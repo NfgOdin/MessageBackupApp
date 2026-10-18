@@ -53,6 +53,8 @@ data class MainUiState(
     val viewerFile: java.io.File? = null,
     val showStatsDialog: Boolean = false,
     val isStatsLoading: Boolean = false,
+    val statsProgressPct: Int = 0,
+    val statsProgressMessage: String = "",
     val stats: com.messagebackup.app.model.ConversationStats? = null,
     val statsTargetThreadId: Long? = null,
     val isCopilotOpen: Boolean = false,
@@ -373,7 +375,11 @@ class MainViewModel : ViewModel() {
             return
         }
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isStatsLoading = true)
+            _uiState.value = _uiState.value.copy(
+                isStatsLoading = true,
+                statsProgressPct = 5,
+                statsProgressMessage = "Indexing conversations..."
+            )
             val threads = if (targetThread != null) listOf(targetThread) else _uiState.value.threads
             val totalThreads = threads.size
             val totalMessages = threads.sumOf { it.messageCount.toLong() }
@@ -390,6 +396,11 @@ class MainViewModel : ViewModel() {
                         percentage = pct
                     )
                 }
+
+            _uiState.value = _uiState.value.copy(
+                statsProgressPct = 15,
+                statsProgressMessage = "Analyzing top contacts & message ratios..."
+            )
 
             // Sample detailed message metrics across top threads
             var totalSent = 0L
@@ -409,7 +420,12 @@ class MainViewModel : ViewModel() {
                 threads.take(15)
             }
 
-            for (thread in sampleThreads) {
+            for ((index, thread) in sampleThreads.withIndex()) {
+                val pct = 15 + ((index.toFloat() / sampleThreads.size.toFloat()) * 80f).toInt()
+                _uiState.value = _uiState.value.copy(
+                    statsProgressPct = pct,
+                    statsProgressMessage = "Scanning \"${thread.displayName}\" (${index + 1}/${sampleThreads.size})..."
+                )
                 val messages = app.currentTelephonyRepository.getMessagesForThread(
                     threadId = thread.threadId,
                     resolveContacts = false
@@ -427,6 +443,11 @@ class MainViewModel : ViewModel() {
                     if (newestTime == null || msg.timestamp > newestTime) newestTime = msg.timestamp
                 }
             }
+
+            _uiState.value = _uiState.value.copy(
+                statsProgressPct = 98,
+                statsProgressMessage = "Finalizing activity patterns & insights..."
+            )
 
             val busiestHour = hourCounts.indices.maxByOrNull { hourCounts[it] }
             val busiestDay = dayOfWeekCounts.maxByOrNull { it.value }?.key?.name?.lowercase()?.replaceFirstChar { it.uppercase() }
@@ -449,7 +470,9 @@ class MainViewModel : ViewModel() {
             _uiState.value = _uiState.value.copy(
                 stats = stats,
                 statsTargetThreadId = targetThreadId,
-                isStatsLoading = false
+                isStatsLoading = false,
+                statsProgressPct = 100,
+                statsProgressMessage = "Complete!"
             )
         }
     }

@@ -887,6 +887,8 @@ fun MainScreen(
         com.messagebackup.app.ui.components.ConversationStatsDialog(
             stats = uiState.stats,
             isLoading = uiState.isStatsLoading,
+            progressPct = uiState.statsProgressPct,
+            progressMessage = uiState.statsProgressMessage,
             onRecalculate = { viewModel.loadStatistics(forceRefresh = true) },
             onExportReport = {
                 uiState.stats?.let { statsData ->

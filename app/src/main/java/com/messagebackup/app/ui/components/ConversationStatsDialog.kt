@@ -30,12 +30,20 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.messagebackup.app.model.ConversationStats
 import java.time.Instant
 import java.time.ZoneId
@@ -48,12 +56,27 @@ import java.time.format.DateTimeFormatter
 fun ConversationStatsDialog(
     stats: ConversationStats?,
     isLoading: Boolean,
+    progressPct: Int = 0,
+    progressMessage: String = "",
     onRecalculate: () -> Unit,
     onExportReport: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    var showConfirmCloseDialog by remember { mutableStateOf(false) }
+
+    fun handleRequestClose() {
+        showConfirmCloseDialog = true
+    }
+
+    // Main Dialog — Prevent accidental outside taps by intercepting onDismissRequest with confirmation
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = { handleRequestClose() },
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false
+        )
+    ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -113,7 +136,7 @@ fun ConversationStatsDialog(
                                 )
                             }
                         }
-                        IconButton(onClick = onDismiss) {
+                        IconButton(onClick = { handleRequestClose() }) {
                             Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
                         }
                     }
@@ -125,15 +148,47 @@ fun ConversationStatsDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp),
+                            .padding(vertical = 24.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
-                            Spacer(modifier = Modifier.height(12.dp))
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(
+                                    progress = { progressPct.toFloat() / 100f },
+                                    modifier = Modifier.height(72.dp).width(72.dp),
+                                    strokeWidth = 6.dp,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                                Text(
+                                    text = "$progressPct%",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "Crunching conversation stats...",
+                                text = if (progressMessage.isNotBlank()) progressMessage else "Crunching conversation stats...",
                                 style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { progressPct.toFloat() / 100f },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Please keep this window open while processing.",
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -296,6 +351,39 @@ fun ConversationStatsDialog(
                 }
             }
         }
+    }
+
+    // Confirmation modal to prevent accidental dismissal during or after calculations
+    if (showConfirmCloseDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmCloseDialog = false },
+            title = {
+                Text(if (isLoading) "Cancel Calculation?" else "Close Conversation Insights?")
+            },
+            text = {
+                Text(
+                    if (isLoading)
+                        "Stats are still being calculated ($progressPct% complete). If you close now, the calculation will stop."
+                    else
+                        "Are you sure you want to exit Conversation Insights?"
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConfirmCloseDialog = false
+                        onDismiss()
+                    }
+                ) {
+                    Text(if (isLoading) "Yes, Cancel & Close" else "Close Insights")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showConfirmCloseDialog = false }) {
+                    Text(if (isLoading) "Keep Waiting" else "Stay Here")
+                }
+            }
+        )
     }
 }
 
