@@ -1,0 +1,213 @@
+package com.messagebackup.app.ui.dialogs
+
+import android.app.Activity
+import android.widget.Toast
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Stars
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import com.messagebackup.app.ads.AdManager
+import com.messagebackup.app.data.preferences.AppPreferences
+
+enum class RewardOption(val title: String, val subtitle: String, val iconVector: androidx.compose.ui.graphics.vector.ImageVector) {
+    ODIN_AI("+3 O.D.I.N. AI Queries", "Ask 3 questions to your archive intelligence", Icons.Default.AutoAwesome),
+    AUTO_BACKUP("+3 Auto-Backup Nights", "3 automated background backups to folder or Drive", Icons.Default.Schedule),
+    COMBO_PACK("Combo: +2 AI & +2 Auto-Backups", "Best of both worlds: 2 queries & 2 backup nights", Icons.Default.Stars)
+}
+
+/**
+ * Interactive Reward Center / Arcade where free users can select their preferred reward
+ * and watch a quick rewarded ad to earn credits.
+ */
+@Composable
+fun CreditArcadeDialog(
+    prefs: AppPreferences,
+    adManager: AdManager,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val activity = context as Activity
+
+    val aiCredits by prefs.aiCredits.collectAsState()
+    val autoBackupCredits by prefs.autoBackupCredits.collectAsState()
+
+    var selectedOption by remember { mutableStateOf(RewardOption.COMBO_PACK) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.CardGiftcard,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(
+                            text = "Reward Arcade",
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "Current Balance: ⚡ $aiCredits AI Queries • 🔄 $autoBackupCredits Backup Nights",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = "Pick your reward below and watch a quick ad to claim your credits instantly:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+
+                // Reward Options
+                RewardOption.values().forEach { option ->
+                    val isSelected = selectedOption == option
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable { selectedOption = option }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { selectedOption = option }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = option.iconVector,
+                                contentDescription = null,
+                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = option.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = option.subtitle,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = {
+                        adManager.showRewardedAd(
+                            activity = activity,
+                            isAdsRemoved = false,
+                            onUserEarnedReward = {
+                                when (selectedOption) {
+                                    RewardOption.ODIN_AI -> {
+                                        prefs.addAiCredits(3)
+                                        Toast.makeText(context, "Claimed +3 O.D.I.N. AI Credits!", Toast.LENGTH_SHORT).show()
+                                    }
+                                    RewardOption.AUTO_BACKUP -> {
+                                        prefs.addAutoBackupCredits(3)
+                                        Toast.makeText(context, "Claimed +3 Auto-Backup Nights!", Toast.LENGTH_SHORT).show()
+                                    }
+                                    RewardOption.COMBO_PACK -> {
+                                        prefs.addAiCredits(2)
+                                        prefs.addAutoBackupCredits(2)
+                                        Toast.makeText(context, "Claimed Combo: +2 AI & +2 Backup Nights!", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                onDismiss()
+                            }
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.VideoLibrary,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Text("Watch Video to Claim")
+                }
+            }
+        }
+    }
+}

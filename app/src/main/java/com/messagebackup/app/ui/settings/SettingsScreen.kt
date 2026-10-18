@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.messagebackup.app.MessageBackupApp
 import com.messagebackup.app.billing.BillingManager
@@ -87,13 +88,15 @@ fun SettingsScreen(
     val isAutoBackupUnlocked by billingManager.isAutoBackupUnlocked.collectAsState()
     val autoBackupPrice by billingManager.autoBackupPrice.collectAsState()
 
-    // O.D.I.N. AI States
+    // O.D.I.N. AI & Auto-Backup Credit States
     val aiCredits by prefs.aiCredits.collectAsState()
+    val autoBackupCredits by prefs.autoBackupCredits.collectAsState()
     val aiProvider by prefs.aiProvider.collectAsState()
     val geminiApiKey by prefs.geminiApiKey.collectAsState()
     val ollamaEndpoint by prefs.ollamaEndpoint.collectAsState()
     val ollamaModel by prefs.ollamaModel.collectAsState()
     var showOllamaGuide by remember { mutableStateOf(false) }
+    var showRewardArcade by remember { mutableStateOf(false) }
 
     // Export cache size computation
     val exportsDir = File(context.cacheDir, "exports")
@@ -448,6 +451,36 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     if (!isAutoBackupUnlocked) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Current Credit: $autoBackupCredits Night(s)",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    text = "Claim Free Nights >",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.clickable { showRewardArcade = true }
+                                )
+                            }
+                        }
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -456,7 +489,7 @@ fun SettingsScreen(
                                 onClick = { billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_AUTO_BACKUP) },
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text(text = "Auto-Backup ($autoBackupPrice)")
+                                Text(text = "Unlimited ($autoBackupPrice)")
                             }
                             OutlinedButton(
                                 onClick = { billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_REMOVE_ADS) },
@@ -689,6 +722,14 @@ fun SettingsScreen(
             currentEndpoint = ollamaEndpoint,
             onSaveEndpoint = { prefs.setOllamaEndpoint(it) },
             onDismiss = { showOllamaGuide = false }
+        )
+    }
+
+    if (showRewardArcade) {
+        com.messagebackup.app.ui.dialogs.CreditArcadeDialog(
+            prefs = prefs,
+            adManager = app.adManager,
+            onDismiss = { showRewardArcade = false }
         )
     }
 }

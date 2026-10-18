@@ -59,8 +59,14 @@ class AutoBackupWorker(
     override suspend fun doWork(): Result {
         val app = MessageBackupApp.instance
         val isAutoBackupUnlocked = app.billingManager.isAutoBackupUnlocked.value
-        if (!isAutoBackupUnlocked) {
-            // Free users do not run automatic background backups
+        val hasCredit = if (!isAutoBackupUnlocked) {
+            app.appPreferences.consumeAutoBackupCredit()
+        } else {
+            true
+        }
+
+        if (!hasCredit) {
+            // User does not have active Pro/Standalone unlock and has 0 auto-backup credits
             return Result.success()
         }
 

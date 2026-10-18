@@ -48,6 +48,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Home Screen Analytics Widget -->
+        <receiver
+            android:name=".widget.MessageStatsWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.messagebackup.app.ACTION_REFRESH_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_message_stats_info" />
+        </receiver>
+
     </application>
 
 </manifest>

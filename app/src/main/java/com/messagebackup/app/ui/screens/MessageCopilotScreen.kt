@@ -108,6 +108,7 @@ fun MessageCopilotScreen(
     }
 
     var showGuideDialog by remember { mutableStateOf(false) }
+    var showArcadeDialog by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
     var isThinking by remember { mutableStateOf(false) }
 
@@ -229,14 +230,7 @@ fun MessageCopilotScreen(
                         modifier = Modifier
                             .clickable {
                                 if (!isAdsRemoved) {
-                                    adManager.showRewardedAd(
-                                        activity = activity,
-                                        isAdsRemoved = false,
-                                        onUserEarnedReward = {
-                                            prefs.addAiCredits(3)
-                                            Toast.makeText(context, "+3 AI Credits Added!", Toast.LENGTH_SHORT).show()
-                                        }
-                                    )
+                                    showArcadeDialog = true
                                 }
                             }
                             .padding(end = 4.dp)
@@ -261,17 +255,8 @@ fun MessageCopilotScreen(
                     }
 
                     if (!isAdsRemoved) {
-                        IconButton(onClick = {
-                            adManager.showRewardedAd(
-                                activity = activity,
-                                isAdsRemoved = false,
-                                onUserEarnedReward = {
-                                    prefs.addAiCredits(3)
-                                    Toast.makeText(context, "+3 AI Credits Added!", Toast.LENGTH_SHORT).show()
-                                }
-                            )
-                        }) {
-                            Icon(imageVector = Icons.Default.VideoLibrary, contentDescription = "Watch Ad for Credits")
+                        IconButton(onClick = { showArcadeDialog = true }) {
+                            Icon(imageVector = Icons.Default.VideoLibrary, contentDescription = "Reward Arcade")
                         }
                     }
 
@@ -387,6 +372,14 @@ fun MessageCopilotScreen(
             currentEndpoint = ollamaUrl,
             onSaveEndpoint = { prefs.setOllamaEndpoint(it) },
             onDismiss = { showGuideDialog = false }
+        )
+    }
+
+    if (showArcadeDialog) {
+        com.messagebackup.app.ui.dialogs.CreditArcadeDialog(
+            prefs = prefs,
+            adManager = adManager,
+            onDismiss = { showArcadeDialog = false }
         )
     }
 }

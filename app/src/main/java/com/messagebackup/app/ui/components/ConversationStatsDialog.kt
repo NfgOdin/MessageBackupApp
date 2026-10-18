@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,6 +48,7 @@ import java.time.format.DateTimeFormatter
 fun ConversationStatsDialog(
     stats: ConversationStats?,
     isLoading: Boolean,
+    onRecalculate: () -> Unit,
     onExportReport: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -79,13 +81,41 @@ fun ConversationStatsDialog(
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(end = 8.dp)
                         )
-                        Text(
-                            text = "Conversation Insights",
-                            style = MaterialTheme.typography.titleLarge
-                        )
+                        Column {
+                            Text(
+                                text = "Conversation Insights",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            if (stats != null && !isLoading) {
+                                Text(
+                                    text = "Cached stats • Tap 🔄 to recalculate",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
-                    IconButton(onClick = onDismiss) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = onRecalculate,
+                            enabled = !isLoading
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.height(18.dp).width(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Recalculate Stats",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
+                        }
                     }
                 }
 

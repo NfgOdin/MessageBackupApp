@@ -319,12 +319,16 @@ class MainViewModel : ViewModel() {
 
     fun setShowStatsDialog(show: Boolean) {
         _uiState.value = _uiState.value.copy(showStatsDialog = show)
-        if (show) {
-            loadStatistics()
+        if (show && _uiState.value.stats == null) {
+            loadStatistics(forceRefresh = false)
         }
     }
 
-    fun loadStatistics() {
+    fun loadStatistics(forceRefresh: Boolean = false) {
+        if (!forceRefresh && _uiState.value.stats != null) {
+            // Already cached, don't recompute
+            return
+        }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isStatsLoading = true)
             val threads = _uiState.value.threads

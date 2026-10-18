@@ -32,6 +32,7 @@ class AppPreferences(context: Context) {
 
         // O.D.I.N. AI Preferences
         private const val KEY_AI_CREDITS = "ai_credits"
+        private const val KEY_AUTO_BACKUP_CREDITS = "auto_backup_credits"
         private const val KEY_AI_PROVIDER = "ai_provider"
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
         private const val KEY_OLLAMA_ENDPOINT = "ollama_endpoint"
@@ -41,9 +42,13 @@ class AppPreferences(context: Context) {
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
     val googleDriveAccount: StateFlow<String?> = _googleDriveAccount.asStateFlow()
 
-    // Default 3 welcome credits for new users
+    // Default 3 welcome AI credits for new users
     private val _aiCredits = MutableStateFlow(prefs.getInt(KEY_AI_CREDITS, 3))
     val aiCredits: StateFlow<Int> = _aiCredits.asStateFlow()
+
+    // Default 3 welcome Auto-Backup credits for new users
+    private val _autoBackupCredits = MutableStateFlow(prefs.getInt(KEY_AUTO_BACKUP_CREDITS, 3))
+    val autoBackupCredits: StateFlow<Int> = _autoBackupCredits.asStateFlow()
 
     private val _aiProvider = MutableStateFlow(prefs.getString(KEY_AI_PROVIDER, "GEMINI") ?: "GEMINI")
     val aiProvider: StateFlow<String> = _aiProvider.asStateFlow()
@@ -103,6 +108,25 @@ class AppPreferences(context: Context) {
     fun consumeAiCredit(): Boolean {
         if (_aiCredits.value > 0) {
             setAiCredits(_aiCredits.value - 1)
+            return true
+        }
+        return false
+    }
+
+    fun setAutoBackupCredits(credits: Int) {
+        val safeCredits = credits.coerceAtLeast(0)
+        prefs.edit().putInt(KEY_AUTO_BACKUP_CREDITS, safeCredits).apply()
+        _autoBackupCredits.value = safeCredits
+    }
+
+    fun addAutoBackupCredits(amount: Int) {
+        val newCredits = (_autoBackupCredits.value + amount).coerceAtLeast(0)
+        setAutoBackupCredits(newCredits)
+    }
+
+    fun consumeAutoBackupCredit(): Boolean {
+        if (_autoBackupCredits.value > 0) {
+            setAutoBackupCredits(_autoBackupCredits.value - 1)
             return true
         }
         return false

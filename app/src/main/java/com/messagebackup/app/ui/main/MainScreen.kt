@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
@@ -108,6 +109,7 @@ fun MainScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
     var isMessageSelectionMode by remember { mutableStateOf(false) }
+    var showRewardArcade by remember { mutableStateOf(false) }
 
     // In-App Document Viewer Mode
     uiState.viewerFile?.let { file ->
@@ -387,6 +389,15 @@ fun MainScreen(
                                             viewModel.setShowStatsDialog(true)
                                         }
                                     )
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = { Text("Reward Arcade (Free Credits)") },
+                                leadingIcon = { Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    showMenu = false
+                                    showRewardArcade = true
                                 }
                             )
 
@@ -739,6 +750,7 @@ fun MainScreen(
         com.messagebackup.app.ui.components.ConversationStatsDialog(
             stats = uiState.stats,
             isLoading = uiState.isStatsLoading,
+            onRecalculate = { viewModel.loadStatistics(forceRefresh = true) },
             onExportReport = {
                 uiState.stats?.let { statsData ->
                     viewModel.adManager.showRewardedAd(
@@ -773,6 +785,14 @@ fun MainScreen(
                     onComplete = {}
                 )
             }
+        )
+    }
+
+    if (showRewardArcade) {
+        com.messagebackup.app.ui.dialogs.CreditArcadeDialog(
+            prefs = prefs,
+            adManager = viewModel.adManager,
+            onDismiss = { showRewardArcade = false }
         )
     }
 }
