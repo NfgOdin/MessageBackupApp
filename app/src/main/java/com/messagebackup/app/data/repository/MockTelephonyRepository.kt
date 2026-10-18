@@ -185,4 +185,12 @@ class MockTelephonyRepository : TelephonyRepository {
     override suspend fun getAttachmentBytes(contentUri: Uri): ByteArray {
         return mockSampleImageBytes
     }
+
+    override suspend fun insertSmsMessage(message: MessageItem, address: String): Boolean {
+        return true
+    }
+
+    override fun isDefaultSmsApp(): Boolean {
+        return true
+    }
 }

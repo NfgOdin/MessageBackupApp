@@ -513,6 +513,36 @@ class TelephonyRepositoryImpl(
         }
     }
 
+    override suspend fun insertSmsMessage(message: MessageItem, address: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val values = android.content.ContentValues().apply {
+                val isOutgoing = (message.direction == MessageDirection.OUTGOING)
+                val targetAddress = if (address.isNotBlank()) address else if (isOutgoing) message.recipient else message.sender
+                put(Telephony.Sms.ADDRESS, targetAddress)
+                put(Telephony.Sms.BODY, message.body)
+                put(Telephony.Sms.DATE, message.timestamp)
+                put(Telephony.Sms.DATE_SENT, message.timestamp)
+                put(Telephony.Sms.READ, 1)
+                put(Telephony.Sms.SEEN, 1)
+                put(Telephony.Sms.TYPE, if (isOutgoing) Telephony.Sms.MESSAGE_TYPE_SENT else Telephony.Sms.MESSAGE_TYPE_INBOX)
+            }
+            val uri = contentResolver.insert(Telephony.Sms.CONTENT_URI, values)
+            uri != null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error inserting restored SMS into telephony provider", e)
+            false
+        }
+    }
+
+    override fun isDefaultSmsApp(): Boolean {
+        return try {
+            val defaultPackage = Telephony.Sms.getDefaultSmsPackage(context)
+            defaultPackage == context.packageName
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     companion object {
         private const val TAG = "TelephonyRepoImpl"
     }

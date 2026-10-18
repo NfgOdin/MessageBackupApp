@@ -69,6 +69,7 @@ fun ExportConfigDialog(
     var destination by remember { mutableStateOf(initialDestination) }
     var useZipPassword by remember { mutableStateOf(false) }
     var zipPassword by remember { mutableStateOf("") }
+    var legalEvidenceMode by remember { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
     val dateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy").withZone(ZoneId.systemDefault())
@@ -103,11 +104,50 @@ fun ExportConfigDialog(
                             onClick = { selectedFormat = format }
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = format.displayName, style = MaterialTheme.typography.bodyMedium)
+                        Column {
+                            Text(text = format.displayName, style = MaterialTheme.typography.bodyMedium)
+                            if (format == ExportFormat.JSON || format == ExportFormat.XML) {
+                                Text(
+                                    text = "⚠️ Required format to restore conversations back to an Android phone",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // 2. Legal / Evidentiary Mode for PDF
+                if (selectedFormat == ExportFormat.PDF) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { legalEvidenceMode = !legalEvidenceMode }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = legalEvidenceMode,
+                            onCheckedChange = { legalEvidenceMode = it }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "⚖️ Certified Legal / Court Evidentiary Mode",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                            )
+                            Text(
+                                text = "Includes UTC & local timestamps, E.164 phone headers, Page X of Y numbering, and SHA-256 tamper-evident verification checksum.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                }
 
                 // 2. HTML Theme
                 if (selectedFormat == ExportFormat.HTML) {
@@ -295,7 +335,8 @@ fun ExportConfigDialog(
                             customStartDate = customStartDate,
                             customEndDate = customEndDate,
                             outputType = destination,
-                            zipPassword = if (useZipPassword) zipPassword.trim() else null
+                            zipPassword = if (useZipPassword) zipPassword.trim() else null,
+                            legalEvidenceMode = legalEvidenceMode
                         )
                     )
                 }

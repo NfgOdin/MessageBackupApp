@@ -43,9 +43,11 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -64,6 +66,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -262,6 +265,22 @@ fun MainScreen(
         viewModel.onPermissionsChecked(hasSms = smsGranted, hasContacts = contactsGranted)
     }
 
+    // File picker launcher for JSON and XML message backups
+    val restorePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.startRestoreFromUri(uri) { success, count, message ->
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = message,
+                        duration = SnackbarDuration.Long
+                    )
+                }
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         val hasSms = ContextCompat.checkSelfPermission(
             context,
@@ -345,6 +364,10 @@ fun MainScreen(
                                     triggerOpenFile(result.outputFile)
                                 }
                             }
+                        }
+                        prefs.incrementExportSuccessCount()
+                        if (prefs.getExportSuccessCount() == 2 && !prefs.hasReviewedApp.value) {
+                            showRewardArcade = true
                         }
                     } else {
                         Toast.makeText(context, result.errorMessage ?: "Export error occurred", Toast.LENGTH_LONG).show()
@@ -586,6 +609,23 @@ fun MainScreen(
                                             viewModel.setShowStatsDialog(true)
                                         }
                                     )
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text("Restore Messages")
+                                        Text(
+                                            "Import from .json or .xml backup",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
+                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.setShowRestoreDialog(true)
                                 }
                             )
 
@@ -1012,6 +1052,103 @@ fun MainScreen(
             prefs = prefs,
             adManager = viewModel.adManager,
             onDismiss = { showRewardArcade = false }
+        )
+    }
+
+    if (uiState.showRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!uiState.isRestoring) {
+                    viewModel.setShowRestoreDialog(false)
+                }
+            },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "SMS Restore & Migration",
+                    style = MaterialTheme.typography.titleLarge
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Restoration requires a .json or .xml backup created by Message Backup or standard SMS Backup & Restore.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+
+                    if (uiState.isRestoring) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator()
+                            Text(
+                                text = uiState.restoreProgressMessage ?: "Restoring messages...",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "Select a backup file from your device, Google Drive, or local storage to restore your messages back into your phone's SMS database.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (!uiState.isRestoring) {
+                    Button(
+                        onClick = {
+                            restorePickerLauncher.launch(
+                                arrayOf(
+                                    "application/json",
+                                    "text/xml",
+                                    "application/xml",
+                                    "text/plain",
+                                    "*/*"
+                                )
+                            )
+                        }
+                    ) {
+                        Text("Select Backup File (.json / .xml)")
+                    }
+                }
+            },
+            dismissButton = {
+                if (!uiState.isRestoring) {
+                    TextButton(onClick = { viewModel.setShowRestoreDialog(false) }) {
+                        Text("Close")
+                    }
+                }
+            }
         )
     }
 }

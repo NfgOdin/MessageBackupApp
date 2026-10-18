@@ -57,7 +57,12 @@ data class MainUiState(
     val stats: com.messagebackup.app.model.ConversationStats? = null,
     val statsTargetThreadId: Long? = null,
     val isCopilotOpen: Boolean = false,
-    val globalCopilotMessages: List<MessageItem> = emptyList()
+    val globalCopilotMessages: List<MessageItem> = emptyList(),
+    val showRestoreDialog: Boolean = false,
+    val isRestoring: Boolean = false,
+    val restoreProgressMessage: String? = null,
+    val restoredCount: Int = 0,
+    val showReviewPromptDialog: Boolean = false
 )
 
 /**
@@ -464,6 +469,77 @@ class MainViewModel : ViewModel() {
                 statsProgressPct = 100,
                 statsProgressMessage = "Complete!"
             )
+        }
+    }
+
+    fun setShowRestoreDialog(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showRestoreDialog = show)
+    }
+
+    fun setShowReviewPromptDialog(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showReviewPromptDialog = show)
+    }
+
+    fun startRestoreFromUri(uri: Uri, onResult: (Boolean, Int, String) -> Unit) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isRestoring = true,
+                restoreProgressMessage = "Reading backup file..."
+            )
+
+            try {
+                val inputStream = app.contentResolver.openInputStream(uri)
+                if (inputStream == null) {
+                    _uiState.value = _uiState.value.copy(isRestoring = false, restoreProgressMessage = null)
+                    onResult(false, 0, "Could not open backup file.")
+                    return@launch
+                }
+
+                val content = inputStream.bufferedReader().use { it.readText() }
+                val messages = mutableListOf<MessageItem>()
+                var fallbackAddress = ""
+
+                if (content.trimStart().startsWith("{")) {
+                    val (thread, parsedMsgs) = com.messagebackup.app.domain.export.JsonFormatter().parseBackupJson(content)
+                    messages.addAll(parsedMsgs)
+                    fallbackAddress = thread?.address ?: ""
+                } else if (content.trimStart().startsWith("<")) {
+                    val parsedMsgs = com.messagebackup.app.domain.export.XmlFormatter().parseBackupXml(content)
+                    messages.addAll(parsedMsgs)
+                } else {
+                    _uiState.value = _uiState.value.copy(isRestoring = false, restoreProgressMessage = null)
+                    onResult(false, 0, "Unsupported backup format. Please select a valid .json or .xml backup.")
+                    return@launch
+                }
+
+                if (messages.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(isRestoring = false, restoreProgressMessage = null)
+                    onResult(false, 0, "No messages found in the selected backup file.")
+                    return@launch
+                }
+
+                var successCount = 0
+                val total = messages.size
+                for ((index, msg) in messages.withIndex()) {
+                    _uiState.value = _uiState.value.copy(
+                        restoreProgressMessage = "Restoring message ${index + 1} of $total..."
+                    )
+                    val inserted = app.currentTelephonyRepository.insertSmsMessage(msg, fallbackAddress)
+                    if (inserted) successCount++
+                }
+
+                _uiState.value = _uiState.value.copy(
+                    isRestoring = false,
+                    restoreProgressMessage = null,
+                    restoredCount = successCount
+                )
+
+                loadThreads()
+                onResult(true, successCount, "Successfully restored $successCount messages to your phone!")
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isRestoring = false, restoreProgressMessage = null)
+                onResult(false, 0, "Restore failed: ${e.message}")
+            }
         }
     }
 }

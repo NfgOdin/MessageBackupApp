@@ -33,4 +33,15 @@ interface TelephonyRepository {
      * @return ByteArray containing the media file contents, or null on error.
      */
     suspend fun getAttachmentBytes(contentUri: android.net.Uri): ByteArray?
+
+    /**
+     * Inserts an SMS message into the device telephony provider.
+     * Note: Android requires the app to temporarily be the Default SMS App to write to telephony provider.
+     */
+    suspend fun insertSmsMessage(message: MessageItem, address: String): Boolean
+
+    /**
+     * Checks if this app is currently the default SMS app on the device.
+     */
+    fun isDefaultSmsApp(): Boolean
 }

@@ -34,7 +34,9 @@ class ExportEngine(
     private val htmlFormatter: HtmlFormatter = HtmlFormatter(),
     private val plainTextFormatter: PlainTextFormatter = PlainTextFormatter(),
     private val pdfFormatter: PdfFormatter = PdfFormatter(context),
-    private val csvFormatter: CsvFormatter = CsvFormatter()
+    private val csvFormatter: CsvFormatter = CsvFormatter(),
+    private val jsonFormatter: JsonFormatter = JsonFormatter(),
+    private val xmlFormatter: XmlFormatter = XmlFormatter()
 ) {
 
     suspend fun exportThreads(
@@ -136,7 +138,8 @@ class ExportEngine(
                                 thread = thread,
                                 messages = chunk,
                                 currentPart = partNum,
-                                totalParts = totalParts
+                                totalParts = totalParts,
+                                legalEvidenceMode = options.legalEvidenceMode
                             )
                         } else {
                             val documentContent = when (options.format) {
@@ -149,6 +152,14 @@ class ExportEngine(
                                     nextFileName = nextFileName,
                                     theme = options.theme,
                                     mediaSubdir = "media/"
+                                )
+                                ExportFormat.JSON -> jsonFormatter.formatConversation(
+                                    thread = thread,
+                                    messages = chunk
+                                )
+                                ExportFormat.XML -> xmlFormatter.formatConversation(
+                                    thread = thread,
+                                    messages = chunk
                                 )
                                 ExportFormat.CSV -> csvFormatter.formatConversation(
                                     thread = thread,

@@ -8,6 +8,8 @@ import java.io.File
 enum class ExportFormat(val extension: String, val displayName: String, val mimeType: String) {
     PDF("pdf", "PDF Document (.pdf)", "application/pdf"),
     HTML("html", "HTML Web Page (.html)", "text/html"),
+    JSON("json", "JSON Backup (.json) [Required for Restore]", "application/json"),
+    XML("xml", "XML Backup (.xml) [Required for Restore]", "application/xml"),
     CSV("csv", "Excel / CSV Spreadsheet (.csv)", "text/csv"),
     MARKDOWN("md", "Markdown (.md)", "text/markdown"),
     PLAIN_TEXT("txt", "Plain Text (.txt)", "text/plain")
@@ -55,7 +57,8 @@ data class ExportOptions(
     val customEndDate: Long? = null,
     val excludedMessageIds: Set<Long> = emptySet(),
     val outputType: OutputDestination = OutputDestination.SHARE_SHEET,
-    val zipPassword: String? = null
+    val zipPassword: String? = null,
+    val legalEvidenceMode: Boolean = false
 )
 
 /**

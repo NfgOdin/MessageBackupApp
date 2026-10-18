@@ -47,6 +47,8 @@ class AppPreferences(context: Context) {
         private const val KEY_LAST_REWARD_AD_TIME = "last_reward_ad_time"
         private const val KEY_CACHED_STATS = "cached_conversation_stats"
         private const val KEY_ALWAYS_PROMPT_EXPORT_OPTIONS = "always_prompt_export_options"
+        private const val KEY_HAS_REVIEWED_APP = "has_reviewed_app"
+        private const val KEY_EXPORT_SUCCESS_COUNT = "export_success_count"
     }
 
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
@@ -125,6 +127,29 @@ class AppPreferences(context: Context) {
 
     private val _alwaysPromptExportOptions = MutableStateFlow(prefs.getBoolean(KEY_ALWAYS_PROMPT_EXPORT_OPTIONS, true))
     val alwaysPromptExportOptions: StateFlow<Boolean> = _alwaysPromptExportOptions.asStateFlow()
+
+    private val _hasReviewedApp = MutableStateFlow(prefs.getBoolean(KEY_HAS_REVIEWED_APP, false))
+    val hasReviewedApp: StateFlow<Boolean> = _hasReviewedApp.asStateFlow()
+
+    fun getExportSuccessCount(): Int = prefs.getInt(KEY_EXPORT_SUCCESS_COUNT, 0)
+
+    fun incrementExportSuccessCount(): Int {
+        val next = getExportSuccessCount() + 1
+        prefs.edit().putInt(KEY_EXPORT_SUCCESS_COUNT, next).apply()
+        return next
+    }
+
+    fun markAppReviewed(): Boolean {
+        if (!_hasReviewedApp.value) {
+            prefs.edit().putBoolean(KEY_HAS_REVIEWED_APP, true).apply()
+            _hasReviewedApp.value = true
+            // Grant +5 O.D.I.N. AI credits & +1 Auto-backup credit as a review thank-you
+            addAiCredits(5)
+            addAutoBackupCredits(1)
+            return true
+        }
+        return false
+    }
 
     fun setAiCredits(credits: Int) {
         val safeCredits = credits.coerceAtLeast(0)

@@ -274,7 +274,59 @@ fun CreditArcadeDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                val hasReviewedApp by prefs.hasReviewedApp.collectAsState()
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Rate & Review Bonus Card (+5 AI & +1 Backup Night)
+                Surface(
+                    color = if (hasReviewedApp) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.tertiaryContainer,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !hasReviewedApp) {
+                            try {
+                                val uri = android.net.Uri.parse("market://details?id=${context.packageName}")
+                                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri))
+                            } catch (e: Exception) {
+                                val uri = android.net.Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")
+                                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri))
+                            }
+                            val awarded = prefs.markAppReviewed()
+                            if (awarded) {
+                                Toast.makeText(context, "🌟 Thank you for reviewing! +5 AI & +1 Backup Night awarded!", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Stars,
+                            contentDescription = null,
+                            tint = if (hasReviewedApp) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (hasReviewedApp) "⭐ Review Bonus Claimed" else "⭐ Rate on Google Play (+5 AI & +1 Night)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (hasReviewedApp) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Text(
+                                text = if (hasReviewedApp) "Thank you for supporting Message Backup development!" else "Leave a quick 5-star review to claim +5 AI queries and +1 Auto-backup night instantly!",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (hasReviewedApp) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 val isCoolingDown = cooldownSeconds > 0L
                 val buttonLabel = if (isCoolingDown) {
