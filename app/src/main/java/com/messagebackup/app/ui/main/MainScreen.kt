@@ -350,11 +350,20 @@ fun MainScreen(
             onUserEarnedReward = {
                 viewModel.startExport(options) { result ->
                     if (result.success && result.outputFile != null) {
-                        if (options.outputType == OutputDestination.GOOGLE_DRIVE) {
-                            viewModel.app.googleDriveSyncManager.uploadFileToDrive(result.outputFile)
+                        if (options.outputType == OutputDestination.GOOGLE_DRIVE ||
+                            options.outputType == OutputDestination.ONEDRIVE ||
+                            options.outputType == OutputDestination.DROPBOX ||
+                            options.outputType == OutputDestination.WEBDAV_NAS) {
+                            viewModel.app.cloudStorageDispatcher.dispatchBackupToCloud(result.outputFile, options.outputType)
+                            val destName = when (options.outputType) {
+                                OutputDestination.GOOGLE_DRIVE -> "Google Drive"
+                                OutputDestination.ONEDRIVE -> "Microsoft OneDrive"
+                                OutputDestination.DROPBOX -> "Dropbox"
+                                else -> "WebDAV / Local NAS"
+                            }
                             scope.launch {
                                 val snackResult = snackbarHostState.showSnackbar(
-                                    message = "Syncing to Google Drive: ${result.outputFile.name}",
+                                    message = "Syncing to $destName: ${result.outputFile.name}",
                                     actionLabel = "View File",
                                     duration = SnackbarDuration.Long
                                 )

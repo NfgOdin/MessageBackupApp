@@ -32,6 +32,9 @@ class MessageBackupApp : Application() {
     lateinit var googleDriveSyncManager: com.messagebackup.app.domain.cloud.GoogleDriveSyncManager
         private set
 
+    lateinit var cloudStorageDispatcher: com.messagebackup.app.domain.cloud.CloudStorageDispatcher
+        private set
+
     val currentTelephonyRepository: TelephonyRepository
         get() = realTelephonyRepository
 
@@ -44,6 +47,7 @@ class MessageBackupApp : Application() {
         adManager = AdManager(this)
         billingManager = BillingManager(this)
         googleDriveSyncManager = com.messagebackup.app.domain.cloud.GoogleDriveSyncManager(this)
+        cloudStorageDispatcher = com.messagebackup.app.domain.cloud.CloudStorageDispatcher(this)
 
         exportEngine = ExportEngine(
             context = this,

@@ -109,17 +109,26 @@ class AutoBackupWorker(
             )
 
             if (result.success && result.outputFile != null) {
-                if (destination == OutputDestination.GOOGLE_DRIVE) {
-                    val driveIntent = app.googleDriveSyncManager.createDriveUploadIntent(result.outputFile)
+                if (destination == OutputDestination.GOOGLE_DRIVE ||
+                    destination == OutputDestination.ONEDRIVE ||
+                    destination == OutputDestination.DROPBOX ||
+                    destination == OutputDestination.WEBDAV_NAS) {
+                    val destName = when (destination) {
+                        OutputDestination.GOOGLE_DRIVE -> "Google Drive"
+                        OutputDestination.ONEDRIVE -> "Microsoft OneDrive"
+                        OutputDestination.DROPBOX -> "Dropbox"
+                        else -> "WebDAV / NAS"
+                    }
+                    val cloudIntent = app.cloudStorageDispatcher.createCloudUploadIntent(result.outputFile, destination)
                     val pendingIntent = android.app.PendingIntent.getActivity(
                         appContext,
                         1002,
-                        driveIntent,
+                        cloudIntent,
                         android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
                     )
                     showBackupNotification(
-                        title = "Google Drive Backup Ready",
-                        message = "Archived ${result.exportedThreadCount} conversations. Tap to upload to Google Drive.",
+                        title = "$destName Backup Ready",
+                        message = "Archived ${result.exportedThreadCount} conversations. Tap to upload to $destName.",
                         contentIntent = pendingIntent
                     )
                 } else {

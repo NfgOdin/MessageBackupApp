@@ -250,6 +250,38 @@ fun ExportConfigDialog(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
+                // 5. Output Destination
+                Text(
+                    text = "Save Location / Destination",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                val destinationChoices = listOf(
+                    OutputDestination.SHARE_SHEET to "Android Share / Save Sheet",
+                    OutputDestination.GOOGLE_DRIVE to "Google Drive",
+                    OutputDestination.ONEDRIVE to "Microsoft OneDrive",
+                    OutputDestination.DROPBOX to "Dropbox",
+                    OutputDestination.WEBDAV_NAS to "WebDAV / Local NAS / Nextcloud"
+                )
+                destinationChoices.forEach { (destOption, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { destination = destOption }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = (destination == destOption),
+                            onClick = { destination = destOption }
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
                 // 5. Media Attachments
                 Row(
                     modifier = Modifier

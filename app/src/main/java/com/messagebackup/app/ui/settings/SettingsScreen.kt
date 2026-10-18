@@ -469,6 +469,159 @@ fun SettingsScreen(
                 Icon(imageVector = Icons.Default.CloudUpload, contentDescription = "Drive", tint = MaterialTheme.colorScheme.primary)
             }
 
+            // Microsoft OneDrive
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        if (!isAutoBackupUnlocked) {
+                            showDriveUnlockDialog = true
+                        } else {
+                            prefs.setOutputDestination(OutputDestination.ONEDRIVE)
+                        }
+                    }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = (outputDestination == OutputDestination.ONEDRIVE),
+                    onClick = {
+                        if (!isAutoBackupUnlocked) {
+                            showDriveUnlockDialog = true
+                        } else {
+                            prefs.setOutputDestination(OutputDestination.ONEDRIVE)
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "Microsoft OneDrive", style = MaterialTheme.typography.bodyMedium)
+                        if (!isAutoBackupUnlocked) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = MaterialTheme.shapes.extraSmall,
+                                modifier = Modifier.padding(start = 6.dp)
+                            ) {
+                                Text(
+                                    text = "PRO / AUTO",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = if (isAutoBackupUnlocked) "Direct cloud upload to your OneDrive storage" else "Unlock with Auto-Backup ($autoBackupPrice) or Pro ($productPrice)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isAutoBackupUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(imageVector = Icons.Default.CloudUpload, contentDescription = "OneDrive", tint = MaterialTheme.colorScheme.primary)
+            }
+
+            // Dropbox
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        if (!isAutoBackupUnlocked) {
+                            showDriveUnlockDialog = true
+                        } else {
+                            prefs.setOutputDestination(OutputDestination.DROPBOX)
+                        }
+                    }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = (outputDestination == OutputDestination.DROPBOX),
+                    onClick = {
+                        if (!isAutoBackupUnlocked) {
+                            showDriveUnlockDialog = true
+                        } else {
+                            prefs.setOutputDestination(OutputDestination.DROPBOX)
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "Dropbox", style = MaterialTheme.typography.bodyMedium)
+                        if (!isAutoBackupUnlocked) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = MaterialTheme.shapes.extraSmall,
+                                modifier = Modifier.padding(start = 6.dp)
+                            ) {
+                                Text(
+                                    text = "PRO / AUTO",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = if (isAutoBackupUnlocked) "Direct cloud upload to your Dropbox account" else "Unlock with Auto-Backup ($autoBackupPrice) or Pro ($productPrice)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isAutoBackupUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(imageVector = Icons.Default.CloudUpload, contentDescription = "Dropbox", tint = MaterialTheme.colorScheme.primary)
+            }
+
+            // WebDAV / Local NAS / Nextcloud
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        if (!isAutoBackupUnlocked) {
+                            showDriveUnlockDialog = true
+                        } else {
+                            prefs.setOutputDestination(OutputDestination.WEBDAV_NAS)
+                        }
+                    }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = (outputDestination == OutputDestination.WEBDAV_NAS),
+                    onClick = {
+                        if (!isAutoBackupUnlocked) {
+                            showDriveUnlockDialog = true
+                        } else {
+                            prefs.setOutputDestination(OutputDestination.WEBDAV_NAS)
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "WebDAV / Local NAS / Nextcloud", style = MaterialTheme.typography.bodyMedium)
+                        if (!isAutoBackupUnlocked) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = MaterialTheme.shapes.extraSmall,
+                                modifier = Modifier.padding(start = 6.dp)
+                            ) {
+                                Text(
+                                    text = "PRO / AUTO",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = if (isAutoBackupUnlocked) "Upload to private home server, Synology, or Nextcloud" else "Unlock with Auto-Backup ($autoBackupPrice) or Pro ($productPrice)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isAutoBackupUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(imageVector = Icons.Default.Lan, contentDescription = "WebDAV", tint = MaterialTheme.colorScheme.primary)
+            }
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             // 4. Global Pagination Default
@@ -670,7 +823,14 @@ fun SettingsScreen(
                             }
                         }
                     } else {
-                        val destinationText = if (outputDestination == OutputDestination.GOOGLE_DRIVE) "Google Drive" else safFolderDisplay
+                        val destinationText = when (outputDestination) {
+                            OutputDestination.GOOGLE_DRIVE -> "Google Drive"
+                            OutputDestination.ONEDRIVE -> "Microsoft OneDrive"
+                            OutputDestination.DROPBOX -> "Dropbox"
+                            OutputDestination.WEBDAV_NAS -> "WebDAV / Local NAS"
+                            OutputDestination.PERSISTENT_DIRECTORY -> safFolderDisplay
+                            OutputDestination.SHARE_SHEET -> "Share Sheet"
+                        }
                         Text(
                             text = if (autoBackupEnabled) "✓ Active: Nightly backup to $destinationText" else "⏸ Paused: Toggle switch above to enable nightly backup to $destinationText",
                             style = MaterialTheme.typography.labelMedium,
