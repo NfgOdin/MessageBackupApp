@@ -54,18 +54,10 @@ class MessageStatsWidgetProvider : AppWidgetProvider() {
                 val totalThreads = threads.size
                 val totalMessages = threads.sumOf { it.messageCount.toLong() }
 
-                // Quick sample for sent ratio & media
-                var totalSent = 0L
-                var totalReceived = 0L
-                var totalMedia = 0L
-                for (t in threads.take(10)) {
-                    val msgs = app.currentTelephonyRepository.getMessagesForThread(t.threadId, resolveContacts = false)
-                    for (m in msgs) {
-                        if (m.direction == com.messagebackup.app.model.MessageDirection.OUTGOING) totalSent++ else totalReceived++
-                        totalMedia += m.attachments.size
-                    }
-                }
-
+                val cached = app.appPreferences.getCachedStats()
+                val totalSent = cached?.totalSent ?: 0L
+                val totalReceived = cached?.totalReceived ?: 0L
+                val totalMedia = cached?.totalMediaAttachments ?: 0L
                 val totalSampled = totalSent + totalReceived
                 val sentRatio = if (totalSampled > 0) (totalSent.toFloat() / totalSampled.toFloat() * 100).toInt() else 50
 

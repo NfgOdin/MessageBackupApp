@@ -52,40 +52,65 @@ class FullInsightsWidgetProvider : AppWidgetProvider() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // 1. Check if we have freshly cached full stats
+                val cached = app.appPreferences.getCachedStats()
+
                 val threads = app.currentTelephonyRepository.getConversationThreads(resolveContacts = true).first()
                 val totalThreads = threads.size
                 val totalMessages = threads.sumOf { it.messageCount.toLong() }
 
-                var totalSent = 0L
-                var totalReceived = 0L
-                var totalSms = 0L
-                var totalMms = 0L
-                val hourCounts = IntArray(24)
-                val dayOfWeekCounts = mutableMapOf<java.time.DayOfWeek, Int>()
+                val top1 = threads.getOrNull(0)
+                val top2 = threads.getOrNull(1)
+                val top3 = threads.getOrNull(2)
 
-                val sampleThreads = threads.take(15)
-                for (t in sampleThreads) {
-                    val msgs = app.currentTelephonyRepository.getMessagesForThread(t.threadId, resolveContacts = false)
-                    for (m in msgs) {
-                        if (m.direction == com.messagebackup.app.model.MessageDirection.OUTGOING) totalSent++ else totalReceived++
-                        if (m.type == com.messagebackup.app.model.MessageType.SMS) totalSms++ else totalMms++
+                // Fast SMS vs MMS count from system content provider without heavy MIME attachment parsing
+                var totalSms = cached?.totalSms ?: 0L
+                var totalMms = cached?.totalMms ?: 0L
+                var totalSent = cached?.totalSent ?: 0L
+                var totalReceived = cached?.totalReceived ?: 0L
+                var peakHourStr = cached?.busiestHour?.let { h ->
+                    if (h == 0) "12 AM" else if (h < 12) "$h AM" else if (h == 12) "12 PM" else "${h - 12} PM"
+                } ?: "2 PM"
+                var peakDay = cached?.busiestDayOfWeek ?: "Mon"
 
-                        val zdt = java.time.Instant.ofEpochMilli(m.timestamp).atZone(java.time.ZoneId.systemDefault())
-                        hourCounts[zdt.hour]++
-                        dayOfWeekCounts[zdt.dayOfWeek] = (dayOfWeekCounts[zdt.dayOfWeek] ?: 0) + 1
-                    }
+                if (cached == null) {
+                    // Quick lightweight query on SMS inbox vs sent directly
+                    try {
+                        val smsCursor = context.contentResolver.query(
+                            android.provider.Telephony.Sms.CONTENT_URI,
+                            arrayOf(android.provider.Telephony.Sms.TYPE),
+                            null,
+                            null,
+                            null
+                        )
+                        smsCursor?.use { cursor ->
+                            val typeIdx = cursor.getColumnIndex(android.provider.Telephony.Sms.TYPE)
+                            var count = 0
+                            while (cursor.moveToNext() && count < 2000) {
+                                val type = cursor.getInt(typeIdx)
+                                if (type == android.provider.Telephony.Sms.MESSAGE_TYPE_INBOX) totalReceived++ else totalSent++
+                                totalSms++
+                                count++
+                            }
+                        }
+                    } catch (_: Exception) {}
+
+                    try {
+                        val mmsCursor = context.contentResolver.query(
+                            android.provider.Telephony.Mms.CONTENT_URI,
+                            arrayOf(android.provider.Telephony.Mms._ID),
+                            null,
+                            null,
+                            null
+                        )
+                        mmsCursor?.use { cursor ->
+                            totalMms = cursor.count.toLong()
+                        }
+                    } catch (_: Exception) {}
                 }
 
                 val totalSampled = totalSent + totalReceived
                 val sentRatio = if (totalSampled > 0) (totalSent.toFloat() / totalSampled.toFloat() * 100).toInt() else 50
-                val peakHour = hourCounts.indices.maxByOrNull { hourCounts[it] } ?: 12
-                val peakHourStr = if (peakHour == 0) "12 AM" else if (peakHour < 12) "$peakHour AM" else if (peakHour == 12) "12 PM" else "${peakHour - 12} PM"
-                val peakDay = dayOfWeekCounts.maxByOrNull { it.value }?.key?.name?.lowercase()?.take(3)?.replaceFirstChar { it.uppercase() } ?: "Sun"
-
-                // Top 3 Contacts
-                val top1 = threads.getOrNull(0)
-                val top2 = threads.getOrNull(1)
-                val top3 = threads.getOrNull(2)
 
                 for (widgetId in appWidgetIds) {
                     val views = RemoteViews(context.packageName, R.layout.widget_full_insights).apply {

@@ -45,6 +45,7 @@ class AppPreferences(context: Context) {
         private const val KEY_PRIVACY_PIN_HASH = "privacy_pin_hash"
         private const val KEY_BACKUP_AD_PROGRESS = "backup_ad_progress"
         private const val KEY_LAST_REWARD_AD_TIME = "last_reward_ad_time"
+        private const val KEY_CACHED_STATS = "cached_conversation_stats"
     }
 
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
@@ -289,6 +290,69 @@ class AppPreferences(context: Context) {
     }
 
     fun hasPrivacyPin(): Boolean = _privacyPinHash.value.isNotBlank()
+
+    fun saveCachedStats(stats: com.messagebackup.app.model.ConversationStats) {
+        val json = org.json.JSONObject().apply {
+            put("totalThreads", stats.totalThreads)
+            put("totalMessages", stats.totalMessages)
+            put("totalSms", stats.totalSms)
+            put("totalMms", stats.totalMms)
+            put("totalSent", stats.totalSent)
+            put("totalReceived", stats.totalReceived)
+            put("totalMedia", stats.totalMediaAttachments)
+            put("busiestHour", stats.busiestHour ?: -1)
+            put("busiestDay", stats.busiestDayOfWeek ?: "")
+
+            val contactsArray = org.json.JSONArray()
+            for (c in stats.topContacts.take(3)) {
+                val cObj = org.json.JSONObject().apply {
+                    put("name", c.displayName)
+                    put("count", c.count)
+                }
+                contactsArray.put(cObj)
+            }
+            put("topContacts", contactsArray)
+        }
+        prefs.edit().putString(KEY_CACHED_STATS, json.toString()).apply()
+    }
+
+    fun getCachedStats(): com.messagebackup.app.model.ConversationStats? {
+        val raw = prefs.getString(KEY_CACHED_STATS, null) ?: return null
+        return try {
+            val json = org.json.JSONObject(raw)
+            val topContacts = mutableListOf<com.messagebackup.app.model.ContactMessageCount>()
+            val cArray = json.optJSONArray("topContacts")
+            if (cArray != null) {
+                for (i in 0 until cArray.length()) {
+                    val obj = cArray.getJSONObject(i)
+                    topContacts.add(
+                        com.messagebackup.app.model.ContactMessageCount(
+                            displayName = obj.optString("name", "Unknown"),
+                            address = "",
+                            count = obj.optInt("count", 0),
+                            percentage = 0f
+                        )
+                    )
+                }
+            }
+            val hour = json.optInt("busiestHour", -1)
+            val day = json.optString("busiestDay", "").ifBlank { null }
+            com.messagebackup.app.model.ConversationStats(
+                totalThreads = json.optInt("totalThreads", 0),
+                totalMessages = json.optLong("totalMessages", 0L),
+                totalSms = json.optLong("totalSms", 0L),
+                totalMms = json.optLong("totalMms", 0L),
+                totalSent = json.optLong("totalSent", 0L),
+                totalReceived = json.optLong("totalReceived", 0L),
+                totalMediaAttachments = json.optLong("totalMedia", 0L),
+                topContacts = topContacts,
+                busiestHour = if (hour != -1) hour else null,
+                busiestDayOfWeek = day
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     private fun hashPinSha256(pin: String): String {
         val md = java.security.MessageDigest.getInstance("SHA-256")

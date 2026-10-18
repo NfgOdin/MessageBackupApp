@@ -452,6 +452,11 @@ class MainViewModel : ViewModel() {
                 busiestDayOfWeek = busiestDay
             )
 
+            if (targetThreadId == null) {
+                prefs.saveCachedStats(stats)
+                com.messagebackup.app.widget.FullInsightsWidgetProvider.updateAllWidgets(app)
+            }
+
             _uiState.value = _uiState.value.copy(
                 stats = stats,
                 statsTargetThreadId = targetThreadId,
