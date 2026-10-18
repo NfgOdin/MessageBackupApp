@@ -53,7 +53,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Home Screen Analytics Widget -->
+        <!-- Home Screen Analytics Widget (Compact 3x2) -->
         <receiver
             android:name=".widget.MessageStatsWidgetProvider"
             android:exported="true">
@@ -64,6 +64,43 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_message_stats_info" />
+        </receiver>
+
+        <!-- Home Screen Full Conversation Insights Widget (Large 4x3) -->
+        <receiver
+            android:name=".widget.FullInsightsWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.messagebackup.app.ACTION_REFRESH_INSIGHTS" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_full_insights_info" />
+        </receiver>
+
+        <!-- O.D.I.N. AI Prompt Search Widget (Pill 4x1) -->
+        <receiver
+            android:name=".widget.OdinSearchWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_odin_search_info" />
+        </receiver>
+
+        <!-- Quick Actions & Backup Widget (3x1) -->
+        <receiver
+            android:name=".widget.QuickActionsWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_actions_info" />
         </receiver>
 
     </application>

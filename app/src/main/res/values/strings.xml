@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Message Backup &amp; Export</string>
+    <string name="widget_stats_description">At-a-glance message count and conversation analytics.</string>
+    <string name="widget_full_insights_description">Comprehensive conversation insights with top contacts and activity trends.</string>
+    <string name="widget_odin_search_description">Instant 1-tap AI query and message search on your home screen.</string>
+    <string name="widget_quick_backup_description">Quick 1-tap backup, AI copilot, and storage shortcuts.</string>
 </resources>

@@ -26,6 +26,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        handleIntentAction(intent)
+
         setContent {
             val appTheme by viewModel.prefs.appTheme.collectAsState()
             val isDark = when (appTheme) {
@@ -40,6 +42,31 @@ class MainActivity : ComponentActivity() {
                 ) {
                     MainScreen(viewModel = viewModel)
                 }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntentAction(intent)
+    }
+
+    private fun handleIntentAction(intent: android.content.Intent?) {
+        when (intent?.action) {
+            com.messagebackup.app.widget.OdinSearchWidgetProvider.ACTION_OPEN_ODIN -> {
+                viewModel.setCopilotOpen(true)
+            }
+            com.messagebackup.app.widget.FullInsightsWidgetProvider.ACTION_OPEN_INSIGHTS -> {
+                viewModel.loadStatistics(forceRefresh = false)
+                viewModel.setShowStatsDialog(true)
+            }
+            com.messagebackup.app.widget.QuickActionsWidgetProvider.ACTION_TRIGGER_BACKUP -> {
+                viewModel.setShowExportDialog(true)
+            }
+            com.messagebackup.app.widget.QuickActionsWidgetProvider.ACTION_OPEN_VAULT -> {
+                // Open export history / directory picker
+                viewModel.setSettingsOpen(true)
             }
         }
     }
