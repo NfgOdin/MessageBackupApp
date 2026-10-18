@@ -57,6 +57,7 @@ data class MainUiState(
     val stats: com.messagebackup.app.model.ConversationStats? = null,
     val statsTargetThreadId: Long? = null,
     val isCopilotOpen: Boolean = false,
+    val copilotInitialPrompt: String? = null,
     val globalCopilotMessages: List<MessageItem> = emptyList(),
     val showRestoreDialog: Boolean = false,
     val isRestoring: Boolean = false,
@@ -113,8 +114,11 @@ class MainViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(isSettingsOpen = open)
     }
 
-    fun setCopilotOpen(open: Boolean) {
-        _uiState.value = _uiState.value.copy(isCopilotOpen = open)
+    fun setCopilotOpen(open: Boolean, initialPrompt: String? = null) {
+        _uiState.value = _uiState.value.copy(
+            isCopilotOpen = open,
+            copilotInitialPrompt = initialPrompt
+        )
         if (open && _uiState.value.selectedThreadForPreview == null && _uiState.value.globalCopilotMessages.isEmpty()) {
             loadGlobalCopilotContext()
         }

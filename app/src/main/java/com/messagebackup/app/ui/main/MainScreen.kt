@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -54,6 +55,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Icon
@@ -229,6 +231,7 @@ fun MainScreen(
                 viewModel.setCopilotOpen(false)
                 viewModel.setSettingsOpen(true)
             },
+            initialPrompt = uiState.copilotInitialPrompt,
             modifier = modifier
         )
         return
@@ -827,6 +830,104 @@ fun MainScreen(
                                     text = "💬 ${messages.size} msgs • 📷 $totalMediaCount media",
                                     style = MaterialTheme.typography.labelSmall
                                 )
+                            }
+                        }
+
+                        // O.D.I.N. Quick Action & Summary Chips Bar
+                        Surface(
+                            color = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 1.dp,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            LazyRow(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                item {
+                                    FilterChip(
+                                        selected = false,
+                                        onClick = {
+                                            runWithOdinLock {
+                                                viewModel.setCopilotOpen(
+                                                    open = true,
+                                                    initialPrompt = "Please give me a concise 3-bullet summary of this conversation with ${uiState.selectedThreadForPreview?.displayName ?: "this contact"}."
+                                                )
+                                            }
+                                        },
+                                        label = { Text("⚡ Summarize Thread", style = MaterialTheme.typography.labelSmall) },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.AutoAwesome,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = false,
+                                        onClick = {
+                                            runWithOdinLock {
+                                                viewModel.setCopilotOpen(
+                                                    open = true,
+                                                    initialPrompt = "Extract any dates, schedules, deadlines, or upcoming plans mentioned in this conversation."
+                                                )
+                                            }
+                                        },
+                                        label = { Text("📅 Dates & Deadlines", style = MaterialTheme.typography.labelSmall) },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = false,
+                                        onClick = {
+                                            runWithOdinLock {
+                                                viewModel.setCopilotOpen(
+                                                    open = true,
+                                                    initialPrompt = "Find any addresses, locations, or directions mentioned in this thread."
+                                                )
+                                            }
+                                        },
+                                        label = { Text("📍 Locations", style = MaterialTheme.typography.labelSmall) },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = false,
+                                        onClick = {
+                                            runWithOdinLock {
+                                                viewModel.setCopilotOpen(
+                                                    open = true,
+                                                    initialPrompt = "Find any passcodes, door codes, lockbox combinations, or Wi-Fi passwords in this thread."
+                                                )
+                                            }
+                                        },
+                                        label = { Text("🔑 Codes & Passwords", style = MaterialTheme.typography.labelSmall) },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = false,
+                                        onClick = {
+                                            runWithOdinLock {
+                                                viewModel.setCopilotOpen(
+                                                    open = true,
+                                                    initialPrompt = "Draft a friendly, polite follow-up message responding to the latest context in this conversation."
+                                                )
+                                            }
+                                        },
+                                        label = { Text("✍️ Draft Follow-up", style = MaterialTheme.typography.labelSmall) },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                }
                             }
                         }
 

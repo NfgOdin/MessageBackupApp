@@ -90,6 +90,7 @@ fun MessageCopilotScreen(
     targetContactName: String,
     onNavigateBack: () -> Unit,
     onOpenSettings: () -> Unit,
+    initialPrompt: String? = null,
     modifier: Modifier = Modifier
 ) {
     androidx.activity.compose.BackHandler(onBack = onNavigateBack)
@@ -132,10 +133,12 @@ fun MessageCopilotScreen(
     }
 
     val starterPrompts = listOf(
-        "Find any gate, door, or Wi-Fi codes",
-        "Summarize what we talked about recently",
-        "Find addresses or directions mentioned",
-        "List all flight or reservation info"
+        "⚡ Summarize thread in 3 bullets",
+        "📅 Find dates, deadlines & commitments",
+        "📍 Find addresses & directions",
+        "🔑 Find gate, door, or Wi-Fi codes",
+        "✈️ List flights & reservations",
+        "✍️ Draft a polite follow-up reply"
     )
 
     fun sendPrompt(promptText: String) {
@@ -191,6 +194,12 @@ fun MessageCopilotScreen(
                     )
                 }
             }
+        }
+    }
+
+    LaunchedEffect(initialPrompt) {
+        if (!initialPrompt.isNullOrBlank()) {
+            sendPrompt(initialPrompt)
         }
     }
 
