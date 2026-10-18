@@ -432,23 +432,6 @@ fun MainScreen(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text("O.D.I.N. Message Copilot")
-                                        Text(
-                                            "Omniscient Document & Insights Navigator",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                },
-                                leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                onClick = {
-                                    showMenu = false
-                                    runWithOdinLock { viewModel.setCopilotOpen(true) }
-                                }
-                            )
 
                             DropdownMenuItem(
                                 text = { Text("Conversation Insights") },
