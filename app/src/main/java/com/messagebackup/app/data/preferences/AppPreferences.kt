@@ -38,6 +38,10 @@ class AppPreferences(context: Context) {
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
         private const val KEY_OLLAMA_ENDPOINT = "ollama_endpoint"
         private const val KEY_OLLAMA_MODEL = "ollama_model"
+        private const val KEY_ODIN_TEMPERATURE = "odin_temperature"
+        private const val KEY_ODIN_TOP_P = "odin_top_p"
+        private const val KEY_ODIN_NUM_CTX = "odin_num_ctx"
+        private const val KEY_ODIN_CUSTOM_SYSTEM_PROMPT = "odin_custom_system_prompt"
 
         // Privacy PIN & Biometric Lock Preferences
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
@@ -91,8 +95,20 @@ class AppPreferences(context: Context) {
     private val _ollamaEndpoint = MutableStateFlow(prefs.getString(KEY_OLLAMA_ENDPOINT, "http://100.0.0.1:11434") ?: "http://100.0.0.1:11434")
     val ollamaEndpoint: StateFlow<String> = _ollamaEndpoint.asStateFlow()
 
-    private val _ollamaModel = MutableStateFlow(prefs.getString(KEY_OLLAMA_MODEL, "llama3.2") ?: "llama3.2")
+    private val _ollamaModel = MutableStateFlow(prefs.getString(KEY_OLLAMA_MODEL, "qwen2.5:14b") ?: "qwen2.5:14b")
     val ollamaModel: StateFlow<String> = _ollamaModel.asStateFlow()
+
+    private val _odinTemperature = MutableStateFlow(prefs.getFloat(KEY_ODIN_TEMPERATURE, 0.2f))
+    val odinTemperature: StateFlow<Float> = _odinTemperature.asStateFlow()
+
+    private val _odinTopP = MutableStateFlow(prefs.getFloat(KEY_ODIN_TOP_P, 0.9f))
+    val odinTopP: StateFlow<Float> = _odinTopP.asStateFlow()
+
+    private val _odinNumCtx = MutableStateFlow(prefs.getInt(KEY_ODIN_NUM_CTX, 8192))
+    val odinNumCtx: StateFlow<Int> = _odinNumCtx.asStateFlow()
+
+    private val _odinCustomSystemPrompt = MutableStateFlow(prefs.getString(KEY_ODIN_CUSTOM_SYSTEM_PROMPT, "") ?: "")
+    val odinCustomSystemPrompt: StateFlow<String> = _odinCustomSystemPrompt.asStateFlow()
 
     private val _resolveContacts = MutableStateFlow(prefs.getBoolean(KEY_RESOLVE_CONTACTS, true))
     val resolveContacts: StateFlow<Boolean> = _resolveContacts.asStateFlow()
@@ -259,6 +275,34 @@ class AppPreferences(context: Context) {
     fun setOllamaModel(model: String) {
         prefs.edit().putString(KEY_OLLAMA_MODEL, model.trim()).apply()
         _ollamaModel.value = model.trim()
+    }
+
+    fun setOdinTemperature(temp: Float) {
+        val clamped = temp.coerceIn(0.0f, 1.0f)
+        prefs.edit().putFloat(KEY_ODIN_TEMPERATURE, clamped).apply()
+        _odinTemperature.value = clamped
+    }
+
+    fun setOdinTopP(topP: Float) {
+        val clamped = topP.coerceIn(0.0f, 1.0f)
+        prefs.edit().putFloat(KEY_ODIN_TOP_P, clamped).apply()
+        _odinTopP.value = clamped
+    }
+
+    fun setOdinNumCtx(numCtx: Int) {
+        val clamped = numCtx.coerceIn(2048, 32768)
+        prefs.edit().putInt(KEY_ODIN_NUM_CTX, clamped).apply()
+        _odinNumCtx.value = clamped
+    }
+
+    fun setOdinCustomSystemPrompt(prompt: String) {
+        prefs.edit().putString(KEY_ODIN_CUSTOM_SYSTEM_PROMPT, prompt.trim()).apply()
+        _odinCustomSystemPrompt.value = prompt.trim()
+    }
+
+    fun resetOdinSystemPrompt() {
+        prefs.edit().remove(KEY_ODIN_CUSTOM_SYSTEM_PROMPT).apply()
+        _odinCustomSystemPrompt.value = ""
     }
 
     fun setResolveContacts(enabled: Boolean) {

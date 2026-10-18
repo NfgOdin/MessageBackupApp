@@ -134,12 +134,18 @@ fun OllamaSetupGuideDialog(
                 // Step 1
                 StepHeader(number = "1", title = "Install Ollama & Download a Model")
                 Text(
-                    text = "Download Ollama from ollama.com on your computer (Windows, Mac, or Linux). Open your terminal/PowerShell and run:",
+                    text = "Download Ollama from ollama.com on your computer (Windows, Mac, or Linux). We recommend Qwen 2.5 14B for the highest instruction accuracy and message extraction speed. Open your terminal/PowerShell and run:",
                     style = MaterialTheme.typography.bodySmall
                 )
                 CodeBox(
-                    code = "ollama run llama3.2",
-                    onCopy = { copyToClipboard("Step 1 Command", "ollama run llama3.2") }
+                    code = "ollama run qwen2.5:14b",
+                    onCopy = { copyToClipboard("Step 1 Command", "ollama run qwen2.5:14b") }
+                )
+                Text(
+                    text = "★ Recommended: qwen2.5:14b (Best balance of intelligence & speed). Lightweight alternative: llama3.2 (3B).",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -215,7 +221,7 @@ fun OllamaSetupGuideDialog(
                                 }
                             )
                         },
-                        placeholder = { Text("llama3.2") },
+                        placeholder = { Text("qwen2.5:14b (Recommended)") },
                         singleLine = true,
                         trailingIcon = {
                             if (detectedModels.isNotEmpty()) {

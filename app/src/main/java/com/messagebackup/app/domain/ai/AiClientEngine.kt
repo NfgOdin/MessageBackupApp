@@ -92,21 +92,25 @@ class AiClientEngine {
         providerType: AiProviderType,
         geminiApiKey: String,
         ollamaEndpoint: String,
-        ollamaModel: String
+        ollamaModel: String,
+        temperature: Float = 0.2f,
+        topP: Float = 0.9f,
+        numCtx: Int = 8192,
+        customSystemPrompt: String = ""
     ): AiQueryResult = withContext(Dispatchers.IO) {
         try {
             // Build compact, structured context from messages
             val contextTranscript = buildContextTranscript(messages)
 
+            val baseInstruction = if (customSystemPrompt.isNotBlank()) {
+                customSystemPrompt.trim()
+            } else {
+                DEFAULT_SYSTEM_INSTRUCTION
+            }
+
             val systemInstruction = """
-                You are O.D.I.N. (Omniscient Document & Insights Navigator), an intelligent personal message archivist.
-                You are answering questions about the user's SMS/MMS messages with '$targetContactName'.
-                
-                Rules:
-                1. Only answer based on facts, dates, codes, and context found in the provided message transcript below.
-                2. If the user asks for gate/door codes, addresses, flight numbers, or dates, state them clearly and mention the approximate date of the text.
-                3. If the transcript does not contain the answer, say honestly that you couldn't find that in the archived messages.
-                4. Keep answers friendly, concise, and helpful.
+                $baseInstruction
+                You are currently analyzing messages with '$targetContactName'.
                 
                 === MESSAGE TRANSCRIPT START ===
                 $contextTranscript
@@ -118,13 +122,13 @@ class AiClientEngine {
                     if (geminiApiKey.isBlank()) {
                         return@withContext AiQueryResult.Error("Google Gemini API Key is missing. Add your free key in O.D.I.N. Settings.")
                     }
-                    queryGemini(systemInstruction, userPrompt, geminiApiKey)
+                    queryGemini(systemInstruction, userPrompt, geminiApiKey, temperature, topP)
                 }
                 AiProviderType.OLLAMA -> {
                     if (ollamaEndpoint.isBlank()) {
                         return@withContext AiQueryResult.Error("Ollama host endpoint is missing. Add your Tailscale or local IP (e.g. http://100.x.y.z:11434).")
                     }
-                    queryOllama(systemInstruction, userPrompt, ollamaEndpoint, ollamaModel)
+                    queryOllama(systemInstruction, userPrompt, ollamaEndpoint, ollamaModel, temperature, topP, numCtx)
                 }
             }
         } catch (e: Exception) {
@@ -148,7 +152,13 @@ class AiClientEngine {
         return sb.toString()
     }
 
-    private fun queryGemini(systemInstruction: String, userPrompt: String, apiKey: String): AiQueryResult {
+    private fun queryGemini(
+        systemInstruction: String,
+        userPrompt: String,
+        apiKey: String,
+        temperature: Float,
+        topP: Float
+    ): AiQueryResult {
         // Using Gemini 2.0 Flash (or 1.5 Flash fallback)
         val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey")
         val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -169,6 +179,10 @@ class AiClientEngine {
                 })
             }
             put("contents", contentsArray)
+            put("generationConfig", JSONObject().apply {
+                put("temperature", temperature)
+                put("topP", topP)
+            })
         }
 
         OutputStreamWriter(conn.outputStream).use { it.write(requestJson.toString()) }
@@ -194,7 +208,15 @@ class AiClientEngine {
         }
     }
 
-    private fun queryOllama(systemInstruction: String, userPrompt: String, endpoint: String, model: String): AiQueryResult {
+    private fun queryOllama(
+        systemInstruction: String,
+        userPrompt: String,
+        endpoint: String,
+        model: String,
+        temperature: Float,
+        topP: Float,
+        numCtx: Int
+    ): AiQueryResult {
         val cleanEndpoint = endpoint.trim().trimEnd('/')
         val url = URL("$cleanEndpoint/api/generate")
         val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -207,9 +229,14 @@ class AiClientEngine {
 
         val fullPrompt = "$systemInstruction\n\nUser Question: $userPrompt\n\nO.D.I.N. Answer:"
         val requestJson = JSONObject().apply {
-            put("model", model.ifBlank { "llama3.2" })
+            put("model", model.ifBlank { "qwen2.5:14b" })
             put("prompt", fullPrompt)
             put("stream", false)
+            put("options", JSONObject().apply {
+                put("temperature", temperature)
+                put("top_p", topP)
+                put("num_ctx", numCtx)
+            })
         }
 
         OutputStreamWriter(conn.outputStream).use { it.write(requestJson.toString()) }
@@ -227,5 +254,14 @@ class AiClientEngine {
             val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP $code"
             return AiQueryResult.Error("Ollama Error ($code): $errorText")
         }
+    }
+
+    companion object {
+        const val DEFAULT_SYSTEM_INSTRUCTION = """You are O.D.I.N. (Omniscient Document & Insights Navigator), an intelligent personal message archivist.
+Rules:
+1. Only answer based on facts, dates, codes, and context found in the provided message transcript below.
+2. If the user asks for gate/door codes, addresses, flight numbers, or dates, state them clearly and mention the approximate date of the text.
+3. If the transcript does not contain the answer, say honestly that you couldn't find that in the archived messages.
+4. Keep answers friendly, concise, and helpful."""
     }
 }

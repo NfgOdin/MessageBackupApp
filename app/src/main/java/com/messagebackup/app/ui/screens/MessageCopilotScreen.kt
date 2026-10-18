@@ -105,6 +105,10 @@ fun MessageCopilotScreen(
     val geminiKey by prefs.geminiApiKey.collectAsState()
     val ollamaUrl by prefs.ollamaEndpoint.collectAsState()
     val ollamaModel by prefs.ollamaModel.collectAsState()
+    val odinTemperature by prefs.odinTemperature.collectAsState()
+    val odinTopP by prefs.odinTopP.collectAsState()
+    val odinNumCtx by prefs.odinNumCtx.collectAsState()
+    val customSystemPrompt by prefs.odinCustomSystemPrompt.collectAsState()
 
     val currentProvider = remember(aiProviderStr) {
         if (aiProviderStr == AiProviderType.OLLAMA.name) AiProviderType.OLLAMA else AiProviderType.GEMINI
@@ -178,7 +182,11 @@ fun MessageCopilotScreen(
                 providerType = currentProvider,
                 geminiApiKey = geminiKey,
                 ollamaEndpoint = ollamaUrl,
-                ollamaModel = ollamaModel
+                ollamaModel = ollamaModel,
+                temperature = odinTemperature,
+                topP = odinTopP,
+                numCtx = odinNumCtx,
+                customSystemPrompt = customSystemPrompt
             )
 
             isThinking = false

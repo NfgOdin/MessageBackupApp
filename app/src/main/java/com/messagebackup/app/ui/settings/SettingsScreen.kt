@@ -30,11 +30,17 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lan
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Stars
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.AlertDialog
@@ -113,6 +119,13 @@ fun SettingsScreen(
     val geminiApiKey by prefs.geminiApiKey.collectAsState()
     val ollamaEndpoint by prefs.ollamaEndpoint.collectAsState()
     val ollamaModel by prefs.ollamaModel.collectAsState()
+    val odinTemperature by prefs.odinTemperature.collectAsState()
+    val odinTopP by prefs.odinTopP.collectAsState()
+    val odinNumCtx by prefs.odinNumCtx.collectAsState()
+    val customSystemPrompt by prefs.odinCustomSystemPrompt.collectAsState()
+    var isAdvancedOdinExpanded by remember { mutableStateOf(false) }
+    var promptEditText by remember(customSystemPrompt) { mutableStateOf(customSystemPrompt) }
+
     var showOllamaGuide by remember { mutableStateOf(false) }
     var showRewardArcade by remember { mutableStateOf(false) }
     var showSetPinDialog by remember { mutableStateOf(false) }
@@ -939,10 +952,16 @@ fun SettingsScreen(
                         OutlinedTextField(
                             value = ollamaModel,
                             onValueChange = { prefs.setOllamaModel(it) },
-                            label = { Text("Model Name") },
-                            placeholder = { Text("llama3.2 or mistral") },
+                            label = { Text("Model Name (★ qwen2.5:14b Recommended)") },
+                            placeholder = { Text("qwen2.5:14b") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            text = "★ Recommended: qwen2.5:14b for highest accuracy. Lightweight fallback: llama3.2 (3B).",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 2.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(
@@ -956,6 +975,226 @@ fun SettingsScreen(
                                 modifier = Modifier.padding(end = 8.dp)
                             )
                             Text("Ollama & Tailscale Setup Guide")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Collapsible Advanced Model Tuning & System Prompt Section
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isAdvancedOdinExpanded = !isAdvancedOdinExpanded }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = "Advanced Tuning & System Prompt",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (isAdvancedOdinExpanded) "Tap to collapse" else "Temperature, Context Window & Prompt rules",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = if (isAdvancedOdinExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (isAdvancedOdinExpanded) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp)
+                        ) {
+                            // 1. Temperature Slider
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Temperature (Creativity vs. Precision):",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = String.format("%.2f", odinTemperature),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Text(
+                                text = if (odinTemperature <= 0.25f) "0.0 - 0.25: Strict factual recall (Best for message searches)" else if (odinTemperature <= 0.7f) "0.3 - 0.7: Balanced tone & natural summaries" else "0.8 - 1.0: Creative responses (May hallucinate facts)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Slider(
+                                value = odinTemperature,
+                                onValueChange = { prefs.setOdinTemperature(it) },
+                                valueRange = 0.0f..1.0f,
+                                steps = 19,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // 2. Context Window (num_ctx) for Ollama
+                            if (aiProvider == "OLLAMA") {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Context Window (num_ctx):",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "$odinNumCtx tokens",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Text(
+                                    text = "Controls how many text messages O.D.I.N. can read at once. 8k is ideal for Qwen 2.5 14B.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    listOf(2048, 4096, 8192, 16384).forEach { size ->
+                                        OutlinedButton(
+                                            onClick = { prefs.setOdinNumCtx(size) },
+                                            colors = if (odinNumCtx == size) ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer) else ButtonDefaults.outlinedButtonColors(),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text(
+                                                text = "${size / 1024}k",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = if (odinNumCtx == size) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
+
+                            // 3. Custom System Prompt & Persona
+                            Text(
+                                text = "System Prompt & Persona Rules:",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Edit O.D.I.N.'s base instructions, tone, and formatting rules. Leave blank to use the default archivist prompt.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
+
+                            // Quick Prompt Preset Chips
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        val concise = "You are O.D.I.N., an ultra-concise assistant. Answer factually in 1-2 bullet points. Never include conversational filler."
+                                        promptEditText = concise
+                                        prefs.setOdinCustomSystemPrompt(concise)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("⚡ Concise", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Button(
+                                    onClick = {
+                                        val forensic = "You are O.D.I.N. Forensic Archivist. Quote relevant text messages verbatim with timestamps. Highlight discrepancies and confirm sender IDs."
+                                        promptEditText = forensic
+                                        prefs.setOdinCustomSystemPrompt(forensic)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("⚖️ Forensic", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = promptEditText,
+                                onValueChange = {
+                                    promptEditText = it
+                                    prefs.setOdinCustomSystemPrompt(it)
+                                },
+                                placeholder = {
+                                    Text(
+                                        text = com.messagebackup.app.domain.ai.AiClientEngine.DEFAULT_SYSTEM_INSTRUCTION,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                },
+                                minLines = 4,
+                                maxLines = 8,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                TextButton(
+                                    onClick = {
+                                        prefs.resetOdinSystemPrompt()
+                                        promptEditText = ""
+                                        Toast.makeText(context, "System Prompt reset to default!", Toast.LENGTH_SHORT).show()
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Reset to Default")
+                                }
+                            }
                         }
                     }
                 }
