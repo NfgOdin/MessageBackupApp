@@ -19,8 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CardGiftcard
@@ -43,6 +46,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -114,6 +118,7 @@ fun MainScreen(
     var showRewardArcade by remember { mutableStateOf(false) }
     var isAppSessionUnlocked by remember { mutableStateOf(false) }
     var pendingProtectedAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val previewLazyListState = rememberLazyListState()
 
     val runWithOdinLock: (() -> Unit) -> Unit = { action ->
         if (odinLockEnabled) {
@@ -488,22 +493,67 @@ fun MainScreen(
         floatingActionButton = {
             if (uiState.selectedThreadForPreview != null) {
                 val includedCount = (uiState.previewMessages.size - uiState.excludedMessageIds.size).coerceAtLeast(0)
-                FloatingActionButton(
-                    onClick = { viewModel.setShowExportDialog(true) },
-                    containerColor = MaterialTheme.colorScheme.primary
+                val totalMessages = uiState.filteredPreviewMessages.size
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    if (totalMessages > 8) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    scope.launch {
+                                        previewLazyListState.animateScrollToItem(0)
+                                    }
+                                },
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowUpward,
+                                    contentDescription = "Scroll to Oldest (Top)"
+                                )
+                            }
+
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    scope.launch {
+                                        if (totalMessages > 0) {
+                                            previewLazyListState.animateScrollToItem(totalMessages - 1)
+                                        }
+                                    }
+                                },
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDownward,
+                                    contentDescription = "Scroll to Newest (Bottom)"
+                                )
+                            }
+                        }
+                    }
+
+                    FloatingActionButton(
+                        onClick = { viewModel.setShowExportDialog(true) },
+                        containerColor = MaterialTheme.colorScheme.primary
                     ) {
-                        Icon(imageVector = Icons.Default.FileDownload, contentDescription = "Export")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (uiState.excludedMessageIds.isNotEmpty())
-                                "Export ($includedCount msgs)"
-                            else
-                                "Export Thread"
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Default.FileDownload, contentDescription = "Export")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (uiState.excludedMessageIds.isNotEmpty())
+                                    "Export ($includedCount msgs)"
+                                else
+                                    "Export Thread"
+                            )
+                        }
                     }
                 }
             } else if (uiState.isSelectionMode && uiState.selectedThreadIds.isNotEmpty()) {
@@ -600,7 +650,10 @@ fun MainScreen(
                                 )
                             }
                         } else {
-                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            LazyColumn(
+                                state = previewLazyListState,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
                                 items(uiState.filteredPreviewMessages, key = { it.messageId }) { message ->
                                     val isExcluded = uiState.excludedMessageIds.contains(message.messageId)
                                     MessageBubble(
@@ -614,6 +667,9 @@ fun MainScreen(
                                             }
                                         }
                                     )
+                                }
+                                item {
+                                    Spacer(modifier = Modifier.height(88.dp))
                                 }
                             }
                         }
