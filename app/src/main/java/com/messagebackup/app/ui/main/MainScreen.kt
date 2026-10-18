@@ -21,12 +21,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
@@ -142,6 +144,31 @@ fun MainScreen(
         return
     }
 
+    if (uiState.isCopilotOpen) {
+        val targetName = uiState.selectedThreadForPreview?.displayName ?: "All Conversations"
+        val targetMessages = if (uiState.previewMessages.isNotEmpty()) {
+            uiState.previewMessages
+        } else {
+            // Sample across top active threads if at root
+            emptyList()
+        }
+        com.messagebackup.app.ui.screens.MessageCopilotScreen(
+            prefs = prefs,
+            adManager = viewModel.adManager,
+            isAdsRemoved = isAdsRemoved,
+            threads = uiState.threads,
+            currentMessages = targetMessages,
+            targetContactName = targetName,
+            onNavigateBack = { viewModel.setCopilotOpen(false) },
+            onOpenSettings = {
+                viewModel.setCopilotOpen(false)
+                viewModel.setSettingsOpen(true)
+            },
+            modifier = modifier
+        )
+        return
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -214,6 +241,13 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.setCopilotOpen(true) }) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "O.D.I.N. Copilot",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         IconButton(onClick = {
                             viewModel.loadStatistics()
                             viewModel.adManager.showRewardedAd(
@@ -289,6 +323,13 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.setCopilotOpen(true) }) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "O.D.I.N. Copilot",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         IconButton(onClick = { viewModel.setSearchActive(!uiState.isSearchActive) }) {
                             Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
                         }
@@ -324,6 +365,15 @@ fun MainScreen(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
+                            DropdownMenuItem(
+                                text = { Text("O.D.I.N. Message Copilot") },
+                                leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.setCopilotOpen(true)
+                                }
+                            )
+
                             DropdownMenuItem(
                                 text = { Text("Conversation Insights") },
                                 leadingIcon = { Icon(Icons.Default.Insights, contentDescription = null) },

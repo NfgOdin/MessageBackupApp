@@ -15,14 +15,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -81,6 +86,14 @@ fun SettingsScreen(
     val productPrice by billingManager.productPrice.collectAsState()
     val isAutoBackupUnlocked by billingManager.isAutoBackupUnlocked.collectAsState()
     val autoBackupPrice by billingManager.autoBackupPrice.collectAsState()
+
+    // O.D.I.N. AI States
+    val aiCredits by prefs.aiCredits.collectAsState()
+    val aiProvider by prefs.aiProvider.collectAsState()
+    val geminiApiKey by prefs.geminiApiKey.collectAsState()
+    val ollamaEndpoint by prefs.ollamaEndpoint.collectAsState()
+    val ollamaModel by prefs.ollamaModel.collectAsState()
+    var showOllamaGuide by remember { mutableStateOf(false) }
 
     // Export cache size computation
     val exportsDir = File(context.cacheDir, "exports")
@@ -465,7 +478,128 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 7. Contact Resolution
+            // 7. O.D.I.N. (Omniscient Document & Insights Navigator) AI Configuration
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(
+                                text = "O.D.I.N. AI Intelligence",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                text = if (isAdsRemoved) "PRO: UNLIMITED" else "$aiCredits CREDITS",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Choose your AI intelligence provider to ask natural questions about your archived messages.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Provider Radio Selection
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { prefs.setAiProvider("GEMINI") },
+                            colors = if (aiProvider == "GEMINI") ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer) else ButtonDefaults.outlinedButtonColors(),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Google Gemini")
+                        }
+
+                        OutlinedButton(
+                            onClick = { prefs.setAiProvider("OLLAMA") },
+                            colors = if (aiProvider == "OLLAMA") ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer) else ButtonDefaults.outlinedButtonColors(),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Local Ollama")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    if (aiProvider == "GEMINI") {
+                        OutlinedTextField(
+                            value = geminiApiKey,
+                            onValueChange = { prefs.setGeminiApiKey(it) },
+                            label = { Text("Gemini API Key (BYOK)") },
+                            placeholder = { Text("Paste free Google AI Studio key") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            text = "Get a free API key at aistudio.google.com. Encrypted securely on-device.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value = ollamaEndpoint,
+                            onValueChange = { prefs.setOllamaEndpoint(it) },
+                            label = { Text("Ollama Host / Tailscale URL") },
+                            placeholder = { Text("http://100.x.y.z:11434") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = ollamaModel,
+                            onValueChange = { prefs.setOllamaModel(it) },
+                            label = { Text("Model Name") },
+                            placeholder = { Text("llama3.2 or mistral") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { showOllamaGuide = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lan,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text("Ollama & Tailscale Setup Guide")
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 8. Contact Resolution
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -548,5 +682,13 @@ fun SettingsScreen(
             }
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    if (showOllamaGuide) {
+        com.messagebackup.app.ui.dialogs.OllamaSetupGuideDialog(
+            currentEndpoint = ollamaEndpoint,
+            onSaveEndpoint = { prefs.setOllamaEndpoint(it) },
+            onDismiss = { showOllamaGuide = false }
+        )
     }
 }

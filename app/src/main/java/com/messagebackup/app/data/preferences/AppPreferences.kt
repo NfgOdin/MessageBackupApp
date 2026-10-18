@@ -29,10 +29,33 @@ class AppPreferences(context: Context) {
         private const val KEY_SAF_DIRECTORY_DISPLAY = "saf_directory_display"
         private const val KEY_APP_THEME = "app_theme"
         private const val KEY_GOOGLE_DRIVE_ACCOUNT = "google_drive_account"
+
+        // O.D.I.N. AI Preferences
+        private const val KEY_AI_CREDITS = "ai_credits"
+        private const val KEY_AI_PROVIDER = "ai_provider"
+        private const val KEY_GEMINI_API_KEY = "gemini_api_key"
+        private const val KEY_OLLAMA_ENDPOINT = "ollama_endpoint"
+        private const val KEY_OLLAMA_MODEL = "ollama_model"
     }
 
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
     val googleDriveAccount: StateFlow<String?> = _googleDriveAccount.asStateFlow()
+
+    // Default 3 welcome credits for new users
+    private val _aiCredits = MutableStateFlow(prefs.getInt(KEY_AI_CREDITS, 3))
+    val aiCredits: StateFlow<Int> = _aiCredits.asStateFlow()
+
+    private val _aiProvider = MutableStateFlow(prefs.getString(KEY_AI_PROVIDER, "GEMINI") ?: "GEMINI")
+    val aiProvider: StateFlow<String> = _aiProvider.asStateFlow()
+
+    private val _geminiApiKey = MutableStateFlow(prefs.getString(KEY_GEMINI_API_KEY, "") ?: "")
+    val geminiApiKey: StateFlow<String> = _geminiApiKey.asStateFlow()
+
+    private val _ollamaEndpoint = MutableStateFlow(prefs.getString(KEY_OLLAMA_ENDPOINT, "http://100.0.0.1:11434") ?: "http://100.0.0.1:11434")
+    val ollamaEndpoint: StateFlow<String> = _ollamaEndpoint.asStateFlow()
+
+    private val _ollamaModel = MutableStateFlow(prefs.getString(KEY_OLLAMA_MODEL, "llama3.2") ?: "llama3.2")
+    val ollamaModel: StateFlow<String> = _ollamaModel.asStateFlow()
 
     private val _resolveContacts = MutableStateFlow(prefs.getBoolean(KEY_RESOLVE_CONTACTS, true))
     val resolveContacts: StateFlow<Boolean> = _resolveContacts.asStateFlow()
@@ -65,6 +88,46 @@ class AppPreferences(context: Context) {
         ExportTheme.valueOf(prefs.getString(KEY_APP_THEME, ExportTheme.SYSTEM.name) ?: ExportTheme.SYSTEM.name)
     )
     val appTheme: StateFlow<ExportTheme> = _appTheme.asStateFlow()
+
+    fun setAiCredits(credits: Int) {
+        val safeCredits = credits.coerceAtLeast(0)
+        prefs.edit().putInt(KEY_AI_CREDITS, safeCredits).apply()
+        _aiCredits.value = safeCredits
+    }
+
+    fun addAiCredits(amount: Int) {
+        val newCredits = (_aiCredits.value + amount).coerceAtLeast(0)
+        setAiCredits(newCredits)
+    }
+
+    fun consumeAiCredit(): Boolean {
+        if (_aiCredits.value > 0) {
+            setAiCredits(_aiCredits.value - 1)
+            return true
+        }
+        return false
+    }
+
+    fun setAiProvider(provider: String) {
+        prefs.edit().putString(KEY_AI_PROVIDER, provider).apply()
+        _aiProvider.value = provider
+    }
+
+    fun setGeminiApiKey(key: String) {
+        prefs.edit().putString(KEY_GEMINI_API_KEY, key.trim()).apply()
+        _geminiApiKey.value = key.trim()
+    }
+
+    fun setOllamaEndpoint(endpoint: String) {
+        val clean = endpoint.trim().trimEnd('/')
+        prefs.edit().putString(KEY_OLLAMA_ENDPOINT, clean).apply()
+        _ollamaEndpoint.value = clean
+    }
+
+    fun setOllamaModel(model: String) {
+        prefs.edit().putString(KEY_OLLAMA_MODEL, model.trim()).apply()
+        _ollamaModel.value = model.trim()
+    }
 
     fun setResolveContacts(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_RESOLVE_CONTACTS, enabled).apply()

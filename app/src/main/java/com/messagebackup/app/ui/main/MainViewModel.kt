@@ -53,7 +53,8 @@ data class MainUiState(
     val viewerFile: java.io.File? = null,
     val showStatsDialog: Boolean = false,
     val isStatsLoading: Boolean = false,
-    val stats: com.messagebackup.app.model.ConversationStats? = null
+    val stats: com.messagebackup.app.model.ConversationStats? = null,
+    val isCopilotOpen: Boolean = false
 )
 
 /**
@@ -101,6 +102,10 @@ class MainViewModel : ViewModel() {
 
     fun setSettingsOpen(open: Boolean) {
         _uiState.value = _uiState.value.copy(isSettingsOpen = open)
+    }
+
+    fun setCopilotOpen(open: Boolean) {
+        _uiState.value = _uiState.value.copy(isCopilotOpen = open)
     }
 
     fun toggleMockMode() {
