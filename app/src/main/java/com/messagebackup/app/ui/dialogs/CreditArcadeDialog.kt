@@ -19,11 +19,13 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -34,11 +36,13 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -75,6 +79,18 @@ fun CreditArcadeDialog(
 
     var selectedOption by remember { mutableStateOf(RewardOption.ODIN_AI) }
     var showCelebrationDialog by remember { mutableStateOf(false) }
+
+    val lastRewardAdTime by prefs.lastRewardAdTime.collectAsState()
+    var cooldownSeconds by remember { mutableStateOf(prefs.getRewardCooldownSeconds()) }
+
+    LaunchedEffect(lastRewardAdTime) {
+        while (true) {
+            val remaining = prefs.getRewardCooldownSeconds()
+            cooldownSeconds = remaining
+            if (remaining <= 0L) break
+            delay(1000L)
+        }
+    }
 
     if (showCelebrationDialog) {
         PunchCardUnlockedDialog(
@@ -260,23 +276,33 @@ fun CreditArcadeDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                val buttonLabel = when (selectedOption) {
-                    RewardOption.ODIN_AI -> "Watch Ad (+2 AI Queries)"
-                    RewardOption.AUTO_BACKUP -> {
-                        when (backupAdProgress) {
-                            0 -> "Watch Ad (Ad 1 of 3)"
-                            1 -> "Watch Ad (Ad 2 of 3)"
-                            else -> "Watch Ad (Ad 3 of 3 — Unlock Night!)"
+                val isCoolingDown = cooldownSeconds > 0L
+                val buttonLabel = if (isCoolingDown) {
+                    "⏳ Cooldown (${cooldownSeconds}s left)"
+                } else {
+                    when (selectedOption) {
+                        RewardOption.ODIN_AI -> "Watch Ad (+2 AI Queries)"
+                        RewardOption.AUTO_BACKUP -> {
+                            when (backupAdProgress) {
+                                0 -> "Watch Ad (Ad 1 of 3)"
+                                1 -> "Watch Ad (Ad 2 of 3)"
+                                else -> "Watch Ad (Ad 3 of 3 — Unlock Night!)"
+                            }
                         }
                     }
                 }
 
                 Button(
                     onClick = {
+                        if (isCoolingDown) {
+                            Toast.makeText(context, "⏳ Please wait ${cooldownSeconds}s before watching another ad.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
                         adManager.showRewardedAd(
                             activity = activity,
                             isAdsRemoved = false,
                             onUserEarnedReward = {
+                                prefs.recordRewardAdWatched()
                                 when (selectedOption) {
                                     RewardOption.ODIN_AI -> {
                                         prefs.addAiCredits(2)
@@ -300,11 +326,20 @@ fun CreditArcadeDialog(
                             }
                         )
                     },
+                    enabled = !isCoolingDown,
+                    colors = if (isCoolingDown) {
+                        ButtonDefaults.buttonColors(
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    } else {
+                        ButtonDefaults.buttonColors()
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.VideoLibrary,
+                        imageVector = if (isCoolingDown) Icons.Default.HourglassTop else Icons.Default.VideoLibrary,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 8.dp)
                     )

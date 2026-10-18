@@ -44,10 +44,14 @@ class AppPreferences(context: Context) {
         private const val KEY_ODIN_LOCK_ENABLED = "odin_lock_enabled"
         private const val KEY_PRIVACY_PIN_HASH = "privacy_pin_hash"
         private const val KEY_BACKUP_AD_PROGRESS = "backup_ad_progress"
+        private const val KEY_LAST_REWARD_AD_TIME = "last_reward_ad_time"
     }
 
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
     val googleDriveAccount: StateFlow<String?> = _googleDriveAccount.asStateFlow()
+
+    private val _lastRewardAdTime = MutableStateFlow(prefs.getLong(KEY_LAST_REWARD_AD_TIME, 0L))
+    val lastRewardAdTime: StateFlow<Long> = _lastRewardAdTime.asStateFlow()
 
     // Default 3 welcome AI credits for new users
     private val _aiCredits = MutableStateFlow(prefs.getInt(KEY_AI_CREDITS, 3))
@@ -145,6 +149,25 @@ class AppPreferences(context: Context) {
     fun addAutoBackupCredits(amount: Int) {
         val newCredits = (_autoBackupCredits.value + amount).coerceAtLeast(0)
         setAutoBackupCredits(newCredits)
+    }
+
+    /**
+     * Records timestamp when a rewarded ad is completed to enforce cooldown.
+     */
+    fun recordRewardAdWatched() {
+        val now = System.currentTimeMillis()
+        prefs.edit().putLong(KEY_LAST_REWARD_AD_TIME, now).apply()
+        _lastRewardAdTime.value = now
+    }
+
+    /**
+     * Returns remaining cooldown in seconds (60 seconds cooldown), or 0 if ready.
+     */
+    fun getRewardCooldownSeconds(): Long {
+        val lastTime = _lastRewardAdTime.value
+        val diff = (System.currentTimeMillis() - lastTime) / 1000L
+        val remaining = 60L - diff
+        return if (remaining > 0L) remaining else 0L
     }
 
     /**
