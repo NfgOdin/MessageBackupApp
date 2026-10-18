@@ -49,6 +49,7 @@ class AppPreferences(context: Context) {
         private const val KEY_ALWAYS_PROMPT_EXPORT_OPTIONS = "always_prompt_export_options"
         private const val KEY_HAS_REVIEWED_APP = "has_reviewed_app"
         private const val KEY_EXPORT_SUCCESS_COUNT = "export_success_count"
+        private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
     }
 
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
@@ -130,6 +131,14 @@ class AppPreferences(context: Context) {
 
     private val _hasReviewedApp = MutableStateFlow(prefs.getBoolean(KEY_HAS_REVIEWED_APP, false))
     val hasReviewedApp: StateFlow<Boolean> = _hasReviewedApp.asStateFlow()
+
+    private val _isOnboardingCompleted = MutableStateFlow(prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false))
+    val isOnboardingCompleted: StateFlow<Boolean> = _isOnboardingCompleted.asStateFlow()
+
+    fun setOnboardingCompleted(completed: Boolean = true) {
+        prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, completed).apply()
+        _isOnboardingCompleted.value = completed
+    }
 
     fun getExportSuccessCount(): Int = prefs.getInt(KEY_EXPORT_SUCCESS_COUNT, 0)
 

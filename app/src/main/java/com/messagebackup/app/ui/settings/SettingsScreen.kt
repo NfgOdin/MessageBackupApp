@@ -1166,6 +1166,26 @@ fun SettingsScreen(
             ) {
                 Text(text = "View Privacy Policy")
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = {
+                    prefs.setOnboardingCompleted(false)
+                    Toast.makeText(context, "Onboarding walkthrough will appear on main screen.", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = "Replay App Tour & Feature Walkthrough")
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }

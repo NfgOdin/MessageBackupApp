@@ -126,6 +126,7 @@ fun MainScreen(
     val aiCredits by prefs.aiCredits.collectAsState()
     val autoBackupCredits by prefs.autoBackupCredits.collectAsState()
     val alwaysPromptExportOptions by prefs.alwaysPromptExportOptions.collectAsState()
+    val isOnboardingCompleted by prefs.isOnboardingCompleted.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -133,6 +134,7 @@ fun MainScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var isMessageSelectionMode by remember { mutableStateOf(false) }
     var showRewardArcade by remember { mutableStateOf(false) }
+    var showOnboarding by remember { mutableStateOf(!isOnboardingCompleted) }
     var isAppSessionUnlocked by remember { mutableStateOf(false) }
     var pendingProtectedAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val previewLazyListState = rememberLazyListState()
@@ -395,11 +397,13 @@ fun MainScreen(
                                 }
                             }
                         }
+                        com.messagebackup.app.ui.util.HapticHelper.performSuccess(context)
                         prefs.incrementExportSuccessCount()
                         if (prefs.getExportSuccessCount() == 2 && !prefs.hasReviewedApp.value) {
                             showRewardArcade = true
                         }
                     } else {
+                        com.messagebackup.app.ui.util.HapticHelper.performHeavy(context)
                         Toast.makeText(context, result.errorMessage ?: "Export error occurred", Toast.LENGTH_LONG).show()
                     }
                 }
@@ -1303,6 +1307,15 @@ fun MainScreen(
                         Text("Close")
                     }
                 }
+            }
+        )
+    }
+
+    if (showOnboarding) {
+        com.messagebackup.app.ui.dialogs.OnboardingWalkthroughDialog(
+            onComplete = {
+                prefs.setOnboardingCompleted(true)
+                showOnboarding = false
             }
         )
     }
