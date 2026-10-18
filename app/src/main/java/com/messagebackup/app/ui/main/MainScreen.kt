@@ -386,7 +386,73 @@ fun MainScreen(
                 TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "Message Backup")
+                            // At-a-glance Dual Credits Badge (or PRO indicator)
+                            Surface(
+                                color = if (isAdsRemoved) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .clickable { showRewardArcade = true }
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    if (isAdsRemoved) {
+                                        Icon(
+                                            imageVector = Icons.Default.Stars,
+                                            contentDescription = "Pro",
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.onTertiaryContainer
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "PRO LIFETIME",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                                        )
+                                    } else {
+                                        // AI Query Credits
+                                        Icon(
+                                            imageVector = Icons.Default.Bolt,
+                                            contentDescription = "AI Credits",
+                                            modifier = Modifier.size(15.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "$aiCredits",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "•",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        // Auto-Backup Credits
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = "Backup Credits",
+                                            modifier = Modifier.size(15.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "$autoBackupCredits",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                }
+                            }
+
                             if (uiState.isMockMode) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.tertiaryContainer,
@@ -394,7 +460,7 @@ fun MainScreen(
                                     modifier = Modifier.padding(start = 8.dp)
                                 ) {
                                     Text(
-                                        text = "MOCK DATA",
+                                        text = "MOCK",
                                         style = MaterialTheme.typography.labelSmall,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
@@ -403,33 +469,6 @@ fun MainScreen(
                         }
                     },
                     actions = {
-                        // At-a-glance Credits Badge (or PRO indicator)
-                        Surface(
-                            color = if (isAdsRemoved) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .clickable { showRewardArcade = true }
-                                .padding(end = 4.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isAdsRemoved) Icons.Default.Stars else Icons.Default.Bolt,
-                                    contentDescription = "Credits",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = if (isAdsRemoved) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (isAdsRemoved) "PRO" else "$aiCredits⚡",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
                         IconButton(onClick = { runWithOdinLock { viewModel.setCopilotOpen(true) } }) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
