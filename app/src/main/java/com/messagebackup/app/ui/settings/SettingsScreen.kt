@@ -1481,19 +1481,35 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        val success = billingManager.unlockDeveloperPro(devKeyInput)
-                        if (success) {
-                            Toast.makeText(context, "🌟 Developer Pro License Activated!", Toast.LENGTH_LONG).show()
-                            showDevKeyDialog = false
-                            devKeyInput = ""
-                        } else {
-                            Toast.makeText(context, "Invalid Developer Key", Toast.LENGTH_SHORT).show()
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (isAdsRemoved) {
+                        OutlinedButton(
+                            onClick = {
+                                billingManager.resetDeveloperPro()
+                                Toast.makeText(context, "↩️ License reset: Switched back to Free Tier!", Toast.LENGTH_LONG).show()
+                                showDevKeyDialog = false
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("Revoke Pro (Test Free)")
                         }
                     }
-                ) {
-                    Text("Activate")
+                    Button(
+                        onClick = {
+                            val success = billingManager.unlockDeveloperPro(devKeyInput)
+                            if (success) {
+                                Toast.makeText(context, "🌟 Developer Pro License Activated!", Toast.LENGTH_LONG).show()
+                                showDevKeyDialog = false
+                                devKeyInput = ""
+                            } else {
+                                Toast.makeText(context, "Invalid Developer Key", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) {
+                        Text("Activate")
+                    }
                 }
             },
             dismissButton = {

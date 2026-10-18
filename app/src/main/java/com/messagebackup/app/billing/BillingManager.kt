@@ -247,4 +247,16 @@ class BillingManager(
         }
         return false
     }
+
+    /**
+     * Resets Pro license back to Free tier for testing ad and credit mechanics.
+     */
+    fun resetDeveloperPro() {
+        prefs.edit()
+            .putBoolean(KEY_ADS_REMOVED, false)
+            .putBoolean(KEY_AUTO_BACKUP, false)
+            .apply()
+        _isAdsRemoved.value = false
+        _isAutoBackupUnlocked.value = false
+    }
 }
