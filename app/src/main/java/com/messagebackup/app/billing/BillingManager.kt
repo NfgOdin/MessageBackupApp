@@ -229,11 +229,10 @@ class BillingManager(
             val digest = md.digest(trimmed.toByteArray(Charsets.UTF_8))
             val hashString = digest.joinToString("") { "%02x".format(it) }
 
-            // Target SHA-256 hash for developer bypass key
-            // Secret Key: "NfgOdin-DevMaster-2026-Vault"
-            val targetHash = "579ee5ef84b05ae5d73357eb4bb55c3c0efdc6bce45c7e3f84ce2289d1fa98a6"
+            // Target SHA-256 hash for developer bypass key: "NfgOdin-DevMaster-2026-Vault"
+            val targetHash = "31eeb6e605cdd8aef6251a1bae2662755103bf6ed339acae83b9255f2fae6628"
 
-            if (hashString.equals(targetHash, ignoreCase = true)) {
+            if (hashString.equals(targetHash, ignoreCase = true) || trimmed == "NfgOdin-DevMaster-2026-Vault") {
                 prefs.edit()
                     .putBoolean(KEY_ADS_REMOVED, true)
                     .putBoolean(KEY_AUTO_BACKUP, true)
