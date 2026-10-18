@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -25,8 +29,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
@@ -109,6 +115,8 @@ fun MainScreen(
     val safFolderDisplay by prefs.safDirectoryDisplay.collectAsState()
     val appLockEnabled by prefs.appLockEnabled.collectAsState()
     val odinLockEnabled by prefs.odinLockEnabled.collectAsState()
+    val aiCredits by prefs.aiCredits.collectAsState()
+    val autoBackupCredits by prefs.autoBackupCredits.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -395,6 +403,33 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        // At-a-glance Credits Badge (or PRO indicator)
+                        Surface(
+                            color = if (isAdsRemoved) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .clickable { showRewardArcade = true }
+                                .padding(end = 4.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isAdsRemoved) Icons.Default.Stars else Icons.Default.Bolt,
+                                    contentDescription = "Credits",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (isAdsRemoved) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (isAdsRemoved) "PRO" else "$aiCredits⚡",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
                         IconButton(onClick = { runWithOdinLock { viewModel.setCopilotOpen(true) } }) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
@@ -455,7 +490,16 @@ fun MainScreen(
                             )
 
                             DropdownMenuItem(
-                                text = { Text("Reward Arcade (Free Credits)") },
+                                text = {
+                                    Column {
+                                        Text("Reward Arcade")
+                                        Text(
+                                            if (isAdsRemoved) "PRO License Active" else "⚡ $aiCredits AI • 🔄 $autoBackupCredits Backups",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                },
                                 leadingIcon = { Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                                 onClick = {
                                     showMenu = false

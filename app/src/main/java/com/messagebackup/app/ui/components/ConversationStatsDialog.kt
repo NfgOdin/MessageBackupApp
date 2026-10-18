@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FileDownload
@@ -69,14 +70,18 @@ fun ConversationStatsDialog(
         showConfirmCloseDialog = true
     }
 
-    // Main Dialog — Prevent accidental outside taps by intercepting onDismissRequest with confirmation
+    // Main Dialog — Intercepts both outside taps and system back press with a confirmation dialog
     androidx.compose.ui.window.Dialog(
         onDismissRequest = { handleRequestClose() },
         properties = DialogProperties(
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
         )
     ) {
+        BackHandler(enabled = true) {
+            handleRequestClose()
+        }
+
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -350,40 +355,40 @@ fun ConversationStatsDialog(
                     }
                 }
             }
-        }
-    }
 
-    // Confirmation modal to prevent accidental dismissal during or after calculations
-    if (showConfirmCloseDialog) {
-        AlertDialog(
-            onDismissRequest = { showConfirmCloseDialog = false },
-            title = {
-                Text(if (isLoading) "Cancel Calculation?" else "Close Conversation Insights?")
-            },
-            text = {
-                Text(
-                    if (isLoading)
-                        "Stats are still being calculated ($progressPct% complete). If you close now, the calculation will stop."
-                    else
-                        "Are you sure you want to exit Conversation Insights?"
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showConfirmCloseDialog = false
-                        onDismiss()
+            // In-dialog confirmation overlay
+            if (showConfirmCloseDialog) {
+                AlertDialog(
+                    onDismissRequest = { showConfirmCloseDialog = false },
+                    title = {
+                        Text(if (isLoading) "Cancel Calculation?" else "Close Conversation Insights?")
+                    },
+                    text = {
+                        Text(
+                            if (isLoading)
+                                "Stats are still being calculated ($progressPct% complete). If you close now, the calculation will stop."
+                            else
+                                "Are you sure you want to exit Conversation Insights?"
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showConfirmCloseDialog = false
+                                onDismiss()
+                            }
+                        ) {
+                            Text(if (isLoading) "Yes, Cancel & Close" else "Close Insights")
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(onClick = { showConfirmCloseDialog = false }) {
+                            Text(if (isLoading) "Keep Waiting" else "Stay Here")
+                        }
                     }
-                ) {
-                    Text(if (isLoading) "Yes, Cancel & Close" else "Close Insights")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showConfirmCloseDialog = false }) {
-                    Text(if (isLoading) "Keep Waiting" else "Stay Here")
-                }
+                )
             }
-        )
+        }
     }
 }
 
