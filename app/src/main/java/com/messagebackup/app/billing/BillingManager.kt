@@ -78,6 +78,22 @@ class BillingManager(
         })
     }
 
+    fun restorePurchases(onComplete: (Boolean) -> Unit = {}) {
+        val params = QueryPurchasesParams.newBuilder()
+            .setProductType(BillingClient.ProductType.INAPP)
+            .build()
+
+        billingClient.queryPurchasesAsync(params) { billingResult, purchases ->
+            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                handlePurchasesList(purchases)
+                val isProActive = _isAdsRemoved.value
+                onComplete(isProActive)
+            } else {
+                onComplete(false)
+            }
+        }
+    }
+
     private fun queryPurchases() {
         val params = QueryPurchasesParams.newBuilder()
             .setProductType(BillingClient.ProductType.INAPP)

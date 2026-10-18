@@ -154,6 +154,27 @@ fun SettingsScreen(
                             text = if (isAdsRemoved) "Ad-free experience & automated scheduled backups unlocked." else "One-time purchase: removes all ads & unlocks automatic nightly/weekly backups.",
                             style = MaterialTheme.typography.bodySmall
                         )
+                        if (!isAdsRemoved) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    billingManager.restorePurchases { restored ->
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            if (restored) "Pro License restored successfully!" else "No previous purchase found for this Google account.",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                            ) {
+                                Text(
+                                    text = "Already purchased? Restore",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
             }
