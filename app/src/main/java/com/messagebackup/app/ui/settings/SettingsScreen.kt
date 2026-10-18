@@ -227,6 +227,7 @@ fun SettingsScreen(
 
                     val proFeatures = listOf(
                         "🚫 100% Ad-Free Experience" to "Removes all banners, interstitials, and video ads across the entire app.",
+                        "☁️ Direct Google Drive Cloud Sync" to "Seamlessly save and sync all message backups directly to your Google Drive.",
                         "⚡ Unlimited O.D.I.N. AI Queries" to "Ask unlimited AI questions about your messages without credits or watching ads.",
                         "🔄 Unlimited Automated Nightly Backups" to "Scheduled hands-free backups run automatically every night with zero ad requirements.",
                         "⚡ Instant One-Click Message Exports" to "Export to HTML, PDF, CSV, JSON, TXT, or Encrypted ZIP without watching rewarded ads.",
