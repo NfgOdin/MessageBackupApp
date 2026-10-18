@@ -170,6 +170,14 @@ class BillingManager(
                 )
                 .build()
             billingClient.launchBillingFlow(activity, flowParams)
+        } else {
+            // Re-query in background in case connection was delayed
+            queryProductDetails()
+            android.widget.Toast.makeText(
+                activity,
+                "Connecting to Google Play Store... Please try again in a moment.",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
         }
     }
 

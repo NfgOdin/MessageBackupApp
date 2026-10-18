@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -50,6 +52,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -113,6 +116,7 @@ fun SettingsScreen(
     var showOllamaGuide by remember { mutableStateOf(false) }
     var showRewardArcade by remember { mutableStateOf(false) }
     var showSetPinDialog by remember { mutableStateOf(false) }
+    var showDriveUnlockDialog by remember { mutableStateOf(false) }
     var devTapCount by remember { mutableStateOf(0) }
     var showDevKeyDialog by remember { mutableStateOf(false) }
     var devKeyInput by remember { mutableStateOf("") }
@@ -420,7 +424,7 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .clickable {
                         if (!isAutoBackupUnlocked) {
-                            billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_AUTO_BACKUP)
+                            showDriveUnlockDialog = true
                         } else {
                             prefs.setOutputDestination(OutputDestination.GOOGLE_DRIVE)
                         }
@@ -432,7 +436,7 @@ fun SettingsScreen(
                     selected = (outputDestination == OutputDestination.GOOGLE_DRIVE),
                     onClick = {
                         if (!isAutoBackupUnlocked) {
-                            billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_AUTO_BACKUP)
+                            showDriveUnlockDialog = true
                         } else {
                             prefs.setOutputDestination(OutputDestination.GOOGLE_DRIVE)
                         }
@@ -1076,6 +1080,125 @@ fun SettingsScreen(
             dismissButton = {
                 OutlinedButton(onClick = { showDevKeyDialog = false }) {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Google Drive Unlock Option Modal
+    if (showDriveUnlockDialog) {
+        AlertDialog(
+            onDismissRequest = { showDriveUnlockDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.CloudUpload,
+                    contentDescription = "Google Drive",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Unlock Google Drive Cloud Sync",
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Direct Google Drive Cloud Sync allows you to automatically upload and sync all your conversation backups securely to your personal Google Drive account.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Option A: Pro (Best Value)
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showDriveUnlockDialog = false
+                                billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_REMOVE_ADS)
+                            }
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "🌟 Upgrade to Pro (Best Value)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = productPrice ?: "$4.99",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Includes Google Drive Cloud Sync, 100% Ad-Free, unlimited AI, and unlimited nightly backups forever.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Option B: Auto-Backup Standalone
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showDriveUnlockDialog = false
+                                billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_AUTO_BACKUP)
+                            }
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "🔄 Auto-Backup Standalone",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = autoBackupPrice ?: "$1.99",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Unlocks Google Drive cloud destination and unlimited nightly scheduled backups.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showDriveUnlockDialog = false }) {
+                    Text("Maybe Later")
                 }
             }
         )
