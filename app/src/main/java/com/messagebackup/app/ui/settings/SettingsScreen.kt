@@ -448,7 +448,7 @@ fun SettingsScreen(
                 onClick = {
                     val privacyIntent = android.content.Intent(
                         android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse("https://odinj2010.github.io/MessageBackupApp/")
+                        android.net.Uri.parse("https://NfgOdin.github.io/MessageBackupApp/")
                     )
                     try {
                         context.startActivity(privacyIntent)
