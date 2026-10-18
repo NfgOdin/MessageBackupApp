@@ -3,6 +3,8 @@ package com.messagebackup.app.ui.dialogs
 import android.app.Activity
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -110,9 +112,11 @@ fun CreditArcadeDialog(
                 .fillMaxWidth()
                 .padding(vertical = 16.dp)
         ) {
+            val scrollState = rememberScrollState()
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(scrollState)
                     .padding(20.dp)
             ) {
                 // Header
