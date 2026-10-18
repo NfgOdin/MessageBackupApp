@@ -74,6 +74,16 @@ fun CreditArcadeDialog(
     val backupAdProgress by prefs.backupAdProgress.collectAsState()
 
     var selectedOption by remember { mutableStateOf(RewardOption.ODIN_AI) }
+    var showCelebrationDialog by remember { mutableStateOf(false) }
+
+    if (showCelebrationDialog) {
+        PunchCardUnlockedDialog(
+            onDismiss = {
+                showCelebrationDialog = false
+                onDismiss()
+            }
+        )
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -280,7 +290,7 @@ fun CreditArcadeDialog(
                                                 com.messagebackup.app.worker.AutoBackupWorker.scheduleAutoBackup(context)
                                             }
                                             Toast.makeText(context, "🎉 3/3 Ads Watched! Claimed +1 Auto-Backup Night!", Toast.LENGTH_LONG).show()
-                                            onDismiss()
+                                            showCelebrationDialog = true
                                         } else {
                                             val current = prefs.backupAdProgress.value
                                             Toast.makeText(context, "🎟️ Stamp recorded! ($current/3 ads watched)", Toast.LENGTH_SHORT).show()
