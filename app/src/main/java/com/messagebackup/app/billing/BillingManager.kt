@@ -206,4 +206,37 @@ class BillingManager(
 
         billingClient.consumeAsync(consumeParams) { _, _ -> }
     }
+
+    /**
+     * Secret Developer License Activation.
+     * Compares the SHA-256 hash of the entered key so the actual secret key is NEVER stored in plaintext
+     * and cannot be decompiled or extracted from the APK.
+     */
+    fun unlockDeveloperPro(enteredKey: String): Boolean {
+        val trimmed = enteredKey.trim()
+        if (trimmed.isEmpty()) return false
+
+        try {
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            val digest = md.digest(trimmed.toByteArray(Charsets.UTF_8))
+            val hashString = digest.joinToString("") { "%02x".format(it) }
+
+            // Target SHA-256 hash for developer bypass key
+            // Secret Key: "NfgOdin-DevMaster-2026-Vault"
+            val targetHash = "579ee5ef84b05ae5d73357eb4bb55c3c0efdc6bce45c7e3f84ce2289d1fa98a6"
+
+            if (hashString.equals(targetHash, ignoreCase = true)) {
+                prefs.edit()
+                    .putBoolean(KEY_ADS_REMOVED, true)
+                    .putBoolean(KEY_AUTO_BACKUP, true)
+                    .apply()
+                _isAdsRemoved.value = true
+                _isAutoBackupUnlocked.value = true
+                return true
+            }
+        } catch (e: Exception) {
+            // Ignore security exception
+        }
+        return false
+    }
 }

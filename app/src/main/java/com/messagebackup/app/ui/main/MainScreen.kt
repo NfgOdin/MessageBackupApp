@@ -368,7 +368,16 @@ fun MainScreen(
                             onDismissRequest = { showMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("O.D.I.N. Message Copilot") },
+                                text = {
+                                    Column {
+                                        Text("O.D.I.N. Message Copilot")
+                                        Text(
+                                            "Omniscient Document & Insights Navigator",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
                                 leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                                 onClick = {
                                     showMenu = false

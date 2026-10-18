@@ -2,6 +2,7 @@ package com.messagebackup.app.ui.settings
 
 import android.app.Activity
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -97,6 +98,9 @@ fun SettingsScreen(
     val ollamaModel by prefs.ollamaModel.collectAsState()
     var showOllamaGuide by remember { mutableStateOf(false) }
     var showRewardArcade by remember { mutableStateOf(false) }
+    var devTapCount by remember { mutableStateOf(0) }
+    var showDevKeyDialog by remember { mutableStateOf(false) }
+    var devKeyInput by remember { mutableStateOf("") }
 
     // Export cache size computation
     val exportsDir = File(context.cacheDir, "exports")
@@ -691,7 +695,19 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Message Backup & Export v1.0.0", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = "Message Backup & Export v1.0.0",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.clickable {
+                    devTapCount++
+                    if (devTapCount >= 7) {
+                        devTapCount = 0
+                        showDevKeyDialog = true
+                    } else if (devTapCount >= 4) {
+                        Toast.makeText(context, "${7 - devTapCount} taps away from Developer Mode", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
             Text(
                 text = "Private on-device SMS/MMS archive utility.",
                 style = MaterialTheme.typography.bodySmall,
@@ -730,6 +746,52 @@ fun SettingsScreen(
             prefs = prefs,
             adManager = app.adManager,
             onDismiss = { showRewardArcade = false }
+        )
+    }
+
+    if (showDevKeyDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDevKeyDialog = false },
+            title = { Text("Developer License Activation") },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter your secret developer master key to unlock lifetime Pro features with zero payment.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = devKeyInput,
+                        onValueChange = { devKeyInput = it },
+                        label = { Text("Master Secret Key") },
+                        placeholder = { Text("Paste developer key") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val success = billingManager.unlockDeveloperPro(devKeyInput)
+                        if (success) {
+                            Toast.makeText(context, "🌟 Developer Pro License Activated!", Toast.LENGTH_LONG).show()
+                            showDevKeyDialog = false
+                            devKeyInput = ""
+                        } else {
+                            Toast.makeText(context, "Invalid Developer Key", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Text("Activate")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showDevKeyDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }
