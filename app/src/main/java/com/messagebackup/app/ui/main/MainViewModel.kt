@@ -41,6 +41,7 @@ data class MainUiState(
     val showPermissionDisclosure: Boolean = false,
     val showExportDialog: Boolean = false,
     val isExporting: Boolean = false,
+    val exportProgressPct: Int = 0,
     val exportProgressMessage: String? = null,
     val lastExportResult: ExportResult? = null,
     val selectedThreadForPreview: ConversationThread? = null,
@@ -61,6 +62,7 @@ data class MainUiState(
     val globalCopilotMessages: List<MessageItem> = emptyList(),
     val showRestoreDialog: Boolean = false,
     val isRestoring: Boolean = false,
+    val restoreProgressPct: Int = 0,
     val restoreProgressMessage: String? = null,
     val restoredCount: Int = 0,
     val showReviewPromptDialog: Boolean = false,
@@ -326,8 +328,9 @@ class MainViewModel : ViewModel() {
 
         _uiState.value = _uiState.value.copy(
             isExporting = true,
+            exportProgressPct = 0,
             showExportDialog = false,
-            exportProgressMessage = "Packaging ${selectedThreads.size} conversation${if (selectedThreads.size > 1) "s" else ""} into ${options.format.displayName}..."
+            exportProgressMessage = "Preparing ${selectedThreads.size} conversation${if (selectedThreads.size > 1) "s" else ""}..."
         )
 
         viewModelScope.launch {
@@ -347,10 +350,17 @@ class MainViewModel : ViewModel() {
                 options = effectiveOptions,
                 resolveContacts = prefs.resolveContacts.value && _uiState.value.hasContactsPermission,
                 customSafTreeUri = safUri
-            )
+            ) { processed, total, message ->
+                val pct = if (total > 0) ((processed.toFloat() / total.toFloat()) * 100f).toInt().coerceIn(0, 100) else 0
+                _uiState.value = _uiState.value.copy(
+                    exportProgressPct = pct,
+                    exportProgressMessage = message
+                )
+            }
 
             _uiState.value = _uiState.value.copy(
                 isExporting = false,
+                exportProgressPct = 100,
                 exportProgressMessage = null,
                 lastExportResult = result
             )
@@ -530,8 +540,10 @@ class MainViewModel : ViewModel() {
                 var successCount = 0
                 val total = messages.size
                 for ((index, msg) in messages.withIndex()) {
+                    val pct = if (total > 0) (((index + 1).toFloat() / total.toFloat()) * 100f).toInt().coerceIn(0, 100) else 0
                     _uiState.value = _uiState.value.copy(
-                        restoreProgressMessage = "Restoring message ${index + 1} of $total..."
+                        restoreProgressPct = pct,
+                        restoreProgressMessage = "Restoring message ${index + 1} of $total ($pct%)..."
                     )
                     val inserted = app.currentTelephonyRepository.insertSmsMessage(msg, fallbackAddress)
                     if (inserted) successCount++
@@ -539,6 +551,7 @@ class MainViewModel : ViewModel() {
 
                 _uiState.value = _uiState.value.copy(
                     isRestoring = false,
+                    restoreProgressPct = 100,
                     restoreProgressMessage = null,
                     restoredCount = successCount
                 )

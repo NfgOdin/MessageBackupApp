@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -52,6 +53,7 @@ import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -1108,19 +1110,45 @@ fun MainScreen(
             // Export Progress Overlay
             if (uiState.isExporting) {
                 Surface(
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     Column(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Box(contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                progress = { uiState.exportProgressPct.toFloat() / 100f },
+                                modifier = Modifier.size(76.dp),
+                                strokeWidth = 6.dp,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            Text(
+                                text = "${uiState.exportProgressPct}%",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(20.dp))
                         Text(
-                            text = uiState.exportProgressMessage ?: "Exporting conversations...",
-                            style = MaterialTheme.typography.bodyMedium
+                            text = uiState.exportProgressMessage ?: "Packaging conversations...",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        LinearProgressIndicator(
+                            progress = { uiState.exportProgressPct.toFloat() / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth(0.75f)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     }
                 }
@@ -1268,12 +1296,35 @@ fun MainScreen(
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            CircularProgressIndicator()
+                            Box(contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(
+                                    progress = { uiState.restoreProgressPct.toFloat() / 100f },
+                                    modifier = Modifier.size(64.dp),
+                                    strokeWidth = 5.dp,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                                Text(
+                                    text = "${uiState.restoreProgressPct}%",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                             Text(
                                 text = uiState.restoreProgressMessage ?: "Restoring messages...",
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            LinearProgressIndicator(
+                                progress = { uiState.restoreProgressPct.toFloat() / 100f },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.85f)
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
                             )
                         }
                     } else {

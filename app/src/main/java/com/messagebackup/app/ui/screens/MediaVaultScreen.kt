@@ -116,6 +116,8 @@ fun MediaVaultScreen(
     var selectedContactFilter by remember { mutableStateOf<String?>(null) }
     var previewItem by remember { mutableStateOf<VaultMediaItem?>(null) }
     var isBulkExporting by remember { mutableStateOf(false) }
+    var bulkExportPct by remember { mutableStateOf(0) }
+    var bulkExportMessage by remember { mutableStateOf("") }
 
     BackHandler(onBack = onNavigateBack)
 
@@ -168,7 +170,12 @@ fun MediaVaultScreen(
                                     scope.launch {
                                         isBulkExporting = true
                                         try {
-                                            val zipFile = createBulkMediaZip(context, filteredItems)
+                                            bulkExportPct = 0
+                                            bulkExportMessage = "Preparing media package..."
+                                            val zipFile = createBulkMediaZip(context, filteredItems) { processed, total ->
+                                                bulkExportPct = if (total > 0) (processed * 100) / total else 0
+                                                bulkExportMessage = "Packaging media: $processed of $total files ($bulkExportPct%)..."
+                                            }
                                             isBulkExporting = false
                                             if (zipFile != null && zipFile.exists()) {
                                                 val uri = FileProvider.getUriForFile(
@@ -283,15 +290,39 @@ fun MediaVaultScreen(
                         modifier = Modifier.padding(horizontal = 32.dp)
                     ) {
                         if (isBulkExporting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(56.dp),
-                                strokeWidth = 5.dp
-                            )
-                            Text(
-                                text = "Packaging media files into ZIP...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(
+                                    progress = { bulkExportPct.toFloat() / 100f },
+                                    modifier = Modifier.size(72.dp),
+                                    strokeWidth = 6.dp,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                                Text(
+                                    text = "$bulkExportPct%",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = if (bulkExportMessage.isNotBlank()) bulkExportMessage else "Packaging media files into ZIP...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                LinearProgressIndicator(
+                                    progress = { bulkExportPct.toFloat() / 100f },
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.75f)
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            }
                         } else {
                             Box(contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(
@@ -636,16 +667,19 @@ private fun shareMediaFile(context: android.content.Context, item: VaultMediaIte
 
 private suspend fun createBulkMediaZip(
     context: android.content.Context,
-    items: List<VaultMediaItem>
+    items: List<VaultMediaItem>,
+    onProgress: ((processed: Int, total: Int) -> Unit)? = null
 ): File? = withContext(Dispatchers.IO) {
     try {
         val exportsDir = File(context.cacheDir, "vault_exports").apply { mkdirs() }
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         val zipFile = File(exportsDir, "Media_Vault_$timeStamp.zip")
 
+        val total = items.size
         ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
             val usedNames = mutableSetOf<String>()
-            for (item in items) {
+            for ((index, item) in items.withIndex()) {
+                onProgress?.invoke(index + 1, total)
                 try {
                     var entryName = "${item.contactName.replace(Regex("[^a-zA-Z0-9_]"), "_")}/${item.fileName}"
                     if (usedNames.contains(entryName)) {

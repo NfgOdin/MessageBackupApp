@@ -43,7 +43,8 @@ class ExportEngine(
         threads: List<ConversationThread>,
         options: ExportOptions,
         resolveContacts: Boolean,
-        customSafTreeUri: Uri? = null
+        customSafTreeUri: Uri? = null,
+        onProgress: ((processed: Int, total: Int, message: String) -> Unit)? = null
     ): ExportResult = withContext(Dispatchers.IO) {
         if (threads.isEmpty()) {
             return@withContext ExportResult(
@@ -71,8 +72,14 @@ class ExportEngine(
             var totalGeneratedParts = 0
             val activePassword = options.zipPassword?.takeIf { it.isNotBlank() }
 
+            val totalThreads = threads.size
             val writeAllThreads: suspend ((String, ByteArray) -> Unit) -> Unit = { putEntry ->
-                for (thread in threads) {
+                for ((tIndex, thread) in threads.withIndex()) {
+                    onProgress?.invoke(
+                        tIndex,
+                        totalThreads,
+                        "Formatting \"${thread.displayName}\" (${tIndex + 1}/$totalThreads)..."
+                    )
                     var messages = telephonyRepository.getMessagesForThread(thread.threadId, resolveContacts)
 
                     // Apply Exclusion Filter
@@ -218,8 +225,11 @@ class ExportEngine(
 
             // If user selected persistent SAF destination, copy archive to SAF folder
             if (options.outputType == OutputDestination.PERSISTENT_DIRECTORY && customSafTreeUri != null) {
+                onProgress?.invoke(threads.size, threads.size, "Saving archive to custom folder...")
                 saveToSafDirectory(zipFile, customSafTreeUri)
             }
+
+            onProgress?.invoke(threads.size, threads.size, "Export completed!")
 
             ExportResult(
                 success = true,
