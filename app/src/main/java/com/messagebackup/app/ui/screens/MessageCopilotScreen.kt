@@ -144,13 +144,14 @@ fun MessageCopilotScreen(
 
         // Credit check for free users
         if (!isAdsRemoved && aiCredits <= 0) {
-            Toast.makeText(context, "Out of AI credits! Watch an ad to earn +3 credits.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Out of AI credits! Watch an ad to earn +2 credits.", Toast.LENGTH_SHORT).show()
             adManager.showRewardedAd(
                 activity = activity,
                 isAdsRemoved = false,
                 onUserEarnedReward = {
-                    prefs.addAiCredits(3)
-                    Toast.makeText(context, "Earned +3 AI Credits! Resending...", Toast.LENGTH_SHORT).show()
+                    prefs.recordRewardAdWatched()
+                    prefs.addAiCredits(2)
+                    Toast.makeText(context, "Earned +2 AI Credits! Resending...", Toast.LENGTH_SHORT).show()
                     sendPrompt(trimmed)
                 }
             )

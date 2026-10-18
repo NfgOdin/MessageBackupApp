@@ -213,7 +213,11 @@ fun MainScreen(
             threads = uiState.threads,
             currentMessages = targetMessages,
             targetContactName = targetName,
-            onNavigateBack = { viewModel.setCopilotOpen(false) },
+            onNavigateBack = {
+                viewModel.adManager.showInterstitialAd(activity, isAdsRemoved) {
+                    viewModel.setCopilotOpen(false)
+                }
+            },
             onOpenSettings = {
                 viewModel.setCopilotOpen(false)
                 viewModel.setSettingsOpen(true)
