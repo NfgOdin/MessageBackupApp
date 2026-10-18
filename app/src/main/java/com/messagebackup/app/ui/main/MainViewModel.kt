@@ -48,7 +48,6 @@ data class MainUiState(
     val filteredPreviewMessages: List<MessageItem> = emptyList(),
     val excludedMessageIds: Set<Long> = emptySet(),
     val isPreviewLoading: Boolean = false,
-    val isMockMode: Boolean = false,
     val isSettingsOpen: Boolean = false,
     val viewerFile: java.io.File? = null,
     val showStatsDialog: Boolean = false,
@@ -79,11 +78,9 @@ class MainViewModel : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     init {
-        _uiState.value = _uiState.value.copy(isMockMode = app.useMockData)
-
         viewModelScope.launch {
             prefs.resolveContacts.collect {
-                if (_uiState.value.hasSmsPermission || _uiState.value.isMockMode) {
+                if (_uiState.value.hasSmsPermission) {
                     loadThreads()
                 }
             }
@@ -95,7 +92,7 @@ class MainViewModel : ViewModel() {
             hasSmsPermission = hasSms,
             hasContactsPermission = hasContacts
         )
-        if (hasSms || _uiState.value.isMockMode) {
+        if (hasSms) {
             loadThreads()
         }
     }
@@ -136,18 +133,6 @@ class MainViewModel : ViewModel() {
             combined.sortBy { it.timestamp }
             _uiState.value = _uiState.value.copy(globalCopilotMessages = combined)
         }
-    }
-
-    fun toggleMockMode() {
-        val newMode = !app.useMockData
-        app.useMockData = newMode
-        app.updateExportEngineRepository(app.currentTelephonyRepository)
-        _uiState.value = _uiState.value.copy(
-            isMockMode = newMode,
-            stats = null,
-            globalCopilotMessages = emptyList()
-        )
-        loadThreads()
     }
 
     fun setSearchQuery(query: String) {

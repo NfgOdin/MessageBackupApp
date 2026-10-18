@@ -20,9 +20,6 @@ class MessageBackupApp : Application() {
     lateinit var realTelephonyRepository: TelephonyRepository
         private set
 
-    lateinit var mockTelephonyRepository: TelephonyRepository
-        private set
-
     lateinit var adManager: AdManager
         private set
 
@@ -35,10 +32,8 @@ class MessageBackupApp : Application() {
     lateinit var googleDriveSyncManager: com.messagebackup.app.domain.cloud.GoogleDriveSyncManager
         private set
 
-    var useMockData: Boolean = false
-
     val currentTelephonyRepository: TelephonyRepository
-        get() = if (useMockData) mockTelephonyRepository else realTelephonyRepository
+        get() = realTelephonyRepository
 
     override fun onCreate() {
         super.onCreate()
@@ -46,7 +41,6 @@ class MessageBackupApp : Application() {
 
         appPreferences = AppPreferences(this)
         realTelephonyRepository = TelephonyRepositoryImpl(this)
-        mockTelephonyRepository = MockTelephonyRepository()
         adManager = AdManager(this)
         billingManager = BillingManager(this)
         googleDriveSyncManager = com.messagebackup.app.domain.cloud.GoogleDriveSyncManager(this)
@@ -54,13 +48,6 @@ class MessageBackupApp : Application() {
         exportEngine = ExportEngine(
             context = this,
             telephonyRepository = realTelephonyRepository
-        )
-    }
-
-    fun updateExportEngineRepository(repo: TelephonyRepository) {
-        exportEngine = ExportEngine(
-            context = this,
-            telephonyRepository = repo
         )
     }
 

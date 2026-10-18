@@ -456,20 +456,6 @@ fun MainScreen(
                                     }
                                 }
                             }
-
-                            if (uiState.isMockMode) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                                    shape = MaterialTheme.shapes.extraSmall,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                ) {
-                                    Text(
-                                        text = "MOCK",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
                         }
                     },
                     actions = {
@@ -558,17 +544,6 @@ fun MainScreen(
                                     viewModel.setSettingsOpen(true)
                                 }
                             )
-
-                            if (com.messagebackup.app.BuildConfig.DEBUG || uiState.isMockMode) {
-                                DropdownMenuItem(
-                                    text = { Text(if (uiState.isMockMode) "Switch to Real Device SMS" else "Switch to Mock Data (Testing)") },
-                                    leadingIcon = { Icon(Icons.Default.BugReport, contentDescription = null) },
-                                    onClick = {
-                                        viewModel.toggleMockMode()
-                                        showMenu = false
-                                    }
-                                )
-                            }
                         }
                     }
                 )
@@ -764,7 +739,7 @@ fun MainScreen(
                 }
 
                 // Permission Required State
-                !uiState.hasSmsPermission && !uiState.isMockMode -> {
+                !uiState.hasSmsPermission -> {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -782,12 +757,6 @@ fun MainScreen(
                         Spacer(modifier = Modifier.height(20.dp))
                         Button(onClick = { viewModel.setShowPermissionDisclosure(true) }) {
                             Text(text = "Grant SMS Access")
-                        }
-                        if (com.messagebackup.app.BuildConfig.DEBUG) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(onClick = { viewModel.toggleMockMode() }) {
-                                Text(text = "Try With Mock Data (Instant Test)")
-                            }
                         }
                     }
                 }
