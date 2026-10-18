@@ -59,9 +59,17 @@ class FullInsightsWidgetProvider : AppWidgetProvider() {
                 val totalThreads = threads.size
                 val totalMessages = threads.sumOf { it.messageCount.toLong() }
 
-                val top1 = threads.getOrNull(0)
-                val top2 = threads.getOrNull(1)
-                val top3 = threads.getOrNull(2)
+                val sortedThreads = threads.sortedByDescending { it.messageCount }
+                val top1 = cached?.topContacts?.getOrNull(0)
+                val top2 = cached?.topContacts?.getOrNull(1)
+                val top3 = cached?.topContacts?.getOrNull(2)
+
+                val contact1Name = top1?.displayName ?: sortedThreads.getOrNull(0)?.displayName
+                val contact1Count = top1?.count ?: sortedThreads.getOrNull(0)?.messageCount
+                val contact2Name = top2?.displayName ?: sortedThreads.getOrNull(1)?.displayName
+                val contact2Count = top2?.count ?: sortedThreads.getOrNull(1)?.messageCount
+                val contact3Name = top3?.displayName ?: sortedThreads.getOrNull(2)?.displayName
+                val contact3Count = top3?.count ?: sortedThreads.getOrNull(2)?.messageCount
 
                 // Fast SMS vs MMS count from system content provider without heavy MIME attachment parsing
                 var totalSms = cached?.totalSms ?: 0L
@@ -122,25 +130,25 @@ class FullInsightsWidgetProvider : AppWidgetProvider() {
                         setTextViewText(R.id.insight_peak_hour, peakHourStr)
 
                         // Top Contacts list
-                        if (top1 != null) {
-                            setTextViewText(R.id.insight_contact_1_name, "1. ${top1.displayName}")
-                            setTextViewText(R.id.insight_contact_1_count, "%,d msgs".format(top1.messageCount))
+                        if (contact1Name != null && contact1Count != null) {
+                            setTextViewText(R.id.insight_contact_1_name, "1. $contact1Name")
+                            setTextViewText(R.id.insight_contact_1_count, "%,d msgs".format(contact1Count))
                         } else {
                             setTextViewText(R.id.insight_contact_1_name, "1. --")
                             setTextViewText(R.id.insight_contact_1_count, "--")
                         }
 
-                        if (top2 != null) {
-                            setTextViewText(R.id.insight_contact_2_name, "2. ${top2.displayName}")
-                            setTextViewText(R.id.insight_contact_2_count, "%,d msgs".format(top2.messageCount))
+                        if (contact2Name != null && contact2Count != null) {
+                            setTextViewText(R.id.insight_contact_2_name, "2. $contact2Name")
+                            setTextViewText(R.id.insight_contact_2_count, "%,d msgs".format(contact2Count))
                         } else {
                             setTextViewText(R.id.insight_contact_2_name, "2. --")
                             setTextViewText(R.id.insight_contact_2_count, "--")
                         }
 
-                        if (top3 != null) {
-                            setTextViewText(R.id.insight_contact_3_name, "3. ${top3.displayName}")
-                            setTextViewText(R.id.insight_contact_3_count, "%,d msgs".format(top3.messageCount))
+                        if (contact3Name != null && contact3Count != null) {
+                            setTextViewText(R.id.insight_contact_3_name, "3. $contact3Name")
+                            setTextViewText(R.id.insight_contact_3_count, "%,d msgs".format(contact3Count))
                         } else {
                             setTextViewText(R.id.insight_contact_3_name, "3. --")
                             setTextViewText(R.id.insight_contact_3_count, "--")
