@@ -111,7 +111,11 @@ fun MainScreen(
     uiState.viewerFile?.let { file ->
         com.messagebackup.app.ui.viewer.DocumentViewerScreen(
             zipFile = file,
-            onNavigateBack = { viewModel.setViewerFile(null) },
+            onNavigateBack = {
+                viewModel.adManager.showInterstitialAd(activity, isAdsRemoved) {
+                    viewModel.setViewerFile(null)
+                }
+            },
             onShare = {
                 val uri: Uri = FileProvider.getUriForFile(
                     context,

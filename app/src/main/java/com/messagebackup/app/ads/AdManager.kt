@@ -26,6 +26,9 @@ class AdManager(private val context: Context) {
 
     private var rewardedAd: RewardedAd? = null
     private var isAdLoading = false
+    private var interstitialAd: com.google.android.gms.ads.interstitial.InterstitialAd? = null
+    private var isInterstitialLoading = false
+    private var lastInterstitialShownTime = 0L
 
     /**
      * Initializes the User Messaging Platform (UMP) SDK for GDPR/UK compliance,
@@ -65,6 +68,7 @@ class AdManager(private val context: Context) {
     private fun initializeMobileAds(context: Context) {
         MobileAds.initialize(context) {
             loadRewardedAd(context)
+            loadInterstitialAd(context)
         }
     }
 
@@ -137,6 +141,83 @@ class AdManager(private val context: Context) {
             // Ad was not ready; don't penalize user - proceed with export and queue load
             loadRewardedAd(activity)
             onUserEarnedReward()
+        }
+    }
+
+    /**
+     * Preloads an Interstitial Ad for screen transition monetization.
+     */
+    fun loadInterstitialAd(context: Context) {
+        if (interstitialAd != null || isInterstitialLoading) return
+
+        isInterstitialLoading = true
+        val adUnitId = context.getString(R.string.admob_interstitial_id)
+        val adRequest = AdRequest.Builder().build()
+
+        com.google.android.gms.ads.interstitial.InterstitialAd.load(
+            context,
+            adUnitId,
+            adRequest,
+            object : com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: com.google.android.gms.ads.interstitial.InterstitialAd) {
+                    interstitialAd = ad
+                    isInterstitialLoading = false
+                    Log.d(TAG, "Interstitial Ad successfully loaded.")
+                }
+
+                override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                    interstitialAd = null
+                    isInterstitialLoading = false
+                    Log.w(TAG, "Interstitial Ad failed to load: ${loadAdError.message}")
+                }
+            }
+        )
+    }
+
+    /**
+     * Shows an Interstitial Ad upon completing actions (e.g., closing conversation viewer).
+     * Protected by a 60-second frequency cap to avoid overwhelming users and to keep 5-star ratings.
+     */
+    fun showInterstitialAd(
+        activity: Activity,
+        isAdsRemoved: Boolean,
+        onComplete: () -> Unit = {}
+    ) {
+        if (isAdsRemoved) {
+            onComplete()
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val elapsedSinceLast = now - lastInterstitialShownTime
+
+        // Pacing limit: at least 60 seconds between interstitials
+        if (elapsedSinceLast < 60_000L) {
+            onComplete()
+            return
+        }
+
+        val ad = interstitialAd
+        if (ad != null) {
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    interstitialAd = null
+                    lastInterstitialShownTime = System.currentTimeMillis()
+                    loadInterstitialAd(activity)
+                    onComplete()
+                }
+
+                override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                    interstitialAd = null
+                    loadInterstitialAd(activity)
+                    onComplete()
+                }
+            }
+
+            ad.show(activity)
+        } else {
+            loadInterstitialAd(activity)
+            onComplete()
         }
     }
 }
