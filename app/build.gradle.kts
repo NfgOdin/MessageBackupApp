@@ -84,10 +84,11 @@ dependencies {
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
 
-  // Google Mobile Ads, User Messaging Platform (GDPR/UMP), and Play Billing
+  // Google Mobile Ads, User Messaging Platform (GDPR/UMP), Play Billing, and AES-256 Zip4j
   implementation(libs.play.services.ads)
   implementation(libs.user.messaging.platform)
   implementation(libs.play.billing)
+  implementation(libs.zip4j)
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)

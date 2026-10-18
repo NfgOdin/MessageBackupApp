@@ -67,8 +67,9 @@ class ExportEngine(
             val zipFile = File(exportsDir, zipFileName)
             var totalProcessedMessages = 0
             var totalGeneratedParts = 0
+            val activePassword = options.zipPassword?.takeIf { it.isNotBlank() }
 
-            ZipOutputStream(FileOutputStream(zipFile)).use { zipOut ->
+            val writeAllThreads: suspend ((String, ByteArray) -> Unit) -> Unit = { putEntry ->
                 for (thread in threads) {
                     var messages = telephonyRepository.getMessagesForThread(thread.threadId, resolveContacts)
 
@@ -98,9 +99,7 @@ class ExportEngine(
                                 if (addedEntryPaths.add(entryPath)) {
                                     val bytes = telephonyRepository.getAttachmentBytes(att.contentUri)
                                     if (bytes != null && bytes.isNotEmpty()) {
-                                        zipOut.putNextEntry(ZipEntry(entryPath))
-                                        zipOut.write(bytes)
-                                        zipOut.closeEntry()
+                                        putEntry(entryPath, bytes)
                                     }
                                 }
                             }
@@ -131,16 +130,14 @@ class ExportEngine(
                         } else null
 
                         val zipEntryPath = "$threadDirName/$currentFileName"
-                        zipOut.putNextEntry(ZipEntry(zipEntryPath))
 
-                        if (options.format == ExportFormat.PDF) {
-                            val pdfBytes = pdfFormatter.generatePdf(
+                        val entryBytes = if (options.format == ExportFormat.PDF) {
+                            pdfFormatter.generatePdf(
                                 thread = thread,
                                 messages = chunk,
                                 currentPart = partNum,
                                 totalParts = totalParts
                             )
-                            zipOut.write(pdfBytes)
                         } else {
                             val documentContent = when (options.format) {
                                 ExportFormat.HTML -> htmlFormatter.formatConversationPart(
@@ -172,8 +169,37 @@ class ExportEngine(
                                 )
                                 ExportFormat.PDF -> ""
                             }
-                            zipOut.write(documentContent.toByteArray(Charsets.UTF_8))
+                            documentContent.toByteArray(Charsets.UTF_8)
                         }
+                        putEntry(zipEntryPath, entryBytes)
+                    }
+                }
+            }
+
+            if (activePassword != null) {
+                // AES-256 Encrypted ZIP Archive via Zip4j
+                net.lingala.zip4j.io.outputstream.ZipOutputStream(
+                    FileOutputStream(zipFile),
+                    activePassword.toCharArray()
+                ).use { aesZipOut ->
+                    writeAllThreads { entryPath, bytes ->
+                        val params = net.lingala.zip4j.model.ZipParameters().apply {
+                            fileNameInZip = entryPath
+                            isEncryptFiles = true
+                            encryptionMethod = net.lingala.zip4j.model.enums.EncryptionMethod.AES
+                            aesKeyStrength = net.lingala.zip4j.model.enums.AesKeyStrength.KEY_STRENGTH_256
+                        }
+                        aesZipOut.putNextEntry(params)
+                        aesZipOut.write(bytes)
+                        aesZipOut.closeEntry()
+                    }
+                }
+            } else {
+                // Standard Unencrypted ZIP Archive
+                ZipOutputStream(FileOutputStream(zipFile)).use { zipOut ->
+                    writeAllThreads { entryPath, bytes ->
+                        zipOut.putNextEntry(ZipEntry(entryPath))
+                        zipOut.write(bytes)
                         zipOut.closeEntry()
                     }
                 }

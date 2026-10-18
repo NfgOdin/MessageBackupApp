@@ -18,6 +18,7 @@ playBilling = "7.1.1"
 userMessagingPlatform = "3.1.0"
 workManager = "2.10.0"
 coreSplashScreen = "1.0.1"
+zip4j = "2.11.5"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -48,6 +49,7 @@ androidx-lifecycle-viewmodel-navigation3 = { module = "androidx.lifecycle:lifecy
 play-services-ads = { module = "com.google.android.gms:play-services-ads", version.ref = "playServicesAds" }
 play-billing = { module = "com.android.billingclient:billing-ktx", version.ref = "playBilling" }
 user-messaging-platform = { module = "com.google.android.ump:user-messaging-platform", version.ref = "userMessagingPlatform" }
+zip4j = { module = "net.lingala.zip4j:zip4j", version.ref = "zip4j" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }

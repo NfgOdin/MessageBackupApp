@@ -92,16 +92,20 @@ fun SettingsScreen(
     val isAutoBackupUnlocked by billingManager.isAutoBackupUnlocked.collectAsState()
     val autoBackupPrice by billingManager.autoBackupPrice.collectAsState()
 
-    // O.D.I.N. AI & Auto-Backup Credit States
+    // O.D.I.N. AI, Auto-Backup, and Privacy Lock States
     val aiCredits by prefs.aiCredits.collectAsState()
     val autoBackupCredits by prefs.autoBackupCredits.collectAsState()
     val autoBackupEnabled by prefs.autoBackupEnabled.collectAsState()
+    val appLockEnabled by prefs.appLockEnabled.collectAsState()
+    val odinLockEnabled by prefs.odinLockEnabled.collectAsState()
+    val privacyPinHash by prefs.privacyPinHash.collectAsState()
     val aiProvider by prefs.aiProvider.collectAsState()
     val geminiApiKey by prefs.geminiApiKey.collectAsState()
     val ollamaEndpoint by prefs.ollamaEndpoint.collectAsState()
     val ollamaModel by prefs.ollamaModel.collectAsState()
     var showOllamaGuide by remember { mutableStateOf(false) }
     var showRewardArcade by remember { mutableStateOf(false) }
+    var showSetPinDialog by remember { mutableStateOf(false) }
     var devTapCount by remember { mutableStateOf(0) }
     var showDevKeyDialog by remember { mutableStateOf(false) }
     var devKeyInput by remember { mutableStateOf("") }
@@ -676,7 +680,88 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 8. Contact Resolution
+            // 8. Privacy PIN & Biometric Lock
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "🔒 Privacy PIN & Biometric Lock",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Protect your message archive and O.D.I.N. Copilot with your phone's Fingerprint / Face Unlock or a custom SHA-256 Privacy PIN.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = "Lock App on Startup", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "Require PIN or Biometrics when opening the app",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = appLockEnabled,
+                            onCheckedChange = { enabled ->
+                                prefs.setAppLockEnabled(enabled)
+                                if (enabled && privacyPinHash.isBlank()) {
+                                    showSetPinDialog = true
+                                }
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = "Lock O.D.I.N. & Document Viewer", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "Require PIN or Biometrics before opening AI or viewing archives",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = odinLockEnabled,
+                            onCheckedChange = { enabled ->
+                                prefs.setOdinLockEnabled(enabled)
+                                if (enabled && privacyPinHash.isBlank()) {
+                                    showSetPinDialog = true
+                                }
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = { showSetPinDialog = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (privacyPinHash.isNotBlank()) "Change Custom Privacy PIN" else "Set Custom Privacy PIN")
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 9. Contact Resolution
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -699,7 +784,7 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 9. App Appearance Theme
+            // 10. App Appearance Theme
             Text(
                 text = "App Appearance Theme",
                 style = MaterialTheme.typography.titleMedium,
@@ -727,7 +812,7 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 10. Storage / Export Cache Cleaner
+            // 11. Storage / Export Cache Cleaner
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -757,7 +842,7 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 8. About & Legal
+            // 12. About & Legal
             Text(
                 text = "About & Legal",
                 style = MaterialTheme.typography.titleMedium,
@@ -800,6 +885,14 @@ fun SettingsScreen(
             }
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    if (showSetPinDialog) {
+        com.messagebackup.app.ui.dialogs.SetPrivacyPinDialog(
+            prefs = prefs,
+            onPinSaved = { showSetPinDialog = false },
+            onDismiss = { showSetPinDialog = false }
+        )
     }
 
     if (showOllamaGuide) {

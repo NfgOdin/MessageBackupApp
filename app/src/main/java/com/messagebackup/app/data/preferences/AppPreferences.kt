@@ -38,6 +38,11 @@ class AppPreferences(context: Context) {
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
         private const val KEY_OLLAMA_ENDPOINT = "ollama_endpoint"
         private const val KEY_OLLAMA_MODEL = "ollama_model"
+
+        // Privacy PIN & Biometric Lock Preferences
+        private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
+        private const val KEY_ODIN_LOCK_ENABLED = "odin_lock_enabled"
+        private const val KEY_PRIVACY_PIN_HASH = "privacy_pin_hash"
     }
 
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
@@ -53,6 +58,15 @@ class AppPreferences(context: Context) {
 
     private val _autoBackupEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_BACKUP_ENABLED, false))
     val autoBackupEnabled: StateFlow<Boolean> = _autoBackupEnabled.asStateFlow()
+
+    private val _appLockEnabled = MutableStateFlow(prefs.getBoolean(KEY_APP_LOCK_ENABLED, false))
+    val appLockEnabled: StateFlow<Boolean> = _appLockEnabled.asStateFlow()
+
+    private val _odinLockEnabled = MutableStateFlow(prefs.getBoolean(KEY_ODIN_LOCK_ENABLED, false))
+    val odinLockEnabled: StateFlow<Boolean> = _odinLockEnabled.asStateFlow()
+
+    private val _privacyPinHash = MutableStateFlow(prefs.getString(KEY_PRIVACY_PIN_HASH, "") ?: "")
+    val privacyPinHash: StateFlow<String> = _privacyPinHash.asStateFlow()
 
     private val _aiProvider = MutableStateFlow(prefs.getString(KEY_AI_PROVIDER, "GEMINI") ?: "GEMINI")
     val aiProvider: StateFlow<String> = _aiProvider.asStateFlow()
@@ -204,5 +218,35 @@ class AppPreferences(context: Context) {
     fun setGoogleDriveAccount(email: String?) {
         prefs.edit().putString(KEY_GOOGLE_DRIVE_ACCOUNT, email).apply()
         _googleDriveAccount.value = email
+    }
+
+    fun setAppLockEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_APP_LOCK_ENABLED, enabled).apply()
+        _appLockEnabled.value = enabled
+    }
+
+    fun setOdinLockEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ODIN_LOCK_ENABLED, enabled).apply()
+        _odinLockEnabled.value = enabled
+    }
+
+    fun setPrivacyPin(rawPin: String) {
+        val hash = hashPinSha256(rawPin.trim())
+        prefs.edit().putString(KEY_PRIVACY_PIN_HASH, hash).apply()
+        _privacyPinHash.value = hash
+    }
+
+    fun verifyPrivacyPin(enteredPin: String): Boolean {
+        val stored = _privacyPinHash.value
+        if (stored.isBlank()) return false
+        return hashPinSha256(enteredPin.trim()).equals(stored, ignoreCase = true)
+    }
+
+    fun hasPrivacyPin(): Boolean = _privacyPinHash.value.isNotBlank()
+
+    private fun hashPinSha256(pin: String): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        val bytes = md.digest(("OdinVaultPinSalt:" + pin).toByteArray(Charsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 }

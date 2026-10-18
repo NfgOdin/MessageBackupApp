@@ -103,6 +103,8 @@ fun MainScreen(
     val exportTheme by prefs.exportTheme.collectAsState()
     val outputDestination by prefs.outputDestination.collectAsState()
     val safFolderDisplay by prefs.safDirectoryDisplay.collectAsState()
+    val appLockEnabled by prefs.appLockEnabled.collectAsState()
+    val odinLockEnabled by prefs.odinLockEnabled.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -110,6 +112,44 @@ fun MainScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var isMessageSelectionMode by remember { mutableStateOf(false) }
     var showRewardArcade by remember { mutableStateOf(false) }
+    var isAppSessionUnlocked by remember { mutableStateOf(false) }
+    var pendingProtectedAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    val runWithOdinLock: (() -> Unit) -> Unit = { action ->
+        if (odinLockEnabled) {
+            pendingProtectedAction = action
+        } else {
+            action()
+        }
+    }
+
+    // App Startup Privacy Lock
+    if (appLockEnabled && !isAppSessionUnlocked) {
+        Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            com.messagebackup.app.ui.dialogs.PrivacyUnlockDialog(
+                title = "Unlock Message Backup",
+                subtitle = "Enter your Privacy PIN or use Fingerprint / Device Lock to access your messages.",
+                prefs = prefs,
+                onUnlocked = { isAppSessionUnlocked = true },
+                onCancel = { activity.finish() }
+            )
+        }
+        return
+    }
+
+    // O.D.I.N. & Viewer Privacy Lock Prompt
+    pendingProtectedAction?.let { action ->
+        com.messagebackup.app.ui.dialogs.PrivacyUnlockDialog(
+            title = "Unlock Protected Vault",
+            subtitle = "Verify your identity to access O.D.I.N. Copilot or the Document Viewer.",
+            prefs = prefs,
+            onUnlocked = {
+                pendingProtectedAction = null
+                action()
+            },
+            onCancel = { pendingProtectedAction = null }
+        )
+    }
 
     // In-App Document Viewer Mode
     uiState.viewerFile?.let { file ->
@@ -236,7 +276,9 @@ fun MainScreen(
             activity = activity,
             isAdsRemoved = isAdsRemoved,
             onUserEarnedReward = {
-                viewModel.setViewerFile(file)
+                runWithOdinLock {
+                    viewModel.setViewerFile(file)
+                }
             }
         )
     }
@@ -266,7 +308,7 @@ fun MainScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { viewModel.setCopilotOpen(true) }) {
+                        IconButton(onClick = { runWithOdinLock { viewModel.setCopilotOpen(true) } }) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = "O.D.I.N. Copilot",
@@ -348,7 +390,7 @@ fun MainScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { viewModel.setCopilotOpen(true) }) {
+                        IconButton(onClick = { runWithOdinLock { viewModel.setCopilotOpen(true) } }) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = "O.D.I.N. Copilot",
@@ -404,7 +446,7 @@ fun MainScreen(
                                 leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                                 onClick = {
                                     showMenu = false
-                                    viewModel.setCopilotOpen(true)
+                                    runWithOdinLock { viewModel.setCopilotOpen(true) }
                                 }
                             )
 

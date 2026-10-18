@@ -63,57 +63,115 @@ fun DocumentViewerScreen(
     var unzipProgress by remember { mutableFloatStateOf(0f) }
     var primaryDocumentFile by remember { mutableStateOf<File?>(null) }
     var documentContent by remember { mutableStateOf<String?>(null) }
+    var needsPassword by remember { mutableStateOf(false) }
+    var enteredPassword by remember { mutableStateOf("") }
+    var passwordError by remember { mutableStateOf<String?>(null) }
+    var unlockAttemptTrigger by remember { mutableStateOf(0) }
 
-    LaunchedEffect(zipFile) {
+    LaunchedEffect(zipFile, unlockAttemptTrigger) {
         withContext(Dispatchers.IO) {
-            val unzippedDir = File(zipFile.parentFile, "unzipped_${zipFile.nameWithoutExtension}")
-            if (!unzippedDir.exists()) {
-                unzippedDir.mkdirs()
-            }
-            val canonicalDirPrefix = unzippedDir.canonicalPath + File.separator
+            try {
+                val zFile = net.lingala.zip4j.ZipFile(zipFile)
+                if (zFile.isEncrypted && enteredPassword.isBlank()) {
+                    needsPassword = true
+                    isUnzipping = false
+                    return@withContext
+                }
+                if (zFile.isEncrypted) {
+                    zFile.setPassword(enteredPassword.toCharArray())
+                }
 
-            // Estimate total entries for progress calculation
-            var totalEntries = 0
-            ZipInputStream(FileInputStream(zipFile)).use { zin ->
-                while (zin.nextEntry != null) totalEntries++
-            }
-            if (totalEntries == 0) totalEntries = 1
+                isUnzipping = true
+                needsPassword = false
+                passwordError = null
 
-            var processed = 0
-            var foundMainDoc: File? = null
+                val unzippedDir = File(zipFile.parentFile, "unzipped_${zipFile.nameWithoutExtension}")
+                if (!unzippedDir.exists()) {
+                    unzippedDir.mkdirs()
+                }
+                val canonicalDirPrefix = unzippedDir.canonicalPath + File.separator
 
-            ZipInputStream(FileInputStream(zipFile)).use { zipIn ->
-                var entry = zipIn.nextEntry
-                while (entry != null) {
-                    val outFile = File(unzippedDir, entry.name)
+                val headers = zFile.fileHeaders
+                val totalEntries = headers.size.coerceAtLeast(1)
+                var processed = 0
+                var foundMainDoc: File? = null
+
+                for (header in headers) {
+                    val outFile = File(unzippedDir, header.fileName)
                     // Zip Slip Path Traversal Security Check (Google Play App Security Requirement)
                     if (!outFile.canonicalPath.startsWith(canonicalDirPrefix)) {
-                        throw SecurityException("Zip Entry is outside of target directory: ${entry.name}")
+                        throw SecurityException("Zip Entry is outside of target directory: ${header.fileName}")
                     }
-                    if (entry.isDirectory) {
+                    if (header.isDirectory) {
                         outFile.mkdirs()
                     } else {
                         outFile.parentFile?.mkdirs()
-                        FileOutputStream(outFile).use { out ->
-                            zipIn.copyTo(out)
+                        zFile.getInputStream(header).use { zIn ->
+                            FileOutputStream(outFile).use { out ->
+                                zIn.copyTo(out)
+                            }
                         }
-                        val lower = entry.name.lowercase()
+                        val lower = header.fileName.lowercase()
                         if (foundMainDoc == null && (lower.endsWith(".html") || lower.endsWith(".pdf") || lower.endsWith(".csv") || lower.endsWith(".md") || lower.endsWith(".txt"))) {
                             foundMainDoc = outFile
                         }
                     }
                     processed++
                     unzipProgress = (processed.toFloat() / totalEntries).coerceIn(0f, 1f)
-                    entry = zipIn.nextEntry
+                }
+
+                primaryDocumentFile = foundMainDoc
+                if (foundMainDoc != null && !foundMainDoc.name.endsWith(".pdf")) {
+                    documentContent = foundMainDoc.readText(Charsets.UTF_8)
+                }
+                isUnzipping = false
+            } catch (e: Exception) {
+                passwordError = "Incorrect password or unable to decrypt archive."
+                needsPassword = true
+                isUnzipping = false
+            }
+        }
+    }
+
+    if (needsPassword) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = onNavigateBack,
+            title = { Text("🔒 Encrypted Archive") },
+            text = {
+                Column {
+                    Text(
+                        text = "This backup archive is protected with AES-256 encryption. Enter the password to view its contents.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    androidx.compose.material3.OutlinedTextField(
+                        value = enteredPassword,
+                        onValueChange = { enteredPassword = it },
+                        label = { Text("Archive Password") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    passwordError?.let { err ->
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(text = err, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    enabled = enteredPassword.isNotBlank(),
+                    onClick = { unlockAttemptTrigger++ }
+                ) {
+                    Text("Unlock & View")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = onNavigateBack) {
+                    Text("Cancel")
                 }
             }
-
-            primaryDocumentFile = foundMainDoc
-            if (foundMainDoc != null && !foundMainDoc!!.name.endsWith(".pdf")) {
-                documentContent = foundMainDoc!!.readText(Charsets.UTF_8)
-            }
-            isUnzipping = false
-        }
+        )
     }
 
     Scaffold(

@@ -54,7 +54,8 @@ data class ExportOptions(
     val customStartDate: Long? = null,
     val customEndDate: Long? = null,
     val excludedMessageIds: Set<Long> = emptySet(),
-    val outputType: OutputDestination = OutputDestination.SHARE_SHEET
+    val outputType: OutputDestination = OutputDestination.SHARE_SHEET,
+    val zipPassword: String? = null
 )
 
 /**

@@ -67,6 +67,8 @@ fun ExportConfigDialog(
     var selectedMaxPerFile by remember { mutableStateOf(initialMaxPerFile) }
     var includeMedia by remember { mutableStateOf(true) }
     var destination by remember { mutableStateOf(initialDestination) }
+    var useZipPassword by remember { mutableStateOf(false) }
+    var zipPassword by remember { mutableStateOf("") }
 
     val scrollState = rememberScrollState()
     val dateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy").withZone(ZoneId.systemDefault())
@@ -231,6 +233,44 @@ fun ExportConfigDialog(
                     }
                 }
 
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // 6. Optional AES-256 Archive Password Encryption
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { useZipPassword = !useZipPassword }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = useZipPassword,
+                        onCheckedChange = { useZipPassword = it }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(text = "Password-Protect Archive (AES-256)", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = "Encrypt the .zip file with a custom password",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                if (useZipPassword) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = zipPassword,
+                        onValueChange = { zipPassword = it },
+                        label = { Text("Archive Password") },
+                        placeholder = { Text("Enter strong password") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                    )
+                }
+
                 if (!isAdsRemoved) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -243,6 +283,7 @@ fun ExportConfigDialog(
         },
         confirmButton = {
             Button(
+                enabled = !useZipPassword || zipPassword.isNotBlank(),
                 onClick = {
                     onConfirmExport(
                         ExportOptions(
@@ -253,7 +294,8 @@ fun ExportConfigDialog(
                             dateRange = selectedDateRange,
                             customStartDate = customStartDate,
                             customEndDate = customEndDate,
-                            outputType = destination
+                            outputType = destination,
+                            zipPassword = if (useZipPassword) zipPassword.trim() else null
                         )
                     )
                 }
