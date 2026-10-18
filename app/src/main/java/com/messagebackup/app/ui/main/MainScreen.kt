@@ -214,7 +214,16 @@ fun MainScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { viewModel.setShowStatsDialog(true) }) {
+                        IconButton(onClick = {
+                            viewModel.loadStatistics()
+                            viewModel.adManager.showRewardedAd(
+                                activity = activity,
+                                isAdsRemoved = isAdsRemoved,
+                                onUserEarnedReward = {
+                                    viewModel.setShowStatsDialog(true)
+                                }
+                            )
+                        }) {
                             Icon(
                                 imageVector = Icons.Default.Insights,
                                 contentDescription = "Thread Analytics",
@@ -320,7 +329,14 @@ fun MainScreen(
                                 leadingIcon = { Icon(Icons.Default.Insights, contentDescription = null) },
                                 onClick = {
                                     showMenu = false
-                                    viewModel.setShowStatsDialog(true)
+                                    viewModel.loadStatistics()
+                                    viewModel.adManager.showRewardedAd(
+                                        activity = activity,
+                                        isAdsRemoved = isAdsRemoved,
+                                        onUserEarnedReward = {
+                                            viewModel.setShowStatsDialog(true)
+                                        }
+                                    )
                                 }
                             )
 
@@ -669,10 +685,44 @@ fun MainScreen(
 
     // Conversation Insights / Statistics Modal
     if (uiState.showStatsDialog) {
+        val statsFormatter = remember { com.messagebackup.app.domain.export.StatsReportFormatter(context) }
         com.messagebackup.app.ui.components.ConversationStatsDialog(
             stats = uiState.stats,
             isLoading = uiState.isStatsLoading,
-            onDismiss = { viewModel.setShowStatsDialog(false) }
+            onExportReport = {
+                uiState.stats?.let { statsData ->
+                    viewModel.adManager.showRewardedAd(
+                        activity = activity,
+                        isAdsRemoved = isAdsRemoved,
+                        onUserEarnedReward = {
+                            val targetTitle = uiState.selectedThreadForPreview?.displayName ?: "All Conversations"
+                            val reportFile = statsFormatter.generateHtmlReport(statsData, targetTitle)
+                            val uri: Uri = FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                reportFile
+                            )
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/html"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                putExtra(Intent.EXTRA_SUBJECT, "$targetTitle - Conversation Insights Report")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share Insights Report"))
+                        }
+                    )
+                } ?: run {
+                    Toast.makeText(context, "Insights still loading, please wait...", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDismiss = {
+                viewModel.setShowStatsDialog(false)
+                viewModel.adManager.showInterstitialAd(
+                    activity = activity,
+                    isAdsRemoved = isAdsRemoved,
+                    onComplete = {}
+                )
+            }
         )
     }
 }

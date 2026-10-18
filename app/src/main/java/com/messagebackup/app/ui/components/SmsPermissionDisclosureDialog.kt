@@ -29,10 +29,10 @@ fun SmsPermissionDisclosureDialog(
         text = {
             Text(
                 text = "Message Backup & Export requires SMS and MMS access to read your existing message " +
-                        "threads and package them into documents (Markdown, HTML, TXT) with images on your device.\n\n" +
-                        "• Your messages and media remain strictly on your device.\n" +
-                        "• Nothing is uploaded to external servers or transmitted without your explicit action.\n" +
-                        "• This permission is used exclusively for the backup and export functionality."
+                        "conversations and package them into documents (PDF, HTML, CSV, Markdown, and TXT) with images on your device.\n\n" +
+                        "• Your messages and media remain strictly on your device or in your designated personal cloud.\n" +
+                        "• Nothing is uploaded to third-party developer servers or shared with unauthorized parties.\n" +
+                        "• This permission is used exclusively for the backup, analytics, and export functionality."
             )
         },
         confirmButton = {
