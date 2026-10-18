@@ -66,6 +66,8 @@ data class MainUiState(
     val showReviewPromptDialog: Boolean = false,
     val isVaultOpen: Boolean = false,
     val isVaultLoading: Boolean = false,
+    val vaultProgressPct: Int = 0,
+    val vaultProgressMessage: String = "",
     val vaultMediaItems: List<com.messagebackup.app.model.VaultMediaItem> = emptyList()
 )
 
@@ -560,11 +562,23 @@ class MainViewModel : ViewModel() {
     fun loadMediaVault(forceRefresh: Boolean = false) {
         if (!forceRefresh && _uiState.value.vaultMediaItems.isNotEmpty()) return
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isVaultLoading = true)
+            _uiState.value = _uiState.value.copy(
+                isVaultLoading = true,
+                vaultProgressPct = 0,
+                vaultProgressMessage = "Discovering MMS messages..."
+            )
             val resolve = prefs.resolveContacts.value && _uiState.value.hasContactsPermission
-            val items = app.currentTelephonyRepository.getAllMediaAttachments(resolve)
+            val items = app.currentTelephonyRepository.getAllMediaAttachments(resolve) { processed, total ->
+                val pct = if (total > 0) ((processed.toFloat() / total.toFloat()) * 100f).toInt().coerceIn(0, 100) else 0
+                _uiState.value = _uiState.value.copy(
+                    vaultProgressPct = pct,
+                    vaultProgressMessage = "Scanning attachments: $processed of $total messages ($pct%)..."
+                )
+            }
             _uiState.value = _uiState.value.copy(
                 isVaultLoading = false,
+                vaultProgressPct = 100,
+                vaultProgressMessage = "Vault ready!",
                 vaultMediaItems = items
             )
         }

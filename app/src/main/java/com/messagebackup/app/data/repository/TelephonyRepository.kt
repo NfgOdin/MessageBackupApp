@@ -47,6 +47,12 @@ interface TelephonyRepository {
 
     /**
      * Retrieves all multimedia attachments across all MMS conversation threads.
+     *
+     * @param resolveContacts If true, resolves address book names for senders.
+     * @param onProgress Optional callback receiving (processedCount, totalCount) for progress tracking.
      */
-    suspend fun getAllMediaAttachments(resolveContacts: Boolean): List<com.messagebackup.app.model.VaultMediaItem>
+    suspend fun getAllMediaAttachments(
+        resolveContacts: Boolean,
+        onProgress: ((processed: Int, total: Int) -> Unit)? = null
+    ): List<com.messagebackup.app.model.VaultMediaItem>
 }

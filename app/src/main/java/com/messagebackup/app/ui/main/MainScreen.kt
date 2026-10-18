@@ -243,6 +243,8 @@ fun MainScreen(
         com.messagebackup.app.ui.screens.MediaVaultScreen(
             mediaItems = uiState.vaultMediaItems,
             isLoading = uiState.isVaultLoading,
+            progressPct = uiState.vaultProgressPct,
+            progressMessage = uiState.vaultProgressMessage,
             adManager = viewModel.adManager,
             isAdsRemoved = isAdsRemoved,
             onRefresh = { viewModel.loadMediaVault(forceRefresh = true) },

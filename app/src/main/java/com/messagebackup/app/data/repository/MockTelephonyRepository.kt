@@ -194,13 +194,20 @@ class MockTelephonyRepository : TelephonyRepository {
         return true
     }
 
-    override suspend fun getAllMediaAttachments(resolveContacts: Boolean): List<com.messagebackup.app.model.VaultMediaItem> {
+    override suspend fun getAllMediaAttachments(
+        resolveContacts: Boolean,
+        onProgress: ((processed: Int, total: Int) -> Unit)?
+    ): List<com.messagebackup.app.model.VaultMediaItem> {
         val list = mutableListOf<com.messagebackup.app.model.VaultMediaItem>()
+        var processed = 0
+        val total = sampleMessages.values.sumOf { it.size }
         for ((threadId, messages) in sampleMessages) {
             val thread = sampleThreads.find { it.threadId == threadId }
             val contact = if (resolveContacts) thread?.displayName ?: "Unknown" else thread?.address ?: "Unknown"
             val addr = thread?.address ?: ""
             for (msg in messages) {
+                processed++
+                onProgress?.invoke(processed, total)
                 for (att in msg.attachments) {
                     list.add(
                         com.messagebackup.app.model.VaultMediaItem(

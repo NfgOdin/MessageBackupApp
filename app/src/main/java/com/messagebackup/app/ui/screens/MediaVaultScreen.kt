@@ -49,6 +49,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -99,6 +100,8 @@ import java.util.zip.ZipOutputStream
 fun MediaVaultScreen(
     mediaItems: List<VaultMediaItem>,
     isLoading: Boolean,
+    progressPct: Int = 0,
+    progressMessage: String = "",
     adManager: AdManager,
     isAdsRemoved: Boolean,
     onRefresh: () -> Unit,
@@ -276,14 +279,54 @@ fun MediaVaultScreen(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(horizontal = 32.dp)
                     ) {
-                        CircularProgressIndicator()
-                        Text(
-                            text = if (isBulkExporting) "Packaging media files into ZIP..." else "Indexing MMS attachments...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        if (isBulkExporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(56.dp),
+                                strokeWidth = 5.dp
+                            )
+                            Text(
+                                text = "Packaging media files into ZIP...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Box(contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(
+                                    progress = { progressPct.toFloat() / 100f },
+                                    modifier = Modifier.size(72.dp),
+                                    strokeWidth = 6.dp,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                                Text(
+                                    text = "$progressPct%",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = if (progressMessage.isNotBlank()) progressMessage else "Scanning MMS attachments...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                LinearProgressIndicator(
+                                    progress = { progressPct.toFloat() / 100f },
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.75f)
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             } else if (filteredItems.isEmpty()) {

@@ -543,7 +543,10 @@ class TelephonyRepositoryImpl(
         }
     }
 
-    override suspend fun getAllMediaAttachments(resolveContacts: Boolean): List<com.messagebackup.app.model.VaultMediaItem> = withContext(Dispatchers.IO) {
+    override suspend fun getAllMediaAttachments(
+        resolveContacts: Boolean,
+        onProgress: ((processed: Int, total: Int) -> Unit)?
+    ): List<com.messagebackup.app.model.VaultMediaItem> = withContext(Dispatchers.IO) {
         val vaultItems = mutableListOf<com.messagebackup.app.model.VaultMediaItem>()
         // 1. Query all MMS messages
         val mmsUri = Telephony.Mms.CONTENT_URI
@@ -565,12 +568,17 @@ class TelephonyRepositoryImpl(
             )
 
             cursor?.let {
+                val totalCount = it.count
                 val idIdx = it.getColumnIndexOrThrow(Telephony.Mms._ID)
                 val tIdIdx = it.getColumnIndexOrThrow(Telephony.Mms.THREAD_ID)
                 val dateIdx = it.getColumnIndexOrThrow(Telephony.Mms.DATE)
                 val msgBoxIdx = it.getColumnIndexOrThrow(Telephony.Mms.MESSAGE_BOX)
 
+                var processedCount = 0
                 while (it.moveToNext()) {
+                    processedCount++
+                    onProgress?.invoke(processedCount, totalCount)
+
                     val mmsId = it.getLong(idIdx)
                     val threadId = it.getLong(tIdIdx)
                     val date = it.getLong(dateIdx) * 1000L
