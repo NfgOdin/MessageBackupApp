@@ -326,10 +326,14 @@ class TelephonyRepositoryImpl(
                             }
                         }
                     } else if (contentType.startsWith("image/") || contentType.startsWith("audio/") || contentType.startsWith("video/")) {
-                        // Media attachment
+                        // Media attachment: always prefix with partId to guarantee uniqueness in zip entries
                         val extension = getExtensionForMime(contentType)
-                        val fileName = name ?: cl ?: "mms_part_${partId}.$extension"
-                        val contentUri = Uri.parse("content://mms/part/$partId")
+                        val rawName = name ?: cl
+                        val fileName = if (rawName != null && rawName.isNotBlank()) {
+                            "${partId}_$rawName"
+                        } else {
+                            "mms_part_${partId}.$extension"
+                        }
 
                         attachments.add(
                             MediaAttachment(

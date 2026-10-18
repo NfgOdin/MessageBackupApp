@@ -31,12 +31,14 @@ class BillingManager(
 
     companion object {
         const val PRODUCT_REMOVE_ADS = "remove_ads_permanent"
+        const val PRODUCT_AUTO_BACKUP = "auto_backup_standalone"
         const val TIP_SMALL = "tip_coffee_099"
         const val TIP_MEDIUM = "tip_lunch_299"
         const val TIP_LARGE = "tip_pizza_499"
 
         private const val PREFS_NAME = "message_backup_billing_prefs"
         private const val KEY_ADS_REMOVED = "is_ads_removed"
+        private const val KEY_AUTO_BACKUP = "is_auto_backup_unlocked"
     }
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -44,8 +46,19 @@ class BillingManager(
     private val _isAdsRemoved = MutableStateFlow(prefs.getBoolean(KEY_ADS_REMOVED, false))
     val isAdsRemoved: StateFlow<Boolean> = _isAdsRemoved.asStateFlow()
 
-    private val _productPrice = MutableStateFlow<String?>("$4.99")
-    val productPrice: StateFlow<String?> = _productPrice.asStateFlow()
+    private val _isAutoBackupUnlocked = MutableStateFlow(
+        prefs.getBoolean(KEY_AUTO_BACKUP, false) || prefs.getBoolean(KEY_ADS_REMOVED, false)
+    )
+    val isAutoBackupUnlocked: StateFlow<Boolean> = _isAutoBackupUnlocked.asStateFlow()
+
+    private val _proProductPrice = MutableStateFlow<String?>("$4.99")
+    val proProductPrice: StateFlow<String?> = _proProductPrice.asStateFlow()
+
+    // Backward-compatibility alias
+    val productPrice: StateFlow<String?> = _proProductPrice
+
+    private val _autoBackupPrice = MutableStateFlow<String?>("$1.99")
+    val autoBackupPrice: StateFlow<String?> = _autoBackupPrice.asStateFlow()
 
     private val _productDetailsMap = MutableStateFlow<Map<String, ProductDetails>>(emptyMap())
     val productDetailsMap: StateFlow<Map<String, ProductDetails>> = _productDetailsMap.asStateFlow()
@@ -109,6 +122,7 @@ class BillingManager(
     private fun queryProductDetails() {
         val productList = listOf(
             PRODUCT_REMOVE_ADS,
+            PRODUCT_AUTO_BACKUP,
             TIP_SMALL,
             TIP_MEDIUM,
             TIP_LARGE
@@ -130,7 +144,11 @@ class BillingManager(
                     map[details.productId] = details
                     if (details.productId == PRODUCT_REMOVE_ADS) {
                         details.oneTimePurchaseOfferDetails?.formattedPrice?.let {
-                            _productPrice.value = it
+                            _proProductPrice.value = it
+                        }
+                    } else if (details.productId == PRODUCT_AUTO_BACKUP) {
+                        details.oneTimePurchaseOfferDetails?.formattedPrice?.let {
+                            _autoBackupPrice.value = it
                         }
                     }
                 }
@@ -167,6 +185,12 @@ class BillingManager(
                 if (purchase.products.contains(PRODUCT_REMOVE_ADS)) {
                     prefs.edit().putBoolean(KEY_ADS_REMOVED, true).apply()
                     _isAdsRemoved.value = true
+                    // Pro includes auto backup as well
+                    prefs.edit().putBoolean(KEY_AUTO_BACKUP, true).apply()
+                    _isAutoBackupUnlocked.value = true
+                } else if (purchase.products.contains(PRODUCT_AUTO_BACKUP)) {
+                    prefs.edit().putBoolean(KEY_AUTO_BACKUP, true).apply()
+                    _isAutoBackupUnlocked.value = true
                 } else {
                     // Consumable tip - consume so user can donate again if desired
                     consumePurchase(purchase)

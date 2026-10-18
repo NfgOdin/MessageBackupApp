@@ -91,14 +91,17 @@ class ExportEngine(
 
                     // Extract and bundle media attachments
                     if (options.includeMedia) {
+                        val addedEntryPaths = mutableSetOf<String>()
                         for (msg in messages) {
                             for (att in msg.attachments) {
-                                val bytes = telephonyRepository.getAttachmentBytes(att.contentUri)
-                                if (bytes != null && bytes.isNotEmpty()) {
-                                    val entryPath = "$mediaDirEntry${att.fileName}"
-                                    zipOut.putNextEntry(ZipEntry(entryPath))
-                                    zipOut.write(bytes)
-                                    zipOut.closeEntry()
+                                val entryPath = "$mediaDirEntry${att.fileName}"
+                                if (addedEntryPaths.add(entryPath)) {
+                                    val bytes = telephonyRepository.getAttachmentBytes(att.contentUri)
+                                    if (bytes != null && bytes.isNotEmpty()) {
+                                        zipOut.putNextEntry(ZipEntry(entryPath))
+                                        zipOut.write(bytes)
+                                        zipOut.closeEntry()
+                                    }
                                 }
                             }
                         }

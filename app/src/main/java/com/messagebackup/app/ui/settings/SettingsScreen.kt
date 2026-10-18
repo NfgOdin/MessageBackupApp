@@ -349,10 +349,13 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 6. Automated Scheduled Backups (Pro Feature)
+            // 6. Automated Scheduled Backups
+            val isAutoBackupUnlocked by billingManager.isAutoBackupUnlocked.collectAsState()
+            val autoBackupPrice by billingManager.autoBackupPrice.collectAsState()
+
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isAdsRemoved) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    containerColor = if (isAutoBackupUnlocked) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -371,20 +374,31 @@ fun SettingsScreen(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = if (isAdsRemoved)
+                        text = if (isAutoBackupUnlocked)
                             "Nightly automatic export scheduled at 2:00 AM to your designated folder."
                         else
-                            "Automatically archive all new SMS/MMS messages nightly or weekly in the background. Included with the $4.99 Pro upgrade.",
+                            "Automatically archive all new SMS/MMS messages nightly or weekly in the background. Buy standalone for $autoBackupPrice, or get it included with the Pro ($productPrice) upgrade!",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(10.dp))
-                    if (!isAdsRemoved) {
-                        Button(
-                            onClick = { billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_REMOVE_ADS) },
-                            modifier = Modifier.fillMaxWidth()
+                    if (!isAutoBackupUnlocked) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(text = "Unlock Auto Backups ($productPrice)")
+                            Button(
+                                onClick = { billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_AUTO_BACKUP) },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(text = "Auto-Backup ($autoBackupPrice)")
+                            }
+                            OutlinedButton(
+                                onClick = { billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_REMOVE_ADS) },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(text = "Get Pro ($productPrice)")
+                            }
                         }
                     } else {
                         Text(
