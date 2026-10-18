@@ -16,9 +16,13 @@ lifecycleViewmodelNav3 = "2.10.0"
 playServicesAds = "23.6.0"
 playBilling = "7.1.1"
 userMessagingPlatform = "3.1.0"
+workManager = "2.10.0"
+coreSplashScreen = "1.0.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashScreen" }
+androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version = "1.0.1" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "androidxComposeBom" }

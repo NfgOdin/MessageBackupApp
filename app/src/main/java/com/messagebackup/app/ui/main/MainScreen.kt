@@ -106,6 +106,29 @@ fun MainScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var isMessageSelectionMode by remember { mutableStateOf(false) }
 
+    // In-App Document Viewer Mode
+    uiState.viewerFile?.let { file ->
+        com.messagebackup.app.ui.viewer.DocumentViewerScreen(
+            zipFile = file,
+            onNavigateBack = { viewModel.setViewerFile(null) },
+            onShare = {
+                val uri: Uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/zip"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(shareIntent, "Save or Share Exported Messages"))
+            },
+            modifier = modifier
+        )
+        return
+    }
+
     if (uiState.isSettingsOpen) {
         SettingsScreen(
             onNavigateBack = { viewModel.setSettingsOpen(false) },
@@ -152,20 +175,13 @@ fun MainScreen(
     }
 
     val triggerOpenFile: (File) -> Unit = { file ->
-        val uri: Uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
+        viewModel.adManager.showRewardedAd(
+            activity = activity,
+            isAdsRemoved = isAdsRemoved,
+            onUserEarnedReward = {
+                viewModel.setViewerFile(file)
+            }
         )
-        val viewIntent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/zip")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        try {
-            context.startActivity(Intent.createChooser(viewIntent, "Open Archive"))
-        } catch (e: Exception) {
-            triggerShareSheet(file)
-        }
     }
 
     Scaffold(
@@ -193,6 +209,13 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.setThreadSearchActive(!uiState.isThreadSearchActive) }) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Search thread",
+                                tint = if (uiState.isThreadSearchActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         IconButton(onClick = { isMessageSelectionMode = !isMessageSelectionMode }) {
                             Icon(
                                 imageVector = Icons.Default.Checklist,
@@ -362,13 +385,46 @@ fun MainScreen(
                             }
                         }
 
+                        // Collapsible In-Thread Search Bar
+                        AnimatedVisibility(visible = uiState.isThreadSearchActive) {
+                            OutlinedTextField(
+                                value = uiState.threadSearchQuery,
+                                onValueChange = { viewModel.setThreadSearchQuery(it) },
+                                placeholder = { Text("Search this conversation...") },
+                                singleLine = true,
+                                trailingIcon = {
+                                    if (uiState.threadSearchQuery.isNotBlank()) {
+                                        IconButton(onClick = { viewModel.setThreadSearchQuery("") }) {
+                                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                                        }
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+
                         if (uiState.isPreviewLoading) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator()
                             }
+                        } else if (uiState.filteredPreviewMessages.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (uiState.threadSearchQuery.isNotBlank()) "No messages match \"${uiState.threadSearchQuery}\"" else "No messages found.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         } else {
                             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                items(uiState.previewMessages, key = { it.messageId }) { message ->
+                                items(uiState.filteredPreviewMessages, key = { it.messageId }) { message ->
                                     val isExcluded = uiState.excludedMessageIds.contains(message.messageId)
                                     MessageBubble(
                                         message = message,

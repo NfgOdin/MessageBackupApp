@@ -8,6 +8,7 @@ import java.io.File
 enum class ExportFormat(val extension: String, val displayName: String, val mimeType: String) {
     PDF("pdf", "PDF Document (.pdf)", "application/pdf"),
     HTML("html", "HTML Web Page (.html)", "text/html"),
+    CSV("csv", "Excel / CSV Spreadsheet (.csv)", "text/csv"),
     MARKDOWN("md", "Markdown (.md)", "text/markdown"),
     PLAIN_TEXT("txt", "Plain Text (.txt)", "text/plain")
 }
@@ -28,7 +29,8 @@ enum class DateRangeFilter(val displayName: String) {
     ALL_TIME("All Time"),
     LAST_30_DAYS("Past 30 Days"),
     LAST_90_DAYS("Past 90 Days"),
-    LAST_YEAR("Past Year")
+    LAST_YEAR("Past Year"),
+    CUSTOM("Custom Date Range")
 }
 
 /**
@@ -41,13 +43,6 @@ enum class OutputDestination {
 
 /**
  * Configuration options selected by user before starting an export.
- *
- * @property format Selected document format.
- * @property includeMedia Whether to extract and bundle images/audio from MMS messages.
- * @property maxMessagesPerFile Maximum messages per document chunk (0 = unlimited).
- * @property theme Light, Dark, or System theme for HTML styling.
- * @property dateRange Date filter restriction.
- * @property outputType Whether to output to SAF custom folder or directly to Share Sheet.
  */
 data class ExportOptions(
     val format: ExportFormat = ExportFormat.HTML,
@@ -55,6 +50,9 @@ data class ExportOptions(
     val maxMessagesPerFile: Int = 0,
     val theme: ExportTheme = ExportTheme.LIGHT,
     val dateRange: DateRangeFilter = DateRangeFilter.ALL_TIME,
+    val customStartDate: Long? = null,
+    val customEndDate: Long? = null,
+    val excludedMessageIds: Set<Long> = emptySet(),
     val outputType: OutputDestination = OutputDestination.SHARE_SHEET
 )
 

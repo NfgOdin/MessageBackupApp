@@ -15,9 +15,19 @@ android {
         versionName = "1.0.0"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("${rootDir}/release-keystore.jks")
+            storePassword = "MessageBackup2026!"
+            keyAlias = "messagebackup"
+            keyPassword = "MessageBackup2026!"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -53,9 +63,11 @@ dependencies {
 
   // Core Android dependencies
   implementation(libs.androidx.core.ktx)
+  implementation(libs.androidx.core.splashscreen)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
   implementation(libs.androidx.documentfile)
+  implementation(libs.androidx.work.runtime.ktx)
 
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)

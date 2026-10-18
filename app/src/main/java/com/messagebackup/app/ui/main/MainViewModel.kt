@@ -31,6 +31,8 @@ data class MainUiState(
     val filteredThreads: List<ConversationThread> = emptyList(),
     val searchQuery: String = "",
     val isSearchActive: Boolean = false,
+    val threadSearchQuery: String = "",
+    val isThreadSearchActive: Boolean = false,
     val sortOption: ThreadSortOption = ThreadSortOption.RECENT,
     val selectedThreadIds: Set<Long> = emptySet(),
     val isSelectionMode: Boolean = false,
@@ -43,10 +45,12 @@ data class MainUiState(
     val lastExportResult: ExportResult? = null,
     val selectedThreadForPreview: ConversationThread? = null,
     val previewMessages: List<MessageItem> = emptyList(),
+    val filteredPreviewMessages: List<MessageItem> = emptyList(),
     val excludedMessageIds: Set<Long> = emptySet(),
     val isPreviewLoading: Boolean = false,
     val isMockMode: Boolean = false,
-    val isSettingsOpen: Boolean = false
+    val isSettingsOpen: Boolean = false,
+    val viewerFile: java.io.File? = null
 )
 
 /**
@@ -198,6 +202,9 @@ class MainViewModel : ViewModel() {
             selectedThreadForPreview = thread,
             isPreviewLoading = true,
             previewMessages = emptyList(),
+            filteredPreviewMessages = emptyList(),
+            threadSearchQuery = "",
+            isThreadSearchActive = false,
             excludedMessageIds = emptySet()
         )
 
@@ -208,9 +215,40 @@ class MainViewModel : ViewModel() {
             )
             _uiState.value = _uiState.value.copy(
                 previewMessages = messages,
+                filteredPreviewMessages = messages,
                 isPreviewLoading = false
             )
         }
+    }
+
+    fun setThreadSearchQuery(query: String) {
+        val q = query.trim().lowercase()
+        val allMessages = _uiState.value.previewMessages
+        val filtered = if (q.isBlank()) {
+            allMessages
+        } else {
+            allMessages.filter { msg ->
+                msg.body.lowercase().contains(q) ||
+                msg.sender.lowercase().contains(q) ||
+                msg.recipient.lowercase().contains(q)
+            }
+        }
+        _uiState.value = _uiState.value.copy(
+            threadSearchQuery = query,
+            filteredPreviewMessages = filtered
+        )
+    }
+
+    fun setThreadSearchActive(active: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            isThreadSearchActive = active,
+            threadSearchQuery = if (!active) "" else _uiState.value.threadSearchQuery,
+            filteredPreviewMessages = if (!active) _uiState.value.previewMessages else _uiState.value.filteredPreviewMessages
+        )
+    }
+
+    fun setViewerFile(file: java.io.File?) {
+        _uiState.value = _uiState.value.copy(viewerFile = file)
     }
 
     fun toggleMessageExclusion(messageId: Long) {
@@ -227,6 +265,9 @@ class MainViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(
             selectedThreadForPreview = null,
             previewMessages = emptyList(),
+            filteredPreviewMessages = emptyList(),
+            threadSearchQuery = "",
+            isThreadSearchActive = false,
             excludedMessageIds = emptySet()
         )
     }

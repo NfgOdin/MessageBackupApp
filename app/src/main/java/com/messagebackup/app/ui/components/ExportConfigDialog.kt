@@ -13,11 +13,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,11 +36,16 @@ import com.messagebackup.app.model.ExportFormat
 import com.messagebackup.app.model.ExportOptions
 import com.messagebackup.app.model.ExportTheme
 import com.messagebackup.app.model.OutputDestination
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * Modal dialog presented when the user taps Export, allowing customized configuration
- * of export format, theme, date range, message pagination per file, and destination.
+ * of export format (PDF, HTML, CSV, Markdown, TXT), themes, calendar date ranges,
+ * message pagination limits, and destinations.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExportConfigDialog(
     selectedCount: Int,
@@ -50,11 +60,16 @@ fun ExportConfigDialog(
     var selectedFormat by remember { mutableStateOf(initialFormat) }
     var selectedTheme by remember { mutableStateOf(initialTheme) }
     var selectedDateRange by remember { mutableStateOf(DateRangeFilter.ALL_TIME) }
+    var customStartDate by remember { mutableStateOf<Long?>(null) }
+    var customEndDate by remember { mutableStateOf<Long?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
     var selectedMaxPerFile by remember { mutableStateOf(initialMaxPerFile) }
     var includeMedia by remember { mutableStateOf(true) }
     var destination by remember { mutableStateOf(initialDestination) }
 
     val scrollState = rememberScrollState()
+    val dateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy").withZone(ZoneId.systemDefault())
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -67,7 +82,7 @@ fun ExportConfigDialog(
                     .fillMaxWidth()
                     .verticalScroll(scrollState)
             ) {
-                // Section: Document Format
+                // 1. Document Format
                 Text(
                     text = "Document Format",
                     style = MaterialTheme.typography.labelLarge,
@@ -92,7 +107,7 @@ fun ExportConfigDialog(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                // Section: Theme (for HTML)
+                // 2. HTML Theme
                 if (selectedFormat == ExportFormat.HTML) {
                     Text(
                         text = "HTML Color Theme",
@@ -119,18 +134,13 @@ fun ExportConfigDialog(
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 }
 
-                // Section: Message Pagination
+                // 3. Message Pagination
                 Text(
                     text = "Pagination: Max Messages Per File",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
-                Text(
-                    text = "Splits large conversations into sequential parts (Part 1 = oldest).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                val splitOptions = listOf(0 to "No Split (Single File)", 50 to "50 messages", 100 to "100 messages", 250 to "250 messages")
+                val splitOptions = listOf(0 to "No Split (Single File - Default)", 50 to "50 messages", 100 to "100 messages", 250 to "250 messages")
                 splitOptions.forEach { (limit, label) ->
                     Row(
                         modifier = Modifier
@@ -150,7 +160,7 @@ fun ExportConfigDialog(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                // Section: Date Range Filter
+                // 4. Date Range Filter & Custom Picker
                 Text(
                     text = "Date Range Filter",
                     style = MaterialTheme.typography.labelLarge,
@@ -160,22 +170,45 @@ fun ExportConfigDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { selectedDateRange = range }
+                            .clickable {
+                                selectedDateRange = range
+                                if (range == DateRangeFilter.CUSTOM) showDatePicker = true
+                            }
                             .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
                             selected = (selectedDateRange == range),
-                            onClick = { selectedDateRange = range }
+                            onClick = {
+                                selectedDateRange = range
+                                if (range == DateRangeFilter.CUSTOM) showDatePicker = true
+                            }
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(text = range.displayName, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
 
+                if (selectedDateRange == DateRangeFilter.CUSTOM && customStartDate != null && customEndDate != null) {
+                    val startStr = dateFormatter.format(Instant.ofEpochMilli(customStartDate!!))
+                    val endStr = dateFormatter.format(Instant.ofEpochMilli(customEndDate!!))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 32.dp, top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = "Range: $startStr - $endStr", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        TextButton(onClick = { showDatePicker = true }) {
+                            Text(text = "Change", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                // Section: Media Attachments
+                // 5. Media Attachments
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -218,6 +251,8 @@ fun ExportConfigDialog(
                             maxMessagesPerFile = selectedMaxPerFile,
                             theme = selectedTheme,
                             dateRange = selectedDateRange,
+                            customStartDate = customStartDate,
+                            customEndDate = customEndDate,
                             outputType = destination
                         )
                     )
@@ -232,4 +267,32 @@ fun ExportConfigDialog(
             }
         }
     )
+
+    // Material 3 Date Range Picker Dialog
+    if (showDatePicker) {
+        val datePickerState = rememberDateRangePickerState()
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    customStartDate = datePickerState.selectedStartDateMillis
+                    customEndDate = datePickerState.selectedEndDateMillis
+                    showDatePicker = false
+                }) {
+                    Text("Select")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel")
+                }
+            }
+        ) {
+            DateRangePicker(
+                state = datePickerState,
+                title = { Text("Select Date Range", modifier = Modifier.padding(16.dp)) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
 }

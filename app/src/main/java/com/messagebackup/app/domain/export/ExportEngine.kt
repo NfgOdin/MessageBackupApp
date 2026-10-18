@@ -33,7 +33,8 @@ class ExportEngine(
     private val markdownFormatter: MarkdownFormatter = MarkdownFormatter(),
     private val htmlFormatter: HtmlFormatter = HtmlFormatter(),
     private val plainTextFormatter: PlainTextFormatter = PlainTextFormatter(),
-    private val pdfFormatter: PdfFormatter = PdfFormatter(context)
+    private val pdfFormatter: PdfFormatter = PdfFormatter(context),
+    private val csvFormatter: CsvFormatter = CsvFormatter()
 ) {
 
     suspend fun exportThreads(
@@ -71,8 +72,18 @@ class ExportEngine(
                 for (thread in threads) {
                     var messages = telephonyRepository.getMessagesForThread(thread.threadId, resolveContacts)
 
-                    // Apply Date Range Filter
-                    messages = filterMessagesByDate(messages, options.dateRange)
+                    // Apply Exclusion Filter
+                    if (options.excludedMessageIds.isNotEmpty()) {
+                        messages = messages.filter { !options.excludedMessageIds.contains(it.messageId) }
+                    }
+
+                    // Apply Date Range Filter (including Custom Date Range)
+                    messages = filterMessagesByDate(
+                        messages = messages,
+                        filter = options.dateRange,
+                        customStart = options.customStartDate,
+                        customEnd = options.customEndDate
+                    )
                     totalProcessedMessages += messages.size
 
                     val threadDirName = sanitizeFilename("${thread.displayName}_${thread.threadId}")
@@ -139,6 +150,10 @@ class ExportEngine(
                                     theme = options.theme,
                                     mediaSubdir = "media/"
                                 )
+                                ExportFormat.CSV -> csvFormatter.formatConversation(
+                                    thread = thread,
+                                    messages = chunk
+                                )
                                 ExportFormat.MARKDOWN -> markdownFormatter.formatConversationPart(
                                     thread = thread,
                                     messages = chunk,
@@ -191,16 +206,33 @@ class ExportEngine(
 
     private fun filterMessagesByDate(
         messages: List<MessageItem>,
-        filter: DateRangeFilter
+        filter: DateRangeFilter,
+        customStart: Long? = null,
+        customEnd: Long? = null
     ): List<MessageItem> {
         val now = System.currentTimeMillis()
-        val cutoff = when (filter) {
-            DateRangeFilter.ALL_TIME -> 0L
-            DateRangeFilter.LAST_30_DAYS -> now - (30L * 24 * 60 * 60 * 1000)
-            DateRangeFilter.LAST_90_DAYS -> now - (90L * 24 * 60 * 60 * 1000)
-            DateRangeFilter.LAST_YEAR -> now - (365L * 24 * 60 * 60 * 1000)
+        return when (filter) {
+            DateRangeFilter.ALL_TIME -> messages
+            DateRangeFilter.LAST_30_DAYS -> {
+                val cutoff = now - (30L * 24 * 60 * 60 * 1000)
+                messages.filter { it.timestamp >= cutoff }
+            }
+            DateRangeFilter.LAST_90_DAYS -> {
+                val cutoff = now - (90L * 24 * 60 * 60 * 1000)
+                messages.filter { it.timestamp >= cutoff }
+            }
+            DateRangeFilter.LAST_YEAR -> {
+                val cutoff = now - (365L * 24 * 60 * 60 * 1000)
+                messages.filter { it.timestamp >= cutoff }
+            }
+            DateRangeFilter.CUSTOM -> {
+                messages.filter { msg ->
+                    val afterStart = customStart == null || msg.timestamp >= customStart
+                    val beforeEnd = customEnd == null || msg.timestamp <= customEnd
+                    afterStart && beforeEnd
+                }
+            }
         }
-        return if (cutoff == 0L) messages else messages.filter { it.timestamp >= cutoff }
     }
 
     private fun saveToSafDirectory(file: File, safTreeUri: Uri) {
