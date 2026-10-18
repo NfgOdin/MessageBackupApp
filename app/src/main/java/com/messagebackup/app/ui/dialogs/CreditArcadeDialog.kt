@@ -51,7 +51,7 @@ import com.messagebackup.app.ads.AdManager
 import com.messagebackup.app.data.preferences.AppPreferences
 
 enum class RewardOption(val title: String, val subtitle: String, val iconVector: androidx.compose.ui.graphics.vector.ImageVector) {
-    ODIN_AI("+3 O.D.I.N. AI Queries", "Watch 1 ad -> Instant +3 message intelligence queries", Icons.Default.AutoAwesome),
+    ODIN_AI("+2 O.D.I.N. AI Queries", "Watch 1 ad -> Instant +2 message intelligence queries", Icons.Default.AutoAwesome),
     AUTO_BACKUP("+1 Auto-Backup Night (3 Ads)", "Watch 3 ads -> Unlocks 1 automated backup night", Icons.Default.Schedule)
 }
 
@@ -251,7 +251,7 @@ fun CreditArcadeDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 val buttonLabel = when (selectedOption) {
-                    RewardOption.ODIN_AI -> "Watch Ad (+3 AI Queries)"
+                    RewardOption.ODIN_AI -> "Watch Ad (+2 AI Queries)"
                     RewardOption.AUTO_BACKUP -> {
                         when (backupAdProgress) {
                             0 -> "Watch Ad (Ad 1 of 3)"
@@ -269,8 +269,8 @@ fun CreditArcadeDialog(
                             onUserEarnedReward = {
                                 when (selectedOption) {
                                     RewardOption.ODIN_AI -> {
-                                        prefs.addAiCredits(3)
-                                        Toast.makeText(context, "🌟 Claimed +3 O.D.I.N. AI Credits!", Toast.LENGTH_SHORT).show()
+                                        prefs.addAiCredits(2)
+                                        Toast.makeText(context, "🌟 Claimed +2 O.D.I.N. AI Credits!", Toast.LENGTH_SHORT).show()
                                         onDismiss()
                                     }
                                     RewardOption.AUTO_BACKUP -> {
