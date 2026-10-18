@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,16 +19,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Lan
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Button
@@ -168,32 +174,114 @@ fun SettingsScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = if (isAdsRemoved) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
                 ),
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(enabled = !isAdsRemoved) {
                         billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_REMOVE_ADS)
                     }
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ShoppingCart,
-                        contentDescription = "Billing",
-                        modifier = Modifier.padding(end = 12.dp)
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isAdsRemoved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isAdsRemoved) Icons.Default.Stars else Icons.Default.ShoppingCart,
+                                    contentDescription = "Billing",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isAdsRemoved) "🌟 Pro Lifetime License Active" else "⚡ Upgrade to Pro ($productPrice)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (isAdsRemoved) "All premium features and ad-free access permanently unlocked." else "One-time purchase • No subscriptions • Lifetime access",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = if (isAdsRemoved) "UNLOCKED FEATURES:" else "WHAT'S INCLUDED IN PRO:",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary
                     )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (isAdsRemoved) "Pro License Active" else "Upgrade to Pro ($productPrice)",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            text = if (isAdsRemoved) "Ad-free experience & automated scheduled backups unlocked." else "One-time purchase: removes all ads & unlocks automatic nightly/weekly backups.",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        if (!isAdsRemoved) {
-                            Spacer(modifier = Modifier.height(4.dp))
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val proFeatures = listOf(
+                        "🚫 100% Ad-Free Experience" to "Removes all banners, interstitials, and video ads across the entire app.",
+                        "⚡ Unlimited O.D.I.N. AI Queries" to "Ask unlimited AI questions about your messages without credits or watching ads.",
+                        "🔄 Unlimited Automated Nightly Backups" to "Scheduled hands-free backups run automatically every night with zero ad requirements.",
+                        "⚡ Instant One-Click Message Exports" to "Export to HTML, PDF, CSV, JSON, TXT, or Encrypted ZIP without watching rewarded ads.",
+                        "📊 Unlimited Conversation Insights" to "Generate full conversational statistics and share HTML reports without ad gates."
+                    )
+
+                    proFeatures.forEach { (title, subtitle) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .padding(top = 2.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = subtitle,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    if (!isAdsRemoved) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = {
+                                    billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_REMOVE_ADS)
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Get Pro ($productPrice)")
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
                             androidx.compose.material3.TextButton(
                                 onClick = {
                                     billingManager.restorePurchases { restored ->
@@ -203,11 +291,10 @@ fun SettingsScreen(
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     }
-                                },
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                }
                             ) {
                                 Text(
-                                    text = "Already purchased? Restore",
+                                    text = "Restore",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary
                                 )
