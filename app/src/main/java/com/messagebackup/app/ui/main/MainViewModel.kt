@@ -50,7 +50,10 @@ data class MainUiState(
     val isPreviewLoading: Boolean = false,
     val isMockMode: Boolean = false,
     val isSettingsOpen: Boolean = false,
-    val viewerFile: java.io.File? = null
+    val viewerFile: java.io.File? = null,
+    val showStatsDialog: Boolean = false,
+    val isStatsLoading: Boolean = false,
+    val stats: com.messagebackup.app.model.ConversationStats? = null
 )
 
 /**
@@ -306,6 +309,95 @@ class MainViewModel : ViewModel() {
             )
 
             onComplete(result)
+        }
+    }
+
+    fun setShowStatsDialog(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showStatsDialog = show)
+        if (show) {
+            loadStatistics()
+        }
+    }
+
+    fun loadStatistics() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isStatsLoading = true)
+            val threads = _uiState.value.threads
+            val totalThreads = threads.size
+            val totalMessages = threads.sumOf { it.messageCount.toLong() }
+
+            // Compute top contacts
+            val topContacts = threads.sortedByDescending { it.messageCount }
+                .take(5)
+                .map { t ->
+                    val pct = if (totalMessages > 0) (t.messageCount.toFloat() / totalMessages.toFloat()) * 100f else 0f
+                    com.messagebackup.app.model.ContactMessageCount(
+                        displayName = t.displayName,
+                        address = t.address,
+                        count = t.messageCount,
+                        percentage = pct
+                    )
+                }
+
+            // Sample detailed message metrics across top threads
+            var totalSent = 0L
+            var totalReceived = 0L
+            var totalSms = 0L
+            var totalMms = 0L
+            var totalMedia = 0L
+            val hourCounts = IntArray(24)
+            val dayOfWeekCounts = mutableMapOf<java.time.DayOfWeek, Int>()
+            var oldestTime: Long? = null
+            var newestTime: Long? = null
+
+            // Inspect messages across selected threads or first batch
+            val sampleThreads = if (_uiState.value.selectedThreadForPreview != null) {
+                listOf(_uiState.value.selectedThreadForPreview!!)
+            } else {
+                threads.take(15) // Deep sample top active threads
+            }
+
+            for (thread in sampleThreads) {
+                val messages = app.currentTelephonyRepository.getMessagesForThread(
+                    threadId = thread.threadId,
+                    resolveContacts = false
+                )
+                for (msg in messages) {
+                    if (msg.direction == com.messagebackup.app.model.MessageDirection.OUTGOING) totalSent++ else totalReceived++
+                    if (msg.type == com.messagebackup.app.model.MessageType.SMS) totalSms++ else totalMms++
+                    totalMedia += msg.attachments.size
+
+                    val zdt = java.time.Instant.ofEpochMilli(msg.timestamp).atZone(java.time.ZoneId.systemDefault())
+                    hourCounts[zdt.hour]++
+                    dayOfWeekCounts[zdt.dayOfWeek] = (dayOfWeekCounts[zdt.dayOfWeek] ?: 0) + 1
+
+                    if (oldestTime == null || msg.timestamp < oldestTime) oldestTime = msg.timestamp
+                    if (newestTime == null || msg.timestamp > newestTime) newestTime = msg.timestamp
+                }
+            }
+
+            val busiestHour = hourCounts.indices.maxByOrNull { hourCounts[it] }
+            val busiestDay = dayOfWeekCounts.maxByOrNull { it.value }?.key?.name?.lowercase()?.replaceFirstChar { it.uppercase() }
+
+            val stats = com.messagebackup.app.model.ConversationStats(
+                totalThreads = totalThreads,
+                totalMessages = totalMessages,
+                totalSms = totalSms,
+                totalMms = totalMms,
+                totalSent = totalSent,
+                totalReceived = totalReceived,
+                totalMediaAttachments = totalMedia,
+                oldestTimestamp = oldestTime,
+                newestTimestamp = newestTime,
+                topContacts = topContacts,
+                busiestHour = busiestHour,
+                busiestDayOfWeek = busiestDay
+            )
+
+            _uiState.value = _uiState.value.copy(
+                stats = stats,
+                isStatsLoading = false
+            )
         }
     }
 }

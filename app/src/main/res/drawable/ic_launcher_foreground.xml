@@ -3,7 +3,28 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Secondary Soft Background Chat Bubble -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M34,28h40c3.3,0 6,2.7 6,6v28c0,3.3 -2.7,6 -6,6h-24l-12,12v-12h-4c-3.3,0 -6,-2.7 -6,-6v-28c0,-3.3 2.7,-6 6,-6zM46,42h16v4h-16zM46,50h24v4h-24z"/>
+        android:fillColor="#33FFFFFF"
+        android:pathData="M38,24h38c5.5,0 10,4.5 10,10v24c0,5.5 -4.5,10 -10,10h-6l-10,10v-10h-22c-5.5,0 -10,-4.5 -10,-10v-24c0,-5.5 4.5,-10 10,-10z"/>
+
+    <!-- Primary Crisp Vault Bubble -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M26,30h44c5.5,0 10,4.5 10,10v26c0,5.5 -4.5,10 -10,10h-24l-12,12v-12h-8c-5.5,0 -10,-4.5 -10,-10v-26c0,-5.5 4.5,-10 10,-10z"/>
+
+    <!-- Vault Security Shield / Lock Core -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M48,43c0,-3.3 2.7,-6 6,-6s6,2.7 6,6v3h2c1.7,0 3,1.3 3,3v10c0,1.7 -1.3,3 -3,3h-16c-1.7,0 -3,-1.3 -3,-3v-10c0,-1.7 1.3,-3 3,-3h2v-3zM51.5,43v3h5v-3c0,-1.4 -1.1,-2.5 -2.5,-2.5s-2.5,1.1 -2.5,2.5z"/>
+
+    <!-- Downward Backup / Restore Arrow inside Vault -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,50v7m-3,-3l3,3l3,-3"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
 </vector>

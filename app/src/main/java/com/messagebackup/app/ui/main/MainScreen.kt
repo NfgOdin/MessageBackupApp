@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
@@ -209,6 +210,13 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.setShowStatsDialog(true) }) {
+                            Icon(
+                                imageVector = Icons.Default.Insights,
+                                contentDescription = "Thread Analytics",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         IconButton(onClick = { viewModel.setThreadSearchActive(!uiState.isThreadSearchActive) }) {
                             Icon(
                                 imageVector = Icons.Default.Search,
@@ -303,6 +311,15 @@ fun MainScreen(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
+                            DropdownMenuItem(
+                                text = { Text("Conversation Insights") },
+                                leadingIcon = { Icon(Icons.Default.Insights, contentDescription = null) },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.setShowStatsDialog(true)
+                                }
+                            )
+
                             DropdownMenuItem(
                                 text = { Text("Settings") },
                                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
@@ -631,6 +648,15 @@ fun MainScreen(
                 )
             },
             onDismiss = { viewModel.setShowExportDialog(false) }
+        )
+    }
+
+    // Conversation Insights / Statistics Modal
+    if (uiState.showStatsDialog) {
+        com.messagebackup.app.ui.components.ConversationStatsDialog(
+            stats = uiState.stats,
+            isLoading = uiState.isStatsLoading,
+            onDismiss = { viewModel.setShowStatsDialog(false) }
         )
     }
 }
