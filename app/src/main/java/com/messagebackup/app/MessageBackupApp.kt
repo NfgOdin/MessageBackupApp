@@ -32,6 +32,9 @@ class MessageBackupApp : Application() {
     lateinit var exportEngine: ExportEngine
         private set
 
+    lateinit var googleDriveSyncManager: com.messagebackup.app.domain.cloud.GoogleDriveSyncManager
+        private set
+
     var useMockData: Boolean = false
 
     val currentTelephonyRepository: TelephonyRepository
@@ -46,6 +49,7 @@ class MessageBackupApp : Application() {
         mockTelephonyRepository = MockTelephonyRepository()
         adManager = AdManager(this)
         billingManager = BillingManager(this)
+        googleDriveSyncManager = com.messagebackup.app.domain.cloud.GoogleDriveSyncManager(this)
 
         exportEngine = ExportEngine(
             context = this,

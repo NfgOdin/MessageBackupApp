@@ -28,7 +28,11 @@ class AppPreferences(context: Context) {
         private const val KEY_SAF_DIRECTORY_URI = "saf_directory_uri"
         private const val KEY_SAF_DIRECTORY_DISPLAY = "saf_directory_display"
         private const val KEY_APP_THEME = "app_theme"
+        private const val KEY_GOOGLE_DRIVE_ACCOUNT = "google_drive_account"
     }
+
+    private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
+    val googleDriveAccount: StateFlow<String?> = _googleDriveAccount.asStateFlow()
 
     private val _resolveContacts = MutableStateFlow(prefs.getBoolean(KEY_RESOLVE_CONTACTS, true))
     val resolveContacts: StateFlow<Boolean> = _resolveContacts.asStateFlow()
@@ -99,5 +103,10 @@ class AppPreferences(context: Context) {
     fun setAppTheme(theme: ExportTheme) {
         prefs.edit().putString(KEY_APP_THEME, theme.name).apply()
         _appTheme.value = theme
+    }
+
+    fun setGoogleDriveAccount(email: String?) {
+        prefs.edit().putString(KEY_GOOGLE_DRIVE_ACCOUNT, email).apply()
+        _googleDriveAccount.value = email
     }
 }

@@ -62,7 +62,7 @@ data class MainUiState(
  */
 class MainViewModel : ViewModel() {
 
-    private val app = MessageBackupApp.instance
+    val app = MessageBackupApp.instance
     val prefs = app.appPreferences
     val billingManager = app.billingManager
     val adManager = app.adManager

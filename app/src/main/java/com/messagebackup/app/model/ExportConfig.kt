@@ -38,7 +38,8 @@ enum class DateRangeFilter(val displayName: String) {
  */
 enum class OutputDestination {
     SHARE_SHEET,
-    PERSISTENT_DIRECTORY
+    PERSISTENT_DIRECTORY,
+    GOOGLE_DRIVE
 }
 
 /**

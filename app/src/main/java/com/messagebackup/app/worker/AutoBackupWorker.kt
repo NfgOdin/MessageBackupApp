@@ -58,14 +58,15 @@ class AutoBackupWorker(
 
     override suspend fun doWork(): Result {
         val app = MessageBackupApp.instance
-        val isPro = app.billingManager.isAdsRemoved.value
-        if (!isPro) {
+        val isAutoBackupUnlocked = app.billingManager.isAutoBackupUnlocked.value
+        if (!isAutoBackupUnlocked) {
             // Free users do not run automatic background backups
             return Result.success()
         }
 
+        val destination = app.appPreferences.outputDestination.value
         val safUriString = app.appPreferences.safDirectoryUri.value
-        if (safUriString == null) {
+        if (destination == OutputDestination.PERSISTENT_DIRECTORY && safUriString == null) {
             return Result.failure()
         }
 
@@ -83,18 +84,27 @@ class AutoBackupWorker(
                 includeMedia = true,
                 maxMessagesPerFile = app.appPreferences.maxMessagesPerFile.value,
                 dateRange = DateRangeFilter.LAST_30_DAYS,
-                outputType = OutputDestination.PERSISTENT_DIRECTORY
+                outputType = destination
             )
+
+            val customSafUri = if (destination == OutputDestination.PERSISTENT_DIRECTORY && safUriString != null) {
+                Uri.parse(safUriString)
+            } else null
 
             val result = app.exportEngine.exportThreads(
                 threads = threads,
                 options = options,
                 resolveContacts = app.appPreferences.resolveContacts.value,
-                customSafTreeUri = Uri.parse(safUriString)
+                customSafTreeUri = customSafUri
             )
 
-            if (result.success) {
-                showBackupNotification("Auto-Backup Complete", "Successfully backed up ${result.exportedThreadCount} conversations.")
+            if (result.success && result.outputFile != null) {
+                if (destination == OutputDestination.GOOGLE_DRIVE) {
+                    app.googleDriveSyncManager.uploadFileToDrive(result.outputFile)
+                    showBackupNotification("Google Drive Sync Complete", "Archived ${result.exportedThreadCount} conversations to your Google Drive.")
+                } else {
+                    showBackupNotification("Auto-Backup Complete", "Successfully backed up ${result.exportedThreadCount} conversations.")
+                }
                 Result.success()
             } else {
                 Result.retry()

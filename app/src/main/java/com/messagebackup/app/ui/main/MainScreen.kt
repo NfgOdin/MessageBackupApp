@@ -620,7 +620,19 @@ fun MainScreen(
                     onUserEarnedReward = {
                         viewModel.startExport(options) { result ->
                             if (result.success && result.outputFile != null) {
-                                if (options.outputType == OutputDestination.PERSISTENT_DIRECTORY) {
+                                if (options.outputType == OutputDestination.GOOGLE_DRIVE) {
+                                    viewModel.app.googleDriveSyncManager.uploadFileToDrive(result.outputFile)
+                                    scope.launch {
+                                        val snackResult = snackbarHostState.showSnackbar(
+                                            message = "Syncing to Google Drive: ${result.outputFile.name}",
+                                            actionLabel = "View File",
+                                            duration = SnackbarDuration.Long
+                                        )
+                                        if (snackResult == SnackbarResult.ActionPerformed) {
+                                            triggerOpenFile(result.outputFile)
+                                        }
+                                    }
+                                } else if (options.outputType == OutputDestination.PERSISTENT_DIRECTORY) {
                                     scope.launch {
                                         val snackResult = snackbarHostState.showSnackbar(
                                             message = "Saved to $safFolderDisplay",

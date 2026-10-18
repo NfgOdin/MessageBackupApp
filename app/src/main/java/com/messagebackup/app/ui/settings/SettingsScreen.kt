@@ -18,10 +18,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -77,6 +79,8 @@ fun SettingsScreen(
     val safFolderDisplay by prefs.safDirectoryDisplay.collectAsState()
     val isAdsRemoved by billingManager.isAdsRemoved.collectAsState()
     val productPrice by billingManager.productPrice.collectAsState()
+    val isAutoBackupUnlocked by billingManager.isAutoBackupUnlocked.collectAsState()
+    val autoBackupPrice by billingManager.autoBackupPrice.collectAsState()
 
     // Export cache size computation
     val exportsDir = File(context.cacheDir, "exports")
@@ -287,6 +291,57 @@ fun SettingsScreen(
                 Icon(imageVector = Icons.Default.Folder, contentDescription = "Folder", tint = MaterialTheme.colorScheme.primary)
             }
 
+            // Google Drive Cloud Destination
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        if (!isAutoBackupUnlocked) {
+                            billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_AUTO_BACKUP)
+                        } else {
+                            prefs.setOutputDestination(OutputDestination.GOOGLE_DRIVE)
+                        }
+                    }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = (outputDestination == OutputDestination.GOOGLE_DRIVE),
+                    onClick = {
+                        if (!isAutoBackupUnlocked) {
+                            billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_AUTO_BACKUP)
+                        } else {
+                            prefs.setOutputDestination(OutputDestination.GOOGLE_DRIVE)
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "Google Drive (Cloud Sync)", style = MaterialTheme.typography.bodyMedium)
+                        if (!isAutoBackupUnlocked) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = MaterialTheme.shapes.extraSmall,
+                                modifier = Modifier.padding(start = 6.dp)
+                            ) {
+                                Text(
+                                    text = "PRO / AUTO",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = if (isAutoBackupUnlocked) "Direct cloud upload to your Google Drive account" else "Unlock with Auto-Backup ($autoBackupPrice) or Pro ($productPrice)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isAutoBackupUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(imageVector = Icons.Default.CloudUpload, contentDescription = "Drive", tint = MaterialTheme.colorScheme.primary)
+            }
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             // 4. Global Pagination Default
@@ -350,9 +405,6 @@ fun SettingsScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             // 6. Automated Scheduled Backups
-            val isAutoBackupUnlocked by billingManager.isAutoBackupUnlocked.collectAsState()
-            val autoBackupPrice by billingManager.autoBackupPrice.collectAsState()
-
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = if (isAutoBackupUnlocked) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -401,8 +453,9 @@ fun SettingsScreen(
                             }
                         }
                     } else {
+                        val destinationText = if (outputDestination == OutputDestination.GOOGLE_DRIVE) "Google Drive" else safFolderDisplay
                         Text(
-                            text = "✓ Enabled: Backs up to $safFolderDisplay",
+                            text = "✓ Enabled: Automatically syncs to $destinationText",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary
                         )
