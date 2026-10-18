@@ -43,6 +43,7 @@ class AppPreferences(context: Context) {
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
         private const val KEY_ODIN_LOCK_ENABLED = "odin_lock_enabled"
         private const val KEY_PRIVACY_PIN_HASH = "privacy_pin_hash"
+        private const val KEY_BACKUP_AD_PROGRESS = "backup_ad_progress"
     }
 
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
@@ -55,6 +56,10 @@ class AppPreferences(context: Context) {
     // Default 3 welcome Auto-Backup credits for new users
     private val _autoBackupCredits = MutableStateFlow(prefs.getInt(KEY_AUTO_BACKUP_CREDITS, 3))
     val autoBackupCredits: StateFlow<Int> = _autoBackupCredits.asStateFlow()
+
+    // Punch-card progress towards next Auto-Backup credit (0, 1, or 2 out of 3)
+    private val _backupAdProgress = MutableStateFlow(prefs.getInt(KEY_BACKUP_AD_PROGRESS, 0))
+    val backupAdProgress: StateFlow<Int> = _backupAdProgress.asStateFlow()
 
     private val _autoBackupEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_BACKUP_ENABLED, false))
     val autoBackupEnabled: StateFlow<Boolean> = _autoBackupEnabled.asStateFlow()
@@ -140,6 +145,24 @@ class AppPreferences(context: Context) {
     fun addAutoBackupCredits(amount: Int) {
         val newCredits = (_autoBackupCredits.value + amount).coerceAtLeast(0)
         setAutoBackupCredits(newCredits)
+    }
+
+    /**
+     * Increments punch-card progress towards next Auto-Backup credit (3 ads = 1 credit).
+     * @return true if 3rd ad was reached and +1 credit was awarded, false if progress incremented (1/3 or 2/3).
+     */
+    fun recordBackupAdWatched(): Boolean {
+        val nextProgress = _backupAdProgress.value + 1
+        return if (nextProgress >= 3) {
+            prefs.edit().putInt(KEY_BACKUP_AD_PROGRESS, 0).apply()
+            _backupAdProgress.value = 0
+            addAutoBackupCredits(1)
+            true
+        } else {
+            prefs.edit().putInt(KEY_BACKUP_AD_PROGRESS, nextProgress).apply()
+            _backupAdProgress.value = nextProgress
+            false
+        }
     }
 
     fun consumeAutoBackupCredit(): Boolean {

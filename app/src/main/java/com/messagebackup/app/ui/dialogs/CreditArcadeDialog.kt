@@ -41,13 +41,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.draw.clip
 import com.messagebackup.app.ads.AdManager
 import com.messagebackup.app.data.preferences.AppPreferences
 
 enum class RewardOption(val title: String, val subtitle: String, val iconVector: androidx.compose.ui.graphics.vector.ImageVector) {
-    ODIN_AI("+3 O.D.I.N. AI Queries", "Ask 3 questions to your archive intelligence", Icons.Default.AutoAwesome),
-    AUTO_BACKUP("+3 Auto-Backup Nights", "3 automated background backups to folder or Drive", Icons.Default.Schedule),
-    COMBO_PACK("Combo: +2 AI & +2 Auto-Backups", "Best of both worlds: 2 queries & 2 backup nights", Icons.Default.Stars)
+    ODIN_AI("+3 O.D.I.N. AI Queries", "Watch 1 ad -> Instant +3 message intelligence queries", Icons.Default.AutoAwesome),
+    AUTO_BACKUP("+1 Auto-Backup Night (3 Ads)", "Watch 3 ads -> Unlocks 1 automated backup night", Icons.Default.Schedule)
 }
 
 /**
@@ -66,8 +67,9 @@ fun CreditArcadeDialog(
 
     val aiCredits by prefs.aiCredits.collectAsState()
     val autoBackupCredits by prefs.autoBackupCredits.collectAsState()
+    val backupAdProgress by prefs.backupAdProgress.collectAsState()
 
-    var selectedOption by remember { mutableStateOf(RewardOption.COMBO_PACK) }
+    var selectedOption by remember { mutableStateOf(RewardOption.ODIN_AI) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -154,7 +156,7 @@ fun CreditArcadeDialog(
                                 tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.width(10.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = option.title,
                                     style = MaterialTheme.typography.bodyMedium,
@@ -165,12 +167,54 @@ fun CreditArcadeDialog(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+
+                                if (option == RewardOption.AUTO_BACKUP) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Punch Card Progress: $backupAdProgress / 3 Ads",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = if (backupAdProgress == 2) "Next ad unlocks night!" else "${3 - backupAdProgress} ads left",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    LinearProgressIndicator(
+                                        progress = { backupAdProgress.toFloat() / 3f },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(6.dp)
+                                            .clip(RoundedCornerShape(3.dp)),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+
+                val buttonLabel = when (selectedOption) {
+                    RewardOption.ODIN_AI -> "Watch Ad (+3 AI Queries)"
+                    RewardOption.AUTO_BACKUP -> {
+                        when (backupAdProgress) {
+                            0 -> "Watch Ad (Ad 1 of 3)"
+                            1 -> "Watch Ad (Ad 2 of 3)"
+                            else -> "Watch Ad (Ad 3 of 3 — Unlock Night!)"
+                        }
+                    }
+                }
 
                 Button(
                     onClick = {
@@ -181,25 +225,23 @@ fun CreditArcadeDialog(
                                 when (selectedOption) {
                                     RewardOption.ODIN_AI -> {
                                         prefs.addAiCredits(3)
-                                        Toast.makeText(context, "Claimed +3 O.D.I.N. AI Credits!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "🌟 Claimed +3 O.D.I.N. AI Credits!", Toast.LENGTH_SHORT).show()
+                                        onDismiss()
                                     }
                                     RewardOption.AUTO_BACKUP -> {
-                                        prefs.addAutoBackupCredits(3)
-                                        if (prefs.autoBackupEnabled.value) {
-                                            com.messagebackup.app.worker.AutoBackupWorker.scheduleAutoBackup(context)
+                                        val unlockedNight = prefs.recordBackupAdWatched()
+                                        if (unlockedNight) {
+                                            if (prefs.autoBackupEnabled.value) {
+                                                com.messagebackup.app.worker.AutoBackupWorker.scheduleAutoBackup(context)
+                                            }
+                                            Toast.makeText(context, "🎉 3/3 Ads Watched! Claimed +1 Auto-Backup Night!", Toast.LENGTH_LONG).show()
+                                            onDismiss()
+                                        } else {
+                                            val current = prefs.backupAdProgress.value
+                                            Toast.makeText(context, "🎟️ Stamp recorded! ($current/3 ads watched)", Toast.LENGTH_SHORT).show()
                                         }
-                                        Toast.makeText(context, "Claimed +3 Auto-Backup Nights!", Toast.LENGTH_SHORT).show()
-                                    }
-                                    RewardOption.COMBO_PACK -> {
-                                        prefs.addAiCredits(2)
-                                        prefs.addAutoBackupCredits(2)
-                                        if (prefs.autoBackupEnabled.value) {
-                                            com.messagebackup.app.worker.AutoBackupWorker.scheduleAutoBackup(context)
-                                        }
-                                        Toast.makeText(context, "Claimed Combo: +2 AI & +2 Backup Nights!", Toast.LENGTH_SHORT).show()
                                     }
                                 }
-                                onDismiss()
                             }
                         )
                     },
@@ -211,7 +253,7 @@ fun CreditArcadeDialog(
                         contentDescription = null,
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    Text("Watch Video to Claim")
+                    Text(buttonLabel)
                 }
             }
         }
