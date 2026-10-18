@@ -1481,7 +1481,10 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     if (isAdsRemoved) {
                         OutlinedButton(
                             onClick = {
@@ -1491,32 +1494,41 @@ fun SettingsScreen(
                             },
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error
-                            )
+                            ),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Revoke Pro (Test Free)")
                         }
                     }
-                    Button(
-                        onClick = {
-                            val success = billingManager.unlockDeveloperPro(devKeyInput)
-                            if (success) {
-                                Toast.makeText(context, "🌟 Developer Pro License Activated!", Toast.LENGTH_LONG).show()
-                                showDevKeyDialog = false
-                                devKeyInput = ""
-                            } else {
-                                Toast.makeText(context, "Invalid Developer Key", Toast.LENGTH_SHORT).show()
-                            }
-                        }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Activate")
+                        Button(
+                            onClick = {
+                                val success = billingManager.unlockDeveloperPro(devKeyInput)
+                                if (success) {
+                                    Toast.makeText(context, "🌟 Developer Pro License Activated!", Toast.LENGTH_LONG).show()
+                                    showDevKeyDialog = false
+                                    devKeyInput = ""
+                                } else {
+                                    Toast.makeText(context, "Invalid Developer Key", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Activate")
+                        }
+                        OutlinedButton(
+                            onClick = { showDevKeyDialog = false },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Cancel")
+                        }
                     }
                 }
             },
-            dismissButton = {
-                OutlinedButton(onClick = { showDevKeyDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            dismissButton = null
         )
     }
 
