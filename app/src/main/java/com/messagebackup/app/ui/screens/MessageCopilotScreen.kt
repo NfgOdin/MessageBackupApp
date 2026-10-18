@@ -92,6 +92,8 @@ fun MessageCopilotScreen(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    androidx.activity.compose.BackHandler(onBack = onNavigateBack)
+
     val context = LocalContext.current
     val activity = context as Activity
     val scope = rememberCoroutineScope()
@@ -282,6 +284,22 @@ fun MessageCopilotScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // Privacy & Choice Indicator Banner
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = if (currentProvider == AiProviderType.OLLAMA)
+                        "🔒 Local Privacy Mode: Queries stay on your private network ($ollamaUrl)"
+                    else
+                        "☁️ Opt-In Gemini Mode (BYOK): Queries use your personal API key • Switch to Ollama in Settings for 100% local AI",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+
             // Quick Starter Chips
             LazyRow(
                 modifier = Modifier

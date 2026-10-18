@@ -58,6 +58,10 @@ class AutoBackupWorker(
 
     override suspend fun doWork(): Result {
         val app = MessageBackupApp.instance
+        if (!app.appPreferences.autoBackupEnabled.value) {
+            return Result.success()
+        }
+
         val isAutoBackupUnlocked = app.billingManager.isAutoBackupUnlocked.value
         val hasCredit = if (!isAutoBackupUnlocked) {
             app.appPreferences.consumeAutoBackupCredit()
@@ -106,10 +110,31 @@ class AutoBackupWorker(
 
             if (result.success && result.outputFile != null) {
                 if (destination == OutputDestination.GOOGLE_DRIVE) {
-                    app.googleDriveSyncManager.uploadFileToDrive(result.outputFile)
-                    showBackupNotification("Google Drive Sync Complete", "Archived ${result.exportedThreadCount} conversations to your Google Drive.")
+                    val driveIntent = app.googleDriveSyncManager.createDriveUploadIntent(result.outputFile)
+                    val pendingIntent = android.app.PendingIntent.getActivity(
+                        appContext,
+                        1002,
+                        driveIntent,
+                        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                    )
+                    showBackupNotification(
+                        title = "Google Drive Backup Ready",
+                        message = "Archived ${result.exportedThreadCount} conversations. Tap to upload to Google Drive.",
+                        contentIntent = pendingIntent
+                    )
                 } else {
-                    showBackupNotification("Auto-Backup Complete", "Successfully backed up ${result.exportedThreadCount} conversations.")
+                    val openIntent = android.content.Intent(appContext, com.messagebackup.app.MainActivity::class.java)
+                    val pendingIntent = android.app.PendingIntent.getActivity(
+                        appContext,
+                        1001,
+                        openIntent,
+                        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                    )
+                    showBackupNotification(
+                        title = "Auto-Backup Complete",
+                        message = "Successfully backed up ${result.exportedThreadCount} conversations.",
+                        contentIntent = pendingIntent
+                    )
                 }
                 Result.success()
             } else {
@@ -120,7 +145,11 @@ class AutoBackupWorker(
         }
     }
 
-    private fun showBackupNotification(title: String, message: String) {
+    private fun showBackupNotification(
+        title: String,
+        message: String,
+        contentIntent: android.app.PendingIntent? = null
+    ) {
         val manager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -131,14 +160,21 @@ class AutoBackupWorker(
             manager.createNotificationChannel(channel)
         }
 
-        val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
-            .build()
 
-        manager.notify(1001, notification)
+        if (contentIntent != null) {
+            builder.setContentIntent(contentIntent)
+        }
+
+        try {
+            manager.notify(1001, builder.build())
+        } catch (e: SecurityException) {
+            // Notification permission not granted on Android 13+
+        }
     }
 }

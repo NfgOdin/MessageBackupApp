@@ -73,6 +73,8 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    androidx.activity.compose.BackHandler(onBack = onNavigateBack)
+
     val context = LocalContext.current
     val activity = context as Activity
     val app = MessageBackupApp.instance
@@ -84,6 +86,7 @@ fun SettingsScreen(
     val maxMessagesPerFile by prefs.maxMessagesPerFile.collectAsState()
     val outputDestination by prefs.outputDestination.collectAsState()
     val safFolderDisplay by prefs.safDirectoryDisplay.collectAsState()
+    val appTheme by prefs.appTheme.collectAsState()
     val isAdsRemoved by billingManager.isAdsRemoved.collectAsState()
     val productPrice by billingManager.productPrice.collectAsState()
     val isAutoBackupUnlocked by billingManager.isAutoBackupUnlocked.collectAsState()
@@ -92,6 +95,7 @@ fun SettingsScreen(
     // O.D.I.N. AI & Auto-Backup Credit States
     val aiCredits by prefs.aiCredits.collectAsState()
     val autoBackupCredits by prefs.autoBackupCredits.collectAsState()
+    val autoBackupEnabled by prefs.autoBackupEnabled.collectAsState()
     val aiProvider by prefs.aiProvider.collectAsState()
     val geminiApiKey by prefs.geminiApiKey.collectAsState()
     val ollamaEndpoint by prefs.ollamaEndpoint.collectAsState()
@@ -102,10 +106,16 @@ fun SettingsScreen(
     var showDevKeyDialog by remember { mutableStateOf(false) }
     var devKeyInput by remember { mutableStateOf("") }
 
-    // Export cache size computation
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+
+    // Export cache size computation (including subdirectories like unzipped viewer files)
     val exportsDir = File(context.cacheDir, "exports")
     var cacheSizeMb by remember {
-        val bytes = exportsDir.listFiles()?.sumOf { it.length() } ?: 0L
+        val bytes = if (exportsDir.exists()) {
+            exportsDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        } else 0L
         mutableStateOf(String.format("%.2f MB", bytes.toDouble() / (1024 * 1024)))
     }
 
@@ -427,29 +437,59 @@ fun SettingsScreen(
             // 6. Automated Scheduled Backups
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isAutoBackupUnlocked) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    containerColor = if (isAutoBackupUnlocked || autoBackupCredits > 0) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = "Schedule",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(
-                            text = "Automatic Scheduled Backups",
-                            style = MaterialTheme.typography.titleMedium
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = "Schedule",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(
+                                text = "Automatic Scheduled Backups",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                        Switch(
+                            checked = autoBackupEnabled && (isAutoBackupUnlocked || autoBackupCredits > 0),
+                            onCheckedChange = { enabled ->
+                                if (enabled && !isAutoBackupUnlocked && autoBackupCredits <= 0) {
+                                    Toast.makeText(context, "Claim free Auto-Backup credits in Reward Arcade or unlock Pro first!", Toast.LENGTH_SHORT).show()
+                                    showRewardArcade = true
+                                } else {
+                                    prefs.setAutoBackupEnabled(enabled)
+                                    if (enabled) {
+                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                        }
+                                        com.messagebackup.app.worker.AutoBackupWorker.scheduleAutoBackup(context)
+                                        Toast.makeText(context, "Nightly Auto-Backup enabled!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        com.messagebackup.app.worker.AutoBackupWorker.cancelAutoBackup(context)
+                                        Toast.makeText(context, "Auto-Backup disabled.", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = if (isAutoBackupUnlocked)
-                            "Nightly automatic export scheduled at 2:00 AM to your designated folder."
+                            "100% Optional: Toggle on to automatically export conversations nightly while charging to your chosen destination."
                         else
-                            "Automatically archive all new SMS/MMS messages nightly or weekly in the background. Buy standalone for $autoBackupPrice, or get it included with the Pro ($productPrice) upgrade!",
+                            "Automatically archive SMS/MMS messages nightly in the background. Use free Reward Arcade credits, buy standalone ($autoBackupPrice), or get Pro ($productPrice)!",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -505,9 +545,9 @@ fun SettingsScreen(
                     } else {
                         val destinationText = if (outputDestination == OutputDestination.GOOGLE_DRIVE) "Google Drive" else safFolderDisplay
                         Text(
-                            text = "✓ Enabled: Automatically syncs to $destinationText",
+                            text = if (autoBackupEnabled) "✓ Active: Nightly backup to $destinationText" else "⏸ Paused: Toggle switch above to enable nightly backup to $destinationText",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
+                            color = if (autoBackupEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -659,7 +699,35 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 7. Storage / Export Cache Cleaner
+            // 9. App Appearance Theme
+            Text(
+                text = "App Appearance Theme",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                com.messagebackup.app.model.ExportTheme.values().forEach { themeOption ->
+                    val isSelected = appTheme == themeOption
+                    OutlinedButton(
+                        onClick = { prefs.setAppTheme(themeOption) },
+                        colors = if (isSelected) ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer) else ButtonDefaults.outlinedButtonColors(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = themeOption.displayName.split(" ").first(),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 10. Storage / Export Cache Cleaner
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -676,8 +744,9 @@ fun SettingsScreen(
                 }
                 Button(
                     onClick = {
-                        exportsDir.listFiles()?.forEach { it.delete() }
+                        exportsDir.listFiles()?.forEach { it.deleteRecursively() }
                         cacheSizeMb = "0.00 MB"
+                        Toast.makeText(context, "Temporary export cache cleared.", Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {

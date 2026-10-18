@@ -30,9 +30,9 @@ fun SmsPermissionDisclosureDialog(
             Text(
                 text = "Message Backup & Export requires SMS and MMS access to read your existing message " +
                         "conversations and package them into documents (PDF, HTML, CSV, Markdown, and TXT) with images on your device.\n\n" +
-                        "• Your messages and media remain strictly on your device or in your designated personal cloud.\n" +
-                        "• Nothing is uploaded to third-party developer servers or shared with unauthorized parties.\n" +
-                        "• This permission is used exclusively for the backup, analytics, and export functionality."
+                        "• 100% User Choice & Local Privacy: Your messages stay strictly on your device by default.\n" +
+                        "• Zero Developer Servers: Nothing is ever uploaded to developer servers or shared with third parties.\n" +
+                        "• Optional Cloud & AI: Cloud Drive sync and O.D.I.N. AI (Local Ollama or BYOK Gemini) are 100% opt-in and only run when you explicitly choose to use them."
             )
         },
         confirmButton = {

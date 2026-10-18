@@ -29,6 +29,38 @@ class GoogleDriveSyncManager(private val context: Context) {
     }
 
     /**
+     * Builds an Intent that targets Google Drive (or falls back to the share sheet) for a backup archive.
+     */
+    fun createDriveUploadIntent(file: File): Intent {
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+
+        return if (isGoogleDriveInstalled()) {
+            Intent(Intent.ACTION_SEND).apply {
+                type = "application/zip"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_TITLE, file.name)
+                setPackage("com.google.android.apps.docs")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        } else {
+            val fallback = Intent(Intent.ACTION_SEND).apply {
+                type = "application/zip"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_TITLE, file.name)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            Intent.createChooser(fallback, "Upload Backup to Google Drive").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+    }
+
+    /**
      * Directs an exported file into Google Drive with "Save to Drive" targeting.
      */
     fun uploadFileToDrive(file: File) {
@@ -56,9 +88,11 @@ class GoogleDriveSyncManager(private val context: Context) {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 putExtra(Intent.EXTRA_TITLE, file.name)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(fallback, "Upload Backup to Google Drive").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(Intent.createChooser(fallback, "Upload Backup to Google Drive"))
+            context.startActivity(chooser)
         }
     }
 }

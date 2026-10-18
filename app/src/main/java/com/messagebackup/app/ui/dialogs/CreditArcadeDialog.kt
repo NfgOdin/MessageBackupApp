@@ -185,11 +185,17 @@ fun CreditArcadeDialog(
                                     }
                                     RewardOption.AUTO_BACKUP -> {
                                         prefs.addAutoBackupCredits(3)
+                                        if (prefs.autoBackupEnabled.value) {
+                                            com.messagebackup.app.worker.AutoBackupWorker.scheduleAutoBackup(context)
+                                        }
                                         Toast.makeText(context, "Claimed +3 Auto-Backup Nights!", Toast.LENGTH_SHORT).show()
                                     }
                                     RewardOption.COMBO_PACK -> {
                                         prefs.addAiCredits(2)
                                         prefs.addAutoBackupCredits(2)
+                                        if (prefs.autoBackupEnabled.value) {
+                                            com.messagebackup.app.worker.AutoBackupWorker.scheduleAutoBackup(context)
+                                        }
                                         Toast.makeText(context, "Claimed Combo: +2 AI & +2 Backup Nights!", Toast.LENGTH_SHORT).show()
                                     }
                                 }

@@ -148,11 +148,10 @@ fun MainScreen(
 
     if (uiState.isCopilotOpen) {
         val targetName = uiState.selectedThreadForPreview?.displayName ?: "All Conversations"
-        val targetMessages = if (uiState.previewMessages.isNotEmpty()) {
+        val targetMessages = if (uiState.selectedThreadForPreview != null) {
             uiState.previewMessages
         } else {
-            // Sample across top active threads if at root
-            emptyList()
+            uiState.globalCopilotMessages
         }
         com.messagebackup.app.ui.screens.MessageCopilotScreen(
             prefs = prefs,
@@ -169,6 +168,30 @@ fun MainScreen(
             modifier = modifier
         )
         return
+    }
+
+    // System Back Button Navigation Handling
+    androidx.activity.compose.BackHandler(
+        enabled = uiState.selectedThreadForPreview != null || uiState.isSelectionMode || uiState.isSearchActive
+    ) {
+        when {
+            uiState.selectedThreadForPreview != null && isMessageSelectionMode -> {
+                isMessageSelectionMode = false
+            }
+            uiState.selectedThreadForPreview != null && uiState.isThreadSearchActive -> {
+                viewModel.setThreadSearchActive(false)
+            }
+            uiState.selectedThreadForPreview != null -> {
+                isMessageSelectionMode = false
+                viewModel.closeThreadPreview()
+            }
+            uiState.isSelectionMode -> {
+                viewModel.clearSelection()
+            }
+            uiState.isSearchActive -> {
+                viewModel.setSearchActive(false)
+            }
+        }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -419,14 +442,16 @@ fun MainScreen(
                                 }
                             )
 
-                            DropdownMenuItem(
-                                text = { Text(if (uiState.isMockMode) "Switch to Real Device SMS" else "Switch to Mock Data (Testing)") },
-                                leadingIcon = { Icon(Icons.Default.BugReport, contentDescription = null) },
-                                onClick = {
-                                    viewModel.toggleMockMode()
-                                    showMenu = false
-                                }
-                            )
+                            if (com.messagebackup.app.BuildConfig.DEBUG || uiState.isMockMode) {
+                                DropdownMenuItem(
+                                    text = { Text(if (uiState.isMockMode) "Switch to Real Device SMS" else "Switch to Mock Data (Testing)") },
+                                    leadingIcon = { Icon(Icons.Default.BugReport, contentDescription = null) },
+                                    onClick = {
+                                        viewModel.toggleMockMode()
+                                        showMenu = false
+                                    }
+                                )
+                            }
                         }
                     }
                 )
@@ -436,7 +461,27 @@ fun MainScreen(
             AdBannerView(isAdsRemoved = isAdsRemoved)
         },
         floatingActionButton = {
-            if (uiState.isSelectionMode && uiState.selectedThreadIds.isNotEmpty() && uiState.selectedThreadForPreview == null) {
+            if (uiState.selectedThreadForPreview != null) {
+                val includedCount = (uiState.previewMessages.size - uiState.excludedMessageIds.size).coerceAtLeast(0)
+                FloatingActionButton(
+                    onClick = { viewModel.setShowExportDialog(true) },
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(imageVector = Icons.Default.FileDownload, contentDescription = "Export")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (uiState.excludedMessageIds.isNotEmpty())
+                                "Export ($includedCount msgs)"
+                            else
+                                "Export Thread"
+                        )
+                    }
+                }
+            } else if (uiState.isSelectionMode && uiState.selectedThreadIds.isNotEmpty()) {
                 FloatingActionButton(
                     onClick = { viewModel.setShowExportDialog(true) },
                     containerColor = MaterialTheme.colorScheme.primary
@@ -570,9 +615,11 @@ fun MainScreen(
                         Button(onClick = { viewModel.setShowPermissionDisclosure(true) }) {
                             Text(text = "Grant SMS Access")
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(onClick = { viewModel.toggleMockMode() }) {
-                            Text(text = "Try With Mock Data (Instant Test)")
+                        if (com.messagebackup.app.BuildConfig.DEBUG) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(onClick = { viewModel.toggleMockMode() }) {
+                                Text(text = "Try With Mock Data (Instant Test)")
+                            }
                         }
                     }
                 }
@@ -680,7 +727,6 @@ fun MainScreen(
                 permissionLauncher.launch(
                     arrayOf(
                         android.Manifest.permission.READ_SMS,
-                        android.Manifest.permission.RECEIVE_MMS,
                         android.Manifest.permission.READ_CONTACTS
                     )
                 )
@@ -691,8 +737,9 @@ fun MainScreen(
 
     // Export Options Modal
     if (uiState.showExportDialog) {
+        val exportThreadCount = if (uiState.selectedThreadForPreview != null) 1 else uiState.selectedThreadIds.size
         ExportConfigDialog(
-            selectedCount = uiState.selectedThreadIds.size,
+            selectedCount = exportThreadCount,
             isAdsRemoved = isAdsRemoved,
             initialFormat = defaultFormat,
             initialMaxPerFile = maxMessagesPerFile,

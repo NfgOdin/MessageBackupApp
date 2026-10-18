@@ -57,6 +57,8 @@ fun DocumentViewerScreen(
     onShare: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    androidx.activity.compose.BackHandler(onBack = onNavigateBack)
+
     var isUnzipping by remember { mutableStateOf(true) }
     var unzipProgress by remember { mutableFloatStateOf(0f) }
     var primaryDocumentFile by remember { mutableStateOf<File?>(null) }
@@ -68,6 +70,7 @@ fun DocumentViewerScreen(
             if (!unzippedDir.exists()) {
                 unzippedDir.mkdirs()
             }
+            val canonicalDirPrefix = unzippedDir.canonicalPath + File.separator
 
             // Estimate total entries for progress calculation
             var totalEntries = 0
@@ -83,6 +86,10 @@ fun DocumentViewerScreen(
                 var entry = zipIn.nextEntry
                 while (entry != null) {
                     val outFile = File(unzippedDir, entry.name)
+                    // Zip Slip Path Traversal Security Check (Google Play App Security Requirement)
+                    if (!outFile.canonicalPath.startsWith(canonicalDirPrefix)) {
+                        throw SecurityException("Zip Entry is outside of target directory: ${entry.name}")
+                    }
                     if (entry.isDirectory) {
                         outFile.mkdirs()
                     } else {
@@ -174,7 +181,7 @@ fun DocumentViewerScreen(
                         AndroidView(
                             factory = { ctx ->
                                 WebView(ctx).apply {
-                                    settings.javaScriptEnabled = true
+                                    settings.javaScriptEnabled = false
                                     settings.allowFileAccess = true
                                     webViewClient = WebViewClient()
                                     loadUrl("file://${file.absolutePath}")

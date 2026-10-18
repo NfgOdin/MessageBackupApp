@@ -54,7 +54,9 @@ data class MainUiState(
     val showStatsDialog: Boolean = false,
     val isStatsLoading: Boolean = false,
     val stats: com.messagebackup.app.model.ConversationStats? = null,
-    val isCopilotOpen: Boolean = false
+    val statsTargetThreadId: Long? = null,
+    val isCopilotOpen: Boolean = false,
+    val globalCopilotMessages: List<MessageItem> = emptyList()
 )
 
 /**
@@ -106,13 +108,43 @@ class MainViewModel : ViewModel() {
 
     fun setCopilotOpen(open: Boolean) {
         _uiState.value = _uiState.value.copy(isCopilotOpen = open)
+        if (open && _uiState.value.selectedThreadForPreview == null && _uiState.value.globalCopilotMessages.isEmpty()) {
+            loadGlobalCopilotContext()
+        }
+    }
+
+    private fun loadGlobalCopilotContext() {
+        viewModelScope.launch {
+            val sampleThreads = _uiState.value.threads.take(15)
+            val resolve = prefs.resolveContacts.value && _uiState.value.hasContactsPermission
+            val combined = mutableListOf<MessageItem>()
+            for (thread in sampleThreads) {
+                val msgs = app.currentTelephonyRepository.getMessagesForThread(
+                    threadId = thread.threadId,
+                    resolveContacts = resolve
+                ).takeLast(15).map { msg ->
+                    if (msg.direction == com.messagebackup.app.model.MessageDirection.OUTGOING) {
+                        msg.copy(sender = "Me (to ${thread.displayName})")
+                    } else {
+                        msg.copy(sender = thread.displayName)
+                    }
+                }
+                combined.addAll(msgs)
+            }
+            combined.sortBy { it.timestamp }
+            _uiState.value = _uiState.value.copy(globalCopilotMessages = combined)
+        }
     }
 
     fun toggleMockMode() {
         val newMode = !app.useMockData
         app.useMockData = newMode
         app.updateExportEngineRepository(app.currentTelephonyRepository)
-        _uiState.value = _uiState.value.copy(isMockMode = newMode)
+        _uiState.value = _uiState.value.copy(
+            isMockMode = newMode,
+            stats = null,
+            globalCopilotMessages = emptyList()
+        )
         loadThreads()
     }
 
@@ -281,24 +313,33 @@ class MainViewModel : ViewModel() {
     }
 
     fun startExport(options: ExportOptions, onComplete: (ExportResult) -> Unit) {
-        val selectedIds = _uiState.value.selectedThreadIds
-        val selectedThreads = _uiState.value.threads.filter { selectedIds.contains(it.threadId) }
+        val previewThread = _uiState.value.selectedThreadForPreview
+        val selectedThreads = if (previewThread != null) {
+            listOf(previewThread)
+        } else {
+            val selectedIds = _uiState.value.selectedThreadIds
+            _uiState.value.threads.filter { selectedIds.contains(it.threadId) }
+        }
 
         if (selectedThreads.isEmpty()) return
 
         _uiState.value = _uiState.value.copy(
             isExporting = true,
             showExportDialog = false,
-            exportProgressMessage = "Packaging ${selectedThreads.size} conversations into ${options.format.displayName}..."
+            exportProgressMessage = "Packaging ${selectedThreads.size} conversation${if (selectedThreads.size > 1) "s" else ""} into ${options.format.displayName}..."
         )
 
         viewModelScope.launch {
             val safUri = prefs.safDirectoryUri.value?.let { Uri.parse(it) }
-            val effectiveOptions = if (prefs.outputDestination.value == OutputDestination.PERSISTENT_DIRECTORY && safUri != null) {
-                options.copy(outputType = OutputDestination.PERSISTENT_DIRECTORY)
+            val destType = if (prefs.outputDestination.value == OutputDestination.PERSISTENT_DIRECTORY && safUri != null) {
+                OutputDestination.PERSISTENT_DIRECTORY
             } else {
-                options
+                options.outputType
             }
+            val effectiveOptions = options.copy(
+                outputType = destType,
+                excludedMessageIds = _uiState.value.excludedMessageIds
+            )
 
             val result = app.exportEngine.exportThreads(
                 threads = selectedThreads,
@@ -319,19 +360,21 @@ class MainViewModel : ViewModel() {
 
     fun setShowStatsDialog(show: Boolean) {
         _uiState.value = _uiState.value.copy(showStatsDialog = show)
-        if (show && _uiState.value.stats == null) {
+        if (show) {
             loadStatistics(forceRefresh = false)
         }
     }
 
     fun loadStatistics(forceRefresh: Boolean = false) {
-        if (!forceRefresh && _uiState.value.stats != null) {
-            // Already cached, don't recompute
+        val targetThread = _uiState.value.selectedThreadForPreview
+        val targetThreadId = targetThread?.threadId
+        if (!forceRefresh && _uiState.value.stats != null && _uiState.value.statsTargetThreadId == targetThreadId) {
+            // Already cached for this exact scope (global vs specific thread), don't recompute
             return
         }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isStatsLoading = true)
-            val threads = _uiState.value.threads
+            val threads = if (targetThread != null) listOf(targetThread) else _uiState.value.threads
             val totalThreads = threads.size
             val totalMessages = threads.sumOf { it.messageCount.toLong() }
 
@@ -359,11 +402,11 @@ class MainViewModel : ViewModel() {
             var oldestTime: Long? = null
             var newestTime: Long? = null
 
-            // Inspect messages across selected threads or first batch
-            val sampleThreads = if (_uiState.value.selectedThreadForPreview != null) {
-                listOf(_uiState.value.selectedThreadForPreview!!)
+            // Inspect messages across selected thread or top 15 active threads
+            val sampleThreads = if (targetThread != null) {
+                listOf(targetThread)
             } else {
-                threads.take(15) // Deep sample top active threads
+                threads.take(15)
             }
 
             for (thread in sampleThreads) {
@@ -405,6 +448,7 @@ class MainViewModel : ViewModel() {
 
             _uiState.value = _uiState.value.copy(
                 stats = stats,
+                statsTargetThreadId = targetThreadId,
                 isStatsLoading = false
             )
         }

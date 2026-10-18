@@ -30,9 +30,10 @@ class AppPreferences(context: Context) {
         private const val KEY_APP_THEME = "app_theme"
         private const val KEY_GOOGLE_DRIVE_ACCOUNT = "google_drive_account"
 
-        // O.D.I.N. AI Preferences
+        // O.D.I.N. AI & Auto-Backup Preferences
         private const val KEY_AI_CREDITS = "ai_credits"
         private const val KEY_AUTO_BACKUP_CREDITS = "auto_backup_credits"
+        private const val KEY_AUTO_BACKUP_ENABLED = "auto_backup_enabled"
         private const val KEY_AI_PROVIDER = "ai_provider"
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
         private const val KEY_OLLAMA_ENDPOINT = "ollama_endpoint"
@@ -49,6 +50,9 @@ class AppPreferences(context: Context) {
     // Default 3 welcome Auto-Backup credits for new users
     private val _autoBackupCredits = MutableStateFlow(prefs.getInt(KEY_AUTO_BACKUP_CREDITS, 3))
     val autoBackupCredits: StateFlow<Int> = _autoBackupCredits.asStateFlow()
+
+    private val _autoBackupEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_BACKUP_ENABLED, false))
+    val autoBackupEnabled: StateFlow<Boolean> = _autoBackupEnabled.asStateFlow()
 
     private val _aiProvider = MutableStateFlow(prefs.getString(KEY_AI_PROVIDER, "GEMINI") ?: "GEMINI")
     val aiProvider: StateFlow<String> = _aiProvider.asStateFlow()
@@ -130,6 +134,11 @@ class AppPreferences(context: Context) {
             return true
         }
         return false
+    }
+
+    fun setAutoBackupEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_BACKUP_ENABLED, enabled).apply()
+        _autoBackupEnabled.value = enabled
     }
 
     fun setAiProvider(provider: String) {

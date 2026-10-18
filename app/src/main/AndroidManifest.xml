@@ -3,10 +3,12 @@
 
     <!-- Permissions required for reading SMS and MMS data for Backup and Export -->
     <uses-permission android:name="android.permission.READ_SMS" />
-    <uses-permission android:name="android.permission.RECEIVE_MMS" />
 
     <!-- Optional permission: Resolve sender phone numbers to local contact names -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Optional permission: Notify user when scheduled background auto-backup completes (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Permissions required by AdMob, UMP Consent, and Google Play Billing -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -16,6 +18,9 @@
     <application
         android:name=".MessageBackupApp"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

@@ -8,6 +8,8 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.messagebackup.app.theme.MessageBackupAppTheme
 import com.messagebackup.app.ui.main.MainScreen
@@ -25,7 +27,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            MessageBackupAppTheme {
+            val appTheme by viewModel.prefs.appTheme.collectAsState()
+            val isDark = when (appTheme) {
+                com.messagebackup.app.model.ExportTheme.DARK -> true
+                com.messagebackup.app.model.ExportTheme.LIGHT -> false
+                com.messagebackup.app.model.ExportTheme.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+            }
+            MessageBackupAppTheme(darkTheme = isDark) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
