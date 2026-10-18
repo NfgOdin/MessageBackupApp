@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PermMedia
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
@@ -227,6 +228,23 @@ fun MainScreen(
             onOpenSettings = {
                 viewModel.setCopilotOpen(false)
                 viewModel.setSettingsOpen(true)
+            },
+            modifier = modifier
+        )
+        return
+    }
+
+    if (uiState.isVaultOpen) {
+        com.messagebackup.app.ui.screens.MediaVaultScreen(
+            mediaItems = uiState.vaultMediaItems,
+            isLoading = uiState.isVaultLoading,
+            adManager = viewModel.adManager,
+            isAdsRemoved = isAdsRemoved,
+            onRefresh = { viewModel.loadMediaVault(forceRefresh = true) },
+            onNavigateBack = {
+                viewModel.adManager.showInterstitialAd(activity, isAdsRemoved) {
+                    viewModel.setVaultOpen(false)
+                }
             },
             modifier = modifier
         )
@@ -419,6 +437,15 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        if (uiState.selectedThreadForPreview?.hasAttachment == true) {
+                            IconButton(onClick = { viewModel.setVaultOpen(true) }) {
+                                Icon(
+                                    imageVector = Icons.Default.PermMedia,
+                                    contentDescription = "Media Gallery",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                         IconButton(onClick = { runWithOdinLock { viewModel.setCopilotOpen(true) } }) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
@@ -595,6 +622,24 @@ fun MainScreen(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
+
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text("Media Vault & Gallery")
+                                        Text(
+                                            "Browse photos, videos & audio attachments",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
+                                leadingIcon = { Icon(Icons.Default.PermMedia, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.setVaultOpen(true)
+                                }
+                            )
 
                             DropdownMenuItem(
                                 text = { Text("Conversation Insights") },

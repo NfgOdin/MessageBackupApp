@@ -543,6 +543,80 @@ class TelephonyRepositoryImpl(
         }
     }
 
+    override suspend fun getAllMediaAttachments(resolveContacts: Boolean): List<com.messagebackup.app.model.VaultMediaItem> = withContext(Dispatchers.IO) {
+        val vaultItems = mutableListOf<com.messagebackup.app.model.VaultMediaItem>()
+        // 1. Query all MMS messages
+        val mmsUri = Telephony.Mms.CONTENT_URI
+        val projection = arrayOf(
+            Telephony.Mms._ID,
+            Telephony.Mms.THREAD_ID,
+            Telephony.Mms.DATE,
+            Telephony.Mms.MESSAGE_BOX
+        )
+
+        var cursor: Cursor? = null
+        try {
+            cursor = contentResolver.query(
+                mmsUri,
+                projection,
+                null,
+                null,
+                "${Telephony.Mms.DATE} DESC"
+            )
+
+            cursor?.let {
+                val idIdx = it.getColumnIndexOrThrow(Telephony.Mms._ID)
+                val tIdIdx = it.getColumnIndexOrThrow(Telephony.Mms.THREAD_ID)
+                val dateIdx = it.getColumnIndexOrThrow(Telephony.Mms.DATE)
+                val msgBoxIdx = it.getColumnIndexOrThrow(Telephony.Mms.MESSAGE_BOX)
+
+                while (it.moveToNext()) {
+                    val mmsId = it.getLong(idIdx)
+                    val threadId = it.getLong(tIdIdx)
+                    val date = it.getLong(dateIdx) * 1000L
+                    val msgBox = it.getInt(msgBoxIdx)
+                    val isIncoming = (msgBox == Telephony.Mms.MESSAGE_BOX_INBOX)
+
+                    val (_, attachments) = parseMmsParts(mmsId)
+                    if (attachments.isNotEmpty()) {
+                        val senderAddress = getMmsAddress(mmsId, isSender = true)
+                        val recipientAddress = if (!isIncoming) getMmsAddress(mmsId, isSender = false) else ""
+                        val relevantAddress = if (isIncoming) senderAddress else recipientAddress
+
+                        val contactName = if (resolveContacts && relevantAddress.isNotBlank()) {
+                            resolveContactName(relevantAddress) ?: relevantAddress
+                        } else if (relevantAddress.isNotBlank()) {
+                            relevantAddress
+                        } else {
+                            if (isIncoming) "Unknown" else "Me"
+                        }
+
+                        for (att in attachments) {
+                            vaultItems.add(
+                                com.messagebackup.app.model.VaultMediaItem(
+                                    partId = att.partId,
+                                    messageId = mmsId,
+                                    threadId = threadId,
+                                    contactName = contactName,
+                                    contactAddress = relevantAddress,
+                                    timestamp = date,
+                                    contentType = att.contentType,
+                                    fileName = att.fileName,
+                                    uriString = att.uriString
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error retrieving media vault attachments", e)
+        } finally {
+            cursor?.close()
+        }
+        vaultItems
+    }
+
     companion object {
         private const val TAG = "TelephonyRepoImpl"
     }

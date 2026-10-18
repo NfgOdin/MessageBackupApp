@@ -44,4 +44,9 @@ interface TelephonyRepository {
      * Checks if this app is currently the default SMS app on the device.
      */
     fun isDefaultSmsApp(): Boolean
+
+    /**
+     * Retrieves all multimedia attachments across all MMS conversation threads.
+     */
+    suspend fun getAllMediaAttachments(resolveContacts: Boolean): List<com.messagebackup.app.model.VaultMediaItem>
 }

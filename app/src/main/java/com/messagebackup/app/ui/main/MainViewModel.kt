@@ -62,7 +62,10 @@ data class MainUiState(
     val isRestoring: Boolean = false,
     val restoreProgressMessage: String? = null,
     val restoredCount: Int = 0,
-    val showReviewPromptDialog: Boolean = false
+    val showReviewPromptDialog: Boolean = false,
+    val isVaultOpen: Boolean = false,
+    val isVaultLoading: Boolean = false,
+    val vaultMediaItems: List<com.messagebackup.app.model.VaultMediaItem> = emptyList()
 )
 
 /**
@@ -540,6 +543,26 @@ class MainViewModel : ViewModel() {
                 _uiState.value = _uiState.value.copy(isRestoring = false, restoreProgressMessage = null)
                 onResult(false, 0, "Restore failed: ${e.message}")
             }
+        }
+    }
+
+    fun setVaultOpen(open: Boolean) {
+        _uiState.value = _uiState.value.copy(isVaultOpen = open)
+        if (open && _uiState.value.vaultMediaItems.isEmpty()) {
+            loadMediaVault()
+        }
+    }
+
+    fun loadMediaVault(forceRefresh: Boolean = false) {
+        if (!forceRefresh && _uiState.value.vaultMediaItems.isNotEmpty()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isVaultLoading = true)
+            val resolve = prefs.resolveContacts.value && _uiState.value.hasContactsPermission
+            val items = app.currentTelephonyRepository.getAllMediaAttachments(resolve)
+            _uiState.value = _uiState.value.copy(
+                isVaultLoading = false,
+                vaultMediaItems = items
+            )
         }
     }
 }

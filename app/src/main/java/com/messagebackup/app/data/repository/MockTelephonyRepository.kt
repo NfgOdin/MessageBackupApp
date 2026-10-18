@@ -193,4 +193,31 @@ class MockTelephonyRepository : TelephonyRepository {
     override fun isDefaultSmsApp(): Boolean {
         return true
     }
+
+    override suspend fun getAllMediaAttachments(resolveContacts: Boolean): List<com.messagebackup.app.model.VaultMediaItem> {
+        val list = mutableListOf<com.messagebackup.app.model.VaultMediaItem>()
+        for ((threadId, messages) in sampleMessages) {
+            val thread = sampleThreads.find { it.threadId == threadId }
+            val contact = if (resolveContacts) thread?.displayName ?: "Unknown" else thread?.address ?: "Unknown"
+            val addr = thread?.address ?: ""
+            for (msg in messages) {
+                for (att in msg.attachments) {
+                    list.add(
+                        com.messagebackup.app.model.VaultMediaItem(
+                            partId = att.partId,
+                            messageId = msg.messageId,
+                            threadId = threadId,
+                            contactName = contact,
+                            contactAddress = addr,
+                            timestamp = msg.timestamp,
+                            contentType = att.contentType,
+                            fileName = att.fileName,
+                            uriString = att.uriString
+                        )
+                    )
+                }
+            }
+        }
+        return list
+    }
 }
