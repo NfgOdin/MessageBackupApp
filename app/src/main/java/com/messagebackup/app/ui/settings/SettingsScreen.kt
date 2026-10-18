@@ -898,7 +898,12 @@ fun SettingsScreen(
     if (showOllamaGuide) {
         com.messagebackup.app.ui.dialogs.OllamaSetupGuideDialog(
             currentEndpoint = ollamaEndpoint,
-            onSaveEndpoint = { prefs.setOllamaEndpoint(it) },
+            currentModel = ollamaModel,
+            onSaveEndpoint = { endpoint, model ->
+                prefs.setOllamaEndpoint(endpoint)
+                prefs.setOllamaModel(model)
+                prefs.setAiProvider("LOCAL_OLLAMA")
+            },
             onDismiss = { showOllamaGuide = false }
         )
     }

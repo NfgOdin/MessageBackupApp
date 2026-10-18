@@ -388,7 +388,12 @@ fun MessageCopilotScreen(
     if (showGuideDialog) {
         OllamaSetupGuideDialog(
             currentEndpoint = ollamaUrl,
-            onSaveEndpoint = { prefs.setOllamaEndpoint(it) },
+            currentModel = ollamaModel,
+            onSaveEndpoint = { endpoint, model ->
+                prefs.setOllamaEndpoint(endpoint)
+                prefs.setOllamaModel(model)
+                prefs.setAiProvider("LOCAL_OLLAMA")
+            },
             onDismiss = { showGuideDialog = false }
         )
     }

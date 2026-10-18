@@ -49,13 +49,20 @@ import androidx.compose.ui.window.Dialog
 import com.messagebackup.app.domain.ai.AiClientEngine
 import kotlinx.coroutines.launch
 
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+
 /**
  * Interactive setup guide for running Ollama + Tailscale for 100% private, local AI.
  */
 @Composable
 fun OllamaSetupGuideDialog(
     currentEndpoint: String,
-    onSaveEndpoint: (String) -> Unit,
+    currentModel: String = "llama3.2",
+    onSaveEndpoint: (endpoint: String, model: String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -64,9 +71,11 @@ fun OllamaSetupGuideDialog(
     val aiEngine = remember { AiClientEngine() }
 
     var testEndpoint by remember { mutableStateOf(currentEndpoint) }
+    var selectedModel by remember { mutableStateOf(currentModel.ifBlank { "llama3.2" }) }
     var isTesting by remember { mutableStateOf(false) }
     var testResultMsg by remember { mutableStateOf<String?>(null) }
     var detectedModels by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showModelDropdown by remember { mutableStateOf(false) }
 
     fun copyToClipboard(label: String, text: String) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -190,9 +199,74 @@ fun OllamaSetupGuideDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Model Selector (Dropdown when models are detected, or editable field with dropdown icon)
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = selectedModel,
+                        onValueChange = { selectedModel = it },
+                        label = {
+                            Text(
+                                if (detectedModels.isNotEmpty()) {
+                                    "Active Model (${detectedModels.size} found — tap arrow to pick)"
+                                } else {
+                                    "Ollama Model Name"
+                                }
+                            )
+                        },
+                        placeholder = { Text("llama3.2") },
+                        singleLine = true,
+                        trailingIcon = {
+                            if (detectedModels.isNotEmpty()) {
+                                IconButton(onClick = { showModelDropdown = !showModelDropdown }) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = "Select detected model",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    DropdownMenu(
+                        expanded = showModelDropdown && detectedModels.isNotEmpty(),
+                        onDismissRequest = { showModelDropdown = false },
+                        modifier = Modifier.fillMaxWidth(0.78f)
+                    ) {
+                        detectedModels.forEach { modelName ->
+                            val isSelected = modelName.equals(selectedModel, ignoreCase = true)
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = modelName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
+                                leadingIcon = if (isSelected) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                } else null,
+                                onClick = {
+                                    selectedModel = modelName
+                                    showModelDropdown = false
+                                }
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Step 4: Test Connection
+                // Step 4: Test Connection & Save
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -207,7 +281,22 @@ fun OllamaSetupGuideDialog(
                                 isTesting = false
                                 result.onSuccess { models ->
                                     detectedModels = models
-                                    testResultMsg = "Connected! Found ${models.size} model(s): ${models.joinToString(", ")}"
+                                    if (models.isNotEmpty()) {
+                                        // Automatically select first detected model if current selection isn't in list
+                                        val match = models.firstOrNull {
+                                            it.equals(selectedModel, ignoreCase = true) ||
+                                                it.startsWith("$selectedModel:", ignoreCase = true)
+                                        }
+                                        selectedModel = match ?: models.first()
+                                        if (models.size > 1) {
+                                            showModelDropdown = true
+                                        }
+                                    }
+                                    testResultMsg = if (models.isNotEmpty()) {
+                                        "Connected! Found ${models.size} model(s). Selected: $selectedModel"
+                                    } else {
+                                        "Connected to Ollama, but no models are installed yet. Run 'ollama pull llama3.2' on your PC."
+                                    }
                                 }.onFailure { err ->
                                     testResultMsg = err.message
                                 }
@@ -225,8 +314,13 @@ fun OllamaSetupGuideDialog(
 
                     Button(
                         onClick = {
-                            onSaveEndpoint(testEndpoint)
-                            Toast.makeText(context, "Saved Ollama endpoint!", Toast.LENGTH_SHORT).show()
+                            val finalModel = selectedModel.trim().ifBlank { "llama3.2" }
+                            onSaveEndpoint(testEndpoint.trim(), finalModel)
+                            Toast.makeText(
+                                context,
+                                "Saved Ollama endpoint & model ($finalModel)!",
+                                Toast.LENGTH_SHORT
+                            ).show()
                             onDismiss()
                         },
                         enabled = testEndpoint.isNotBlank(),
