@@ -1,0 +1,6 @@
+<resources>
+    <!-- Production Google AdMob Keys (Used when building Release APK / App Bundle) -->
+    <string name="admob_app_id">ca-app-pub-1794260070743930~7555291386</string>
+    <string name="admob_banner_id">ca-app-pub-1794260070743930/5078046713</string>
+    <string name="admob_rewarded_id">ca-app-pub-1794260070743930/5813825146</string>
+</resources>
