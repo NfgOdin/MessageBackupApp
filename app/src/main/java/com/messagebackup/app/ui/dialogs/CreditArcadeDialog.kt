@@ -184,25 +184,24 @@ fun CreditArcadeDialog(
                                                 .fillMaxWidth()
                                                 .padding(horizontal = 10.dp, vertical = 8.dp)
                                         ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
                                                 Text(
-                                                    text = "Punch Card: $backupAdProgress of 3 Ads",
-                                                    style = MaterialTheme.typography.labelMedium,
+                                                    text = "Punch Card: $backupAdProgress of 3 Ads Watched",
+                                                    style = MaterialTheme.typography.titleSmall,
                                                     fontWeight = FontWeight.Bold,
                                                     color = MaterialTheme.colorScheme.primary
                                                 )
+                                                Spacer(modifier = Modifier.height(2.dp))
                                                 Text(
-                                                    text = if (backupAdProgress >= 2) "Next ad unlocks!" else "${3 - backupAdProgress} to go",
-                                                    style = MaterialTheme.typography.labelSmall,
+                                                    text = if (backupAdProgress >= 2) "🎯 Next ad unlocks 1 backup night!" else "⏳ ${3 - backupAdProgress} more ads to unlock 1 night",
+                                                    style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
 
-                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Spacer(modifier = Modifier.height(10.dp))
 
                                             // 3 Clear Punch Stamps
                                             Row(
