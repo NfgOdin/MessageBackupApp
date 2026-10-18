@@ -93,6 +93,7 @@ fun SettingsScreen(
     val outputDestination by prefs.outputDestination.collectAsState()
     val safFolderDisplay by prefs.safDirectoryDisplay.collectAsState()
     val appTheme by prefs.appTheme.collectAsState()
+    val alwaysPromptExportOptions by prefs.alwaysPromptExportOptions.collectAsState()
     val isAdsRemoved by billingManager.isAdsRemoved.collectAsState()
     val productPrice by billingManager.productPrice.collectAsState()
     val isAutoBackupUnlocked by billingManager.isAutoBackupUnlocked.collectAsState()
@@ -526,7 +527,37 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 6. Automated Scheduled Backups
+            // 6. Export Dialog Configuration Prompt Toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Show Export Options Popup",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = if (alwaysPromptExportOptions)
+                            "Shows the customization popup before each export (format, theme, date range, destination)."
+                        else
+                            "Always use default settings set here and start export immediately without showing the popup.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = alwaysPromptExportOptions,
+                    onCheckedChange = { prefs.setAlwaysPromptExportOptions(it) }
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 7. Automated Scheduled Backups
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = if (isAutoBackupUnlocked || autoBackupCredits > 0) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)

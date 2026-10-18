@@ -80,6 +80,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import com.messagebackup.app.model.DateRangeFilter
+import com.messagebackup.app.model.ExportOptions
 import com.messagebackup.app.model.OutputDestination
 import com.messagebackup.app.ui.components.AdBannerView
 import com.messagebackup.app.ui.components.ConversationItem
@@ -117,6 +119,7 @@ fun MainScreen(
     val odinLockEnabled by prefs.odinLockEnabled.collectAsState()
     val aiCredits by prefs.aiCredits.collectAsState()
     val autoBackupCredits by prefs.autoBackupCredits.collectAsState()
+    val alwaysPromptExportOptions by prefs.alwaysPromptExportOptions.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -298,6 +301,74 @@ fun MainScreen(
                 }
             }
         )
+    }
+
+    val executeExportWithOptions: (ExportOptions) -> Unit = { options ->
+        viewModel.adManager.showRewardedAd(
+            activity = activity,
+            isAdsRemoved = isAdsRemoved,
+            onUserEarnedReward = {
+                viewModel.startExport(options) { result ->
+                    if (result.success && result.outputFile != null) {
+                        if (options.outputType == OutputDestination.GOOGLE_DRIVE) {
+                            viewModel.app.googleDriveSyncManager.uploadFileToDrive(result.outputFile)
+                            scope.launch {
+                                val snackResult = snackbarHostState.showSnackbar(
+                                    message = "Syncing to Google Drive: ${result.outputFile.name}",
+                                    actionLabel = "View File",
+                                    duration = SnackbarDuration.Long
+                                )
+                                if (snackResult == SnackbarResult.ActionPerformed) {
+                                    triggerOpenFile(result.outputFile)
+                                }
+                            }
+                        } else if (options.outputType == OutputDestination.PERSISTENT_DIRECTORY) {
+                            scope.launch {
+                                val snackResult = snackbarHostState.showSnackbar(
+                                    message = "Saved to $safFolderDisplay",
+                                    actionLabel = "Open",
+                                    duration = SnackbarDuration.Long
+                                )
+                                if (snackResult == SnackbarResult.ActionPerformed) {
+                                    triggerOpenFile(result.outputFile)
+                                }
+                            }
+                        } else {
+                            triggerShareSheet(result.outputFile)
+                            scope.launch {
+                                val snackResult = snackbarHostState.showSnackbar(
+                                    message = "Export ready: ${result.outputFile.name}",
+                                    actionLabel = "Open File",
+                                    duration = SnackbarDuration.Long
+                                )
+                                if (snackResult == SnackbarResult.ActionPerformed) {
+                                    triggerOpenFile(result.outputFile)
+                                }
+                            }
+                        }
+                    } else {
+                        Toast.makeText(context, result.errorMessage ?: "Export error occurred", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
+    }
+
+    val initiateExport: () -> Unit = {
+        if (alwaysPromptExportOptions) {
+            viewModel.setShowExportDialog(true)
+        } else {
+            // Directly export using the defaults configured in Settings
+            val defaultOptions = ExportOptions(
+                format = defaultFormat,
+                includeMedia = true,
+                maxMessagesPerFile = maxMessagesPerFile,
+                theme = exportTheme,
+                dateRange = DateRangeFilter.ALL_TIME,
+                outputType = outputDestination
+            )
+            executeExportWithOptions(defaultOptions)
+        }
     }
 
     Scaffold(
@@ -600,7 +671,7 @@ fun MainScreen(
                     }
 
                     FloatingActionButton(
-                        onClick = { viewModel.setShowExportDialog(true) },
+                        onClick = { initiateExport() },
                         containerColor = MaterialTheme.colorScheme.primary
                     ) {
                         Row(
@@ -620,7 +691,7 @@ fun MainScreen(
                 }
             } else if (uiState.isSelectionMode && uiState.selectedThreadIds.isNotEmpty()) {
                 FloatingActionButton(
-                    onClick = { viewModel.setShowExportDialog(true) },
+                    onClick = { initiateExport() },
                     containerColor = MaterialTheme.colorScheme.primary
                 ) {
                     Row(
@@ -884,54 +955,7 @@ fun MainScreen(
             initialDestination = outputDestination,
             onConfirmExport = { options ->
                 viewModel.setShowExportDialog(false)
-                viewModel.adManager.showRewardedAd(
-                    activity = activity,
-                    isAdsRemoved = isAdsRemoved,
-                    onUserEarnedReward = {
-                        viewModel.startExport(options) { result ->
-                            if (result.success && result.outputFile != null) {
-                                if (options.outputType == OutputDestination.GOOGLE_DRIVE) {
-                                    viewModel.app.googleDriveSyncManager.uploadFileToDrive(result.outputFile)
-                                    scope.launch {
-                                        val snackResult = snackbarHostState.showSnackbar(
-                                            message = "Syncing to Google Drive: ${result.outputFile.name}",
-                                            actionLabel = "View File",
-                                            duration = SnackbarDuration.Long
-                                        )
-                                        if (snackResult == SnackbarResult.ActionPerformed) {
-                                            triggerOpenFile(result.outputFile)
-                                        }
-                                    }
-                                } else if (options.outputType == OutputDestination.PERSISTENT_DIRECTORY) {
-                                    scope.launch {
-                                        val snackResult = snackbarHostState.showSnackbar(
-                                            message = "Saved to $safFolderDisplay",
-                                            actionLabel = "Open",
-                                            duration = SnackbarDuration.Long
-                                        )
-                                        if (snackResult == SnackbarResult.ActionPerformed) {
-                                            triggerOpenFile(result.outputFile)
-                                        }
-                                    }
-                                } else {
-                                    triggerShareSheet(result.outputFile)
-                                    scope.launch {
-                                        val snackResult = snackbarHostState.showSnackbar(
-                                            message = "Export ready: ${result.outputFile.name}",
-                                            actionLabel = "Open File",
-                                            duration = SnackbarDuration.Long
-                                        )
-                                        if (snackResult == SnackbarResult.ActionPerformed) {
-                                            triggerOpenFile(result.outputFile)
-                                        }
-                                    }
-                                }
-                            } else {
-                                Toast.makeText(context, result.errorMessage ?: "Export error occurred", Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
-                )
+                executeExportWithOptions(options)
             },
             onDismiss = { viewModel.setShowExportDialog(false) }
         )

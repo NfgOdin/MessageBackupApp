@@ -46,6 +46,7 @@ class AppPreferences(context: Context) {
         private const val KEY_BACKUP_AD_PROGRESS = "backup_ad_progress"
         private const val KEY_LAST_REWARD_AD_TIME = "last_reward_ad_time"
         private const val KEY_CACHED_STATS = "cached_conversation_stats"
+        private const val KEY_ALWAYS_PROMPT_EXPORT_OPTIONS = "always_prompt_export_options"
     }
 
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
@@ -121,6 +122,9 @@ class AppPreferences(context: Context) {
         ExportTheme.valueOf(prefs.getString(KEY_APP_THEME, ExportTheme.SYSTEM.name) ?: ExportTheme.SYSTEM.name)
     )
     val appTheme: StateFlow<ExportTheme> = _appTheme.asStateFlow()
+
+    private val _alwaysPromptExportOptions = MutableStateFlow(prefs.getBoolean(KEY_ALWAYS_PROMPT_EXPORT_OPTIONS, true))
+    val alwaysPromptExportOptions: StateFlow<Boolean> = _alwaysPromptExportOptions.asStateFlow()
 
     fun setAiCredits(credits: Int) {
         val safeCredits = credits.coerceAtLeast(0)
@@ -260,6 +264,11 @@ class AppPreferences(context: Context) {
     fun setAppTheme(theme: ExportTheme) {
         prefs.edit().putString(KEY_APP_THEME, theme.name).apply()
         _appTheme.value = theme
+    }
+
+    fun setAlwaysPromptExportOptions(alwaysPrompt: Boolean) {
+        prefs.edit().putBoolean(KEY_ALWAYS_PROMPT_EXPORT_OPTIONS, alwaysPrompt).apply()
+        _alwaysPromptExportOptions.value = alwaysPrompt
     }
 
     fun setGoogleDriveAccount(email: String?) {
