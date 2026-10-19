@@ -117,6 +117,7 @@ fun SettingsScreen(
     val privacyPinHash by prefs.privacyPinHash.collectAsState()
     val aiProvider by prefs.aiProvider.collectAsState()
     val geminiApiKey by prefs.geminiApiKey.collectAsState()
+    val geminiModel by prefs.geminiModel.collectAsState()
     val ollamaEndpoint by prefs.ollamaEndpoint.collectAsState()
     val ollamaModel by prefs.ollamaModel.collectAsState()
     val odinTemperature by prefs.odinTemperature.collectAsState()
@@ -933,8 +934,17 @@ fun SettingsScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = geminiModel,
+                            onValueChange = { prefs.setGeminiModel(it) },
+                            label = { Text("Gemini Model Name (★ gemini-2.0-flash)") },
+                            placeholder = { Text("gemini-2.0-flash") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         Text(
-                            text = "Get a free API key at aistudio.google.com. Encrypted securely on-device.",
+                            text = "Get a free API key at aistudio.google.com. Defaults to fast Gemini 2.0 Flash.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp)

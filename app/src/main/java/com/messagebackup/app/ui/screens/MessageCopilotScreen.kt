@@ -103,6 +103,7 @@ fun MessageCopilotScreen(
     val aiCredits by prefs.aiCredits.collectAsState()
     val aiProviderStr by prefs.aiProvider.collectAsState()
     val geminiKey by prefs.geminiApiKey.collectAsState()
+    val geminiModel by prefs.geminiModel.collectAsState()
     val ollamaUrl by prefs.ollamaEndpoint.collectAsState()
     val ollamaModel by prefs.ollamaModel.collectAsState()
     val odinTemperature by prefs.odinTemperature.collectAsState()
@@ -181,6 +182,7 @@ fun MessageCopilotScreen(
                 targetContactName = targetContactName,
                 providerType = currentProvider,
                 geminiApiKey = geminiKey,
+                geminiModel = geminiModel,
                 ollamaEndpoint = ollamaUrl,
                 ollamaModel = ollamaModel,
                 temperature = odinTemperature,

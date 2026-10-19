@@ -36,6 +36,7 @@ class AppPreferences(context: Context) {
         private const val KEY_AUTO_BACKUP_ENABLED = "auto_backup_enabled"
         private const val KEY_AI_PROVIDER = "ai_provider"
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
+        private const val KEY_GEMINI_MODEL = "gemini_model"
         private const val KEY_OLLAMA_ENDPOINT = "ollama_endpoint"
         private const val KEY_OLLAMA_MODEL = "ollama_model"
         private const val KEY_ODIN_TEMPERATURE = "odin_temperature"
@@ -91,6 +92,9 @@ class AppPreferences(context: Context) {
 
     private val _geminiApiKey = MutableStateFlow(prefs.getString(KEY_GEMINI_API_KEY, "") ?: "")
     val geminiApiKey: StateFlow<String> = _geminiApiKey.asStateFlow()
+
+    private val _geminiModel = MutableStateFlow(prefs.getString(KEY_GEMINI_MODEL, "gemini-2.0-flash") ?: "gemini-2.0-flash")
+    val geminiModel: StateFlow<String> = _geminiModel.asStateFlow()
 
     private val _ollamaEndpoint = MutableStateFlow(prefs.getString(KEY_OLLAMA_ENDPOINT, "http://100.0.0.1:11434") ?: "http://100.0.0.1:11434")
     val ollamaEndpoint: StateFlow<String> = _ollamaEndpoint.asStateFlow()
@@ -264,6 +268,12 @@ class AppPreferences(context: Context) {
     fun setGeminiApiKey(key: String) {
         prefs.edit().putString(KEY_GEMINI_API_KEY, key.trim()).apply()
         _geminiApiKey.value = key.trim()
+    }
+
+    fun setGeminiModel(model: String) {
+        val clean = model.trim().ifBlank { "gemini-2.0-flash" }
+        prefs.edit().putString(KEY_GEMINI_MODEL, clean).apply()
+        _geminiModel.value = clean
     }
 
     fun setOllamaEndpoint(endpoint: String) {

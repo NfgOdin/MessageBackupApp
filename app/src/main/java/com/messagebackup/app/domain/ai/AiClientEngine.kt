@@ -91,6 +91,7 @@ class AiClientEngine {
         targetContactName: String,
         providerType: AiProviderType,
         geminiApiKey: String,
+        geminiModel: String = "gemini-2.0-flash",
         ollamaEndpoint: String,
         ollamaModel: String,
         temperature: Float = 0.2f,
@@ -122,7 +123,7 @@ class AiClientEngine {
                     if (geminiApiKey.isBlank()) {
                         return@withContext AiQueryResult.Error("Google Gemini API Key is missing. Add your free key in O.D.I.N. Settings.")
                     }
-                    queryGemini(systemInstruction, userPrompt, geminiApiKey, temperature, topP)
+                    queryGemini(systemInstruction, userPrompt, geminiApiKey, geminiModel, temperature, topP)
                 }
                 AiProviderType.OLLAMA -> {
                     if (ollamaEndpoint.isBlank()) {
@@ -156,56 +157,79 @@ class AiClientEngine {
         systemInstruction: String,
         userPrompt: String,
         apiKey: String,
+        modelName: String,
         temperature: Float,
         topP: Float
     ): AiQueryResult {
-        // Using Gemini 2.0 Flash (or 1.5 Flash fallback)
-        val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey")
-        val conn = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            setRequestProperty("Content-Type", "application/json")
-            connectTimeout = 15000
-            readTimeout = 30000
-            doOutput = true
-        }
+        val cleanModel = modelName.trim().removePrefix("models/").ifBlank { "gemini-2.0-flash" }
+        // Attempt user-configured model (defaults to gemini-2.0-flash), with automatic fallbacks
+        val candidateModels = listOf(cleanModel, "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash").distinct()
 
-        val requestJson = JSONObject().apply {
-            val contentsArray = JSONArray().apply {
-                put(JSONObject().apply {
-                    put("role", "user")
-                    put("parts", JSONArray().apply {
-                        put(JSONObject().put("text", "$systemInstruction\n\nUser Question: $userPrompt"))
-                    })
-                })
-            }
-            put("contents", contentsArray)
-            put("generationConfig", JSONObject().apply {
-                put("temperature", temperature)
-                put("topP", topP)
-            })
-        }
+        var lastError = "Unable to reach Gemini API"
 
-        OutputStreamWriter(conn.outputStream).use { it.write(requestJson.toString()) }
-
-        val code = conn.responseCode
-        if (code == 200) {
-            val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-            val root = JSONObject(responseText)
-            val candidates = root.optJSONArray("candidates")
-            if (candidates != null && candidates.length() > 0) {
-                val first = candidates.getJSONObject(0)
-                val content = first.optJSONObject("content")
-                val parts = content?.optJSONArray("parts")
-                if (parts != null && parts.length() > 0) {
-                    val text = parts.getJSONObject(0).optString("text", "")
-                    return AiQueryResult.Success(text.trim())
+        for (model in candidateModels) {
+            try {
+                val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    setRequestProperty("Content-Type", "application/json")
+                    connectTimeout = 15000
+                    readTimeout = 30000
+                    doOutput = true
                 }
+
+                val requestJson = JSONObject().apply {
+                    put("system_instruction", JSONObject().apply {
+                        put("parts", JSONArray().apply {
+                            put(JSONObject().put("text", systemInstruction))
+                        })
+                    })
+                    val contentsArray = JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("role", "user")
+                            put("parts", JSONArray().apply {
+                                put(JSONObject().put("text", userPrompt))
+                            })
+                        })
+                    }
+                    put("contents", contentsArray)
+                    put("generationConfig", JSONObject().apply {
+                        put("temperature", temperature)
+                        put("topP", topP)
+                    })
+                }
+
+                OutputStreamWriter(conn.outputStream).use { it.write(requestJson.toString()) }
+
+                val code = conn.responseCode
+                if (code == 200) {
+                    val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                    val root = JSONObject(responseText)
+                    val candidates = root.optJSONArray("candidates")
+                    if (candidates != null && candidates.length() > 0) {
+                        val first = candidates.getJSONObject(0)
+                        val content = first.optJSONObject("content")
+                        val parts = content?.optJSONArray("parts")
+                        if (parts != null && parts.length() > 0) {
+                            val text = parts.getJSONObject(0).optString("text", "")
+                            return AiQueryResult.Success(text.trim())
+                        }
+                    }
+                    return AiQueryResult.Error("Gemini returned an empty response.")
+                } else if (code == 404) {
+                    val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP 404"
+                    lastError = "Model '$model' not found: $errorText"
+                    continue
+                } else {
+                    val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP $code"
+                    return AiQueryResult.Error("Gemini API Error ($code): $errorText")
+                }
+            } catch (e: Exception) {
+                lastError = e.localizedMessage ?: "Network connection error"
             }
-            return AiQueryResult.Error("Gemini returned an empty response.")
-        } else {
-            val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP $code"
-            return AiQueryResult.Error("Gemini API Error ($code): $errorText")
         }
+
+        return AiQueryResult.Error("Gemini Error: $lastError")
     }
 
     private fun queryOllama(
