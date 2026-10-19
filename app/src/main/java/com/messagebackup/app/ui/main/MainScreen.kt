@@ -144,6 +144,11 @@ fun MainScreen(
     val previewLazyListState = rememberLazyListState()
 
     var lastScrolledThreadId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(uiState.selectedThreadForPreview?.threadId) {
+        if (uiState.selectedThreadForPreview == null) {
+            lastScrolledThreadId = null
+        }
+    }
     LaunchedEffect(uiState.selectedThreadForPreview?.threadId, uiState.previewMessages.size) {
         val currentThreadId = uiState.selectedThreadForPreview?.threadId
         if (currentThreadId != null && currentThreadId != lastScrolledThreadId && uiState.previewMessages.isNotEmpty()) {
@@ -471,10 +476,19 @@ fun MainScreen(
                                 text = uiState.selectedThreadForPreview!!.displayName,
                                 style = MaterialTheme.typography.titleMedium
                             )
-                            Text(
-                                text = "${uiState.previewMessages.size} messages",
-                                style = MaterialTheme.typography.labelSmall
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = "${uiState.previewMessages.size} messages",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                                if (uiState.isPreviewLoading) {
+                                    Text(
+                                        text = "• Refreshing...",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
                         }
                     },
                     navigationIcon = {
@@ -483,6 +497,24 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        IconButton(
+                            onClick = { viewModel.refreshCurrentThreadPreview() },
+                            enabled = !uiState.isPreviewLoading
+                        ) {
+                            if (uiState.isPreviewLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Refresh Messages",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                         if (uiState.selectedThreadForPreview?.hasAttachment == true) {
                             IconButton(onClick = { viewModel.setVaultOpen(true) }) {
                                 Icon(

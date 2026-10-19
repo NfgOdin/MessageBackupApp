@@ -90,6 +90,8 @@ class MainViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
+    private val threadMessagesCache = java.util.concurrent.ConcurrentHashMap<Long, List<MessageItem>>()
+
     val isAdsRemoved: StateFlow<Boolean> = billingManager.isAdsRemoved
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
@@ -215,6 +217,9 @@ class MainViewModel : ViewModel() {
     }
 
     fun loadThreads(forceRefresh: Boolean = false) {
+        if (forceRefresh) {
+            threadMessagesCache.clear()
+        }
         // If not a force refresh and we already have cached threads, avoid redundant loading
         if (!forceRefresh && _uiState.value.threads.isNotEmpty()) {
             return
@@ -269,9 +274,26 @@ class MainViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(showExportDialog = show)
     }
 
-    fun openThreadPreview(thread: ConversationThread) {
+    fun openThreadPreview(thread: ConversationThread, forceRefresh: Boolean = false) {
         val usePagination = prefs.fastPaginationEnabled.value
         val initialBatchSize = if (usePagination) prefs.initialMessageBatchSize.value else null
+
+        val cachedMessages = if (!forceRefresh) threadMessagesCache[thread.threadId] else null
+        if (cachedMessages != null) {
+            _uiState.value = _uiState.value.copy(
+                selectedThreadForPreview = thread,
+                isPreviewLoading = false,
+                hasMoreOlderMessages = if (usePagination) thread.messageCount > cachedMessages.size else false,
+                isLoadingOlderMessages = false,
+                previewMessages = cachedMessages,
+                filteredPreviewMessages = cachedMessages,
+                threadSearchQuery = "",
+                isThreadSearchActive = false,
+                excludedMessageIds = emptySet()
+            )
+            return
+        }
+
         _uiState.value = _uiState.value.copy(
             selectedThreadForPreview = thread,
             isPreviewLoading = true,
@@ -290,6 +312,7 @@ class MainViewModel : ViewModel() {
                 resolveContacts = prefs.resolveContacts.value && _uiState.value.hasContactsPermission,
                 limit = initialBatchSize
             )
+            threadMessagesCache[thread.threadId] = messages
             _uiState.value = _uiState.value.copy(
                 previewMessages = messages,
                 filteredPreviewMessages = messages,
@@ -297,6 +320,11 @@ class MainViewModel : ViewModel() {
                 hasMoreOlderMessages = if (usePagination) thread.messageCount > messages.size else false
             )
         }
+    }
+
+    fun refreshCurrentThreadPreview() {
+        val thread = _uiState.value.selectedThreadForPreview ?: return
+        openThreadPreview(thread, forceRefresh = true)
     }
 
     fun loadAllPreviewMessages() {
@@ -310,6 +338,7 @@ class MainViewModel : ViewModel() {
                 resolveContacts = prefs.resolveContacts.value && _uiState.value.hasContactsPermission,
                 limit = null
             )
+            threadMessagesCache[thread.threadId] = allMessages
             _uiState.value = _uiState.value.copy(
                 previewMessages = allMessages,
                 filteredPreviewMessages = if (_uiState.value.threadSearchQuery.isBlank()) allMessages else _uiState.value.filteredPreviewMessages,
@@ -336,6 +365,7 @@ class MainViewModel : ViewModel() {
                 beforeTimestamp = oldestTimestamp
             )
             val combined = (olderMessages + currentMessages).distinctBy { it.messageId }.sortedBy { it.timestamp }
+            threadMessagesCache[thread.threadId] = combined
             _uiState.value = _uiState.value.copy(
                 previewMessages = combined,
                 filteredPreviewMessages = if (_uiState.value.threadSearchQuery.isBlank()) combined else _uiState.value.filteredPreviewMessages,
