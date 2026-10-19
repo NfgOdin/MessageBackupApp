@@ -270,7 +270,8 @@ class MainViewModel : ViewModel() {
     }
 
     fun openThreadPreview(thread: ConversationThread) {
-        val initialBatchSize = prefs.initialMessageBatchSize.value
+        val usePagination = prefs.fastPaginationEnabled.value
+        val initialBatchSize = if (usePagination) prefs.initialMessageBatchSize.value else null
         _uiState.value = _uiState.value.copy(
             selectedThreadForPreview = thread,
             isPreviewLoading = true,
@@ -293,7 +294,27 @@ class MainViewModel : ViewModel() {
                 previewMessages = messages,
                 filteredPreviewMessages = messages,
                 isPreviewLoading = false,
-                hasMoreOlderMessages = thread.messageCount > messages.size
+                hasMoreOlderMessages = if (usePagination) thread.messageCount > messages.size else false
+            )
+        }
+    }
+
+    fun loadAllPreviewMessages() {
+        val thread = _uiState.value.selectedThreadForPreview ?: return
+        if (_uiState.value.isLoadingOlderMessages) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingOlderMessages = true)
+            val allMessages = app.currentTelephonyRepository.getMessagesForThread(
+                threadId = thread.threadId,
+                resolveContacts = prefs.resolveContacts.value && _uiState.value.hasContactsPermission,
+                limit = null
+            )
+            _uiState.value = _uiState.value.copy(
+                previewMessages = allMessages,
+                filteredPreviewMessages = if (_uiState.value.threadSearchQuery.isBlank()) allMessages else _uiState.value.filteredPreviewMessages,
+                isLoadingOlderMessages = false,
+                hasMoreOlderMessages = false
             )
         }
     }

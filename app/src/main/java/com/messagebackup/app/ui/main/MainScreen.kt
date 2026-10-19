@@ -1037,21 +1037,42 @@ fun MainScreen(
                                                     )
                                                 }
                                             } else {
-                                                OutlinedButton(
-                                                    onClick = { viewModel.loadOlderPreviewMessages() },
-                                                    shape = RoundedCornerShape(20.dp),
-                                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                                val totalCount = uiState.selectedThreadForPreview?.messageCount ?: 0
+                                                val currentCount = uiState.previewMessages.size
+                                                val remaining = (totalCount - currentCount).coerceAtLeast(0)
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.ArrowUpward,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(14.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Text(
-                                                        text = "Load older messages (${uiState.previewMessages.size} of ${uiState.selectedThreadForPreview?.messageCount ?: 0})",
-                                                        style = MaterialTheme.typography.labelSmall
-                                                    )
+                                                    OutlinedButton(
+                                                        onClick = { viewModel.loadOlderPreviewMessages() },
+                                                        shape = RoundedCornerShape(20.dp),
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.ArrowUpward,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(14.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text(
+                                                            text = "Load older ($currentCount of $totalCount)",
+                                                            style = MaterialTheme.typography.labelSmall
+                                                        )
+                                                    }
+
+                                                    if (remaining > 0) {
+                                                        TextButton(
+                                                            onClick = { viewModel.loadAllPreviewMessages() },
+                                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = "Load all ($remaining)",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                fontWeight = FontWeight.Bold
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }

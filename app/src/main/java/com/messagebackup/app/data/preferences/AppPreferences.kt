@@ -57,6 +57,7 @@ class AppPreferences(context: Context) {
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
         private const val KEY_INITIAL_MESSAGE_BATCH_SIZE = "initial_message_batch_size"
         private const val KEY_SCROLL_MESSAGE_BATCH_SIZE = "scroll_message_batch_size"
+        private const val KEY_FAST_PAGINATION_ENABLED = "fast_pagination_enabled"
     }
 
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
@@ -162,6 +163,14 @@ class AppPreferences(context: Context) {
 
     private val _scrollMessageBatchSize = MutableStateFlow(prefs.getInt(KEY_SCROLL_MESSAGE_BATCH_SIZE, 50).coerceIn(10, 75))
     val scrollMessageBatchSize: StateFlow<Int> = _scrollMessageBatchSize.asStateFlow()
+
+    private val _fastPaginationEnabled = MutableStateFlow(prefs.getBoolean(KEY_FAST_PAGINATION_ENABLED, true))
+    val fastPaginationEnabled: StateFlow<Boolean> = _fastPaginationEnabled.asStateFlow()
+
+    fun setFastPaginationEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_FAST_PAGINATION_ENABLED, enabled).apply()
+        _fastPaginationEnabled.value = enabled
+    }
 
     fun setInitialMessageBatchSize(size: Int) {
         val clamped = size.coerceIn(10, 75)
