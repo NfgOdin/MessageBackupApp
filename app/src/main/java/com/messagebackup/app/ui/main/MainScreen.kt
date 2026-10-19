@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -140,6 +142,24 @@ fun MainScreen(
     var isAppSessionUnlocked by remember { mutableStateOf(false) }
     var pendingProtectedAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val previewLazyListState = rememberLazyListState()
+
+    var lastScrolledThreadId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(uiState.selectedThreadForPreview?.threadId, uiState.previewMessages.size) {
+        val currentThreadId = uiState.selectedThreadForPreview?.threadId
+        if (currentThreadId != null && currentThreadId != lastScrolledThreadId && uiState.previewMessages.isNotEmpty()) {
+            lastScrolledThreadId = currentThreadId
+            previewLazyListState.scrollToItem(uiState.previewMessages.size - 1)
+        }
+    }
+
+    LaunchedEffect(previewLazyListState, uiState.hasMoreOlderMessages, uiState.isLoadingOlderMessages) {
+        androidx.compose.runtime.snapshotFlow { previewLazyListState.firstVisibleItemIndex }
+            .collect { firstIndex ->
+                if (firstIndex == 0 && uiState.hasMoreOlderMessages && !uiState.isLoadingOlderMessages && !uiState.isPreviewLoading && uiState.threadSearchQuery.isBlank()) {
+                    viewModel.loadOlderPreviewMessages()
+                }
+            }
+    }
 
     val runWithOdinLock: (() -> Unit) -> Unit = { action ->
         if (odinLockEnabled) {
@@ -996,6 +1016,47 @@ fun MainScreen(
                                 state = previewLazyListState,
                                 modifier = Modifier.fillMaxSize()
                             ) {
+                                if (uiState.hasMoreOlderMessages && uiState.threadSearchQuery.isBlank()) {
+                                    item(key = "load_older_messages_header") {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 10.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (uiState.isLoadingOlderMessages) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                                    Text(
+                                                        text = "Loading older messages...",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            } else {
+                                                OutlinedButton(
+                                                    onClick = { viewModel.loadOlderPreviewMessages() },
+                                                    shape = RoundedCornerShape(20.dp),
+                                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.ArrowUpward,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        text = "Load older messages (${uiState.previewMessages.size} of ${uiState.selectedThreadForPreview?.messageCount ?: 0})",
+                                                        style = MaterialTheme.typography.labelSmall
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 items(uiState.filteredPreviewMessages, key = { it.messageId }) { message ->
                                     val isExcluded = uiState.excludedMessageIds.contains(message.messageId)
                                     MessageBubble(

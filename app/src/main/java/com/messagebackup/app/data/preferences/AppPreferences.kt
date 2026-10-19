@@ -55,6 +55,8 @@ class AppPreferences(context: Context) {
         private const val KEY_HAS_REVIEWED_APP = "has_reviewed_app"
         private const val KEY_EXPORT_SUCCESS_COUNT = "export_success_count"
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        private const val KEY_INITIAL_MESSAGE_BATCH_SIZE = "initial_message_batch_size"
+        private const val KEY_SCROLL_MESSAGE_BATCH_SIZE = "scroll_message_batch_size"
     }
 
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
@@ -154,6 +156,24 @@ class AppPreferences(context: Context) {
 
     private val _isOnboardingCompleted = MutableStateFlow(prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false))
     val isOnboardingCompleted: StateFlow<Boolean> = _isOnboardingCompleted.asStateFlow()
+
+    private val _initialMessageBatchSize = MutableStateFlow(prefs.getInt(KEY_INITIAL_MESSAGE_BATCH_SIZE, 50).coerceIn(10, 75))
+    val initialMessageBatchSize: StateFlow<Int> = _initialMessageBatchSize.asStateFlow()
+
+    private val _scrollMessageBatchSize = MutableStateFlow(prefs.getInt(KEY_SCROLL_MESSAGE_BATCH_SIZE, 50).coerceIn(10, 75))
+    val scrollMessageBatchSize: StateFlow<Int> = _scrollMessageBatchSize.asStateFlow()
+
+    fun setInitialMessageBatchSize(size: Int) {
+        val clamped = size.coerceIn(10, 75)
+        prefs.edit().putInt(KEY_INITIAL_MESSAGE_BATCH_SIZE, clamped).apply()
+        _initialMessageBatchSize.value = clamped
+    }
+
+    fun setScrollMessageBatchSize(size: Int) {
+        val clamped = size.coerceIn(10, 75)
+        prefs.edit().putInt(KEY_SCROLL_MESSAGE_BATCH_SIZE, clamped).apply()
+        _scrollMessageBatchSize.value = clamped
+    }
 
     fun setOnboardingCompleted(completed: Boolean = true) {
         prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, completed).apply()

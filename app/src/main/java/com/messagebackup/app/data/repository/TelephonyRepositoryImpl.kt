@@ -202,19 +202,25 @@ class TelephonyRepositoryImpl(
 
     override suspend fun getMessagesForThread(
         threadId: Long,
-        resolveContacts: Boolean
+        resolveContacts: Boolean,
+        limit: Int?,
+        beforeTimestamp: Long?
     ): List<MessageItem> = withContext(Dispatchers.IO) {
         val messages = mutableListOf<MessageItem>()
 
         // 1. Fetch SMS messages for this thread
-        fetchSmsMessages(threadId, resolveContacts, messages)
+        fetchSmsMessages(threadId, resolveContacts, messages, limit, beforeTimestamp)
 
         // 2. Fetch MMS messages for this thread
-        fetchMmsMessages(threadId, resolveContacts, messages)
+        fetchMmsMessages(threadId, resolveContacts, messages, limit, beforeTimestamp)
 
-        // Sort ascending by timestamp so export reads in chronological order
+        // Sort ascending by timestamp so UI reads in chronological order
         messages.sortBy { it.timestamp }
-        messages
+        if (limit != null && messages.size > limit) {
+            messages.takeLast(limit)
+        } else {
+            messages
+        }
     }
 
     override suspend fun getRecentMessagesAcrossConversations(
@@ -375,7 +381,9 @@ class TelephonyRepositoryImpl(
     private fun fetchSmsMessages(
         threadId: Long,
         resolveContacts: Boolean,
-        outList: MutableList<MessageItem>
+        outList: MutableList<MessageItem>,
+        limit: Int? = null,
+        beforeTimestamp: Long? = null
     ) {
         val smsUri = Telephony.Sms.CONTENT_URI
         val projection = arrayOf(
@@ -387,14 +395,26 @@ class TelephonyRepositoryImpl(
             Telephony.Sms.TYPE
         )
 
+        val (selection, selectionArgs) = if (beforeTimestamp != null) {
+            Pair("${Telephony.Sms.THREAD_ID} = ? AND ${Telephony.Sms.DATE} < ?", arrayOf(threadId.toString(), beforeTimestamp.toString()))
+        } else {
+            Pair("${Telephony.Sms.THREAD_ID} = ?", arrayOf(threadId.toString()))
+        }
+
+        val sortOrder = if (limit != null) {
+            "${Telephony.Sms.DATE} DESC LIMIT $limit"
+        } else {
+            "${Telephony.Sms.DATE} ASC"
+        }
+
         var cursor: Cursor? = null
         try {
             cursor = contentResolver.query(
                 smsUri,
                 projection,
-                "${Telephony.Sms.THREAD_ID} = ?",
-                arrayOf(threadId.toString()),
-                "${Telephony.Sms.DATE} ASC"
+                selection,
+                selectionArgs,
+                sortOrder
             )
 
             cursor?.let {
@@ -449,7 +469,9 @@ class TelephonyRepositoryImpl(
     private fun fetchMmsMessages(
         threadId: Long,
         resolveContacts: Boolean,
-        outList: MutableList<MessageItem>
+        outList: MutableList<MessageItem>,
+        limit: Int? = null,
+        beforeTimestamp: Long? = null
     ) {
         val mmsUri = Telephony.Mms.CONTENT_URI
         val projection = arrayOf(
@@ -459,14 +481,28 @@ class TelephonyRepositoryImpl(
             Telephony.Mms.MESSAGE_BOX
         )
 
+        // Telephony.Mms.DATE is stored in seconds rather than milliseconds
+        val (selection, selectionArgs) = if (beforeTimestamp != null) {
+            val beforeSec = beforeTimestamp / 1000L
+            Pair("${Telephony.Mms.THREAD_ID} = ? AND ${Telephony.Mms.DATE} < ?", arrayOf(threadId.toString(), beforeSec.toString()))
+        } else {
+            Pair("${Telephony.Mms.THREAD_ID} = ?", arrayOf(threadId.toString()))
+        }
+
+        val sortOrder = if (limit != null) {
+            "${Telephony.Mms.DATE} DESC LIMIT $limit"
+        } else {
+            "${Telephony.Mms.DATE} ASC"
+        }
+
         var cursor: Cursor? = null
         try {
             cursor = contentResolver.query(
                 mmsUri,
                 projection,
-                "${Telephony.Mms.THREAD_ID} = ?",
-                arrayOf(threadId.toString()),
-                "${Telephony.Mms.DATE} ASC"
+                selection,
+                selectionArgs,
+                sortOrder
             )
 
             cursor?.let {

@@ -24,13 +24,20 @@ interface TelephonyRepository {
     suspend fun searchThreadIdsByMessageBody(query: String): Set<Long>
 
     /**
-     * Retrieves all messages (SMS + MMS) for a specific thread, sorted ascending by timestamp.
+     * Retrieves messages (SMS + MMS) for a specific thread, sorted ascending by timestamp.
      *
      * @param threadId Unique thread ID.
      * @param resolveContacts If true, resolves address book names for senders.
+     * @param limit Optional maximum number of recent messages to fetch.
+     * @param beforeTimestamp Optional epoch timestamp filter to fetch messages older than this point (for pagination).
      * @return List of MessageItem instances.
      */
-    suspend fun getMessagesForThread(threadId: Long, resolveContacts: Boolean): List<MessageItem>
+    suspend fun getMessagesForThread(
+        threadId: Long,
+        resolveContacts: Boolean,
+        limit: Int? = null,
+        beforeTimestamp: Long? = null
+    ): List<MessageItem>
 
     /**
      * Retrieves the most recent messages across all conversation threads.

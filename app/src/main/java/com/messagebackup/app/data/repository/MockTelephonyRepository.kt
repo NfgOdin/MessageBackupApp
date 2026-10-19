@@ -176,10 +176,15 @@ class MockTelephonyRepository : TelephonyRepository {
 
     override suspend fun getMessagesForThread(
         threadId: Long,
-        resolveContacts: Boolean
+        resolveContacts: Boolean,
+        limit: Int?,
+        beforeTimestamp: Long?
     ): List<MessageItem> {
-        val list = sampleMessages[threadId] ?: emptyList()
-        return if (!resolveContacts) {
+        var list = sampleMessages[threadId] ?: emptyList()
+        if (beforeTimestamp != null) {
+            list = list.filter { it.timestamp < beforeTimestamp }
+        }
+        val resolvedList = if (!resolveContacts) {
             list.map {
                 if (it.direction == MessageDirection.INCOMING) {
                     it.copy(sender = sampleThreads.find { t -> t.threadId == threadId }?.address ?: "Unknown")
@@ -188,6 +193,7 @@ class MockTelephonyRepository : TelephonyRepository {
         } else {
             list
         }
+        return if (limit != null && resolvedList.size > limit) resolvedList.takeLast(limit) else resolvedList
     }
 
     override suspend fun getRecentMessagesAcrossConversations(

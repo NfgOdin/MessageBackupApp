@@ -49,6 +49,8 @@ data class MainUiState(
     val filteredPreviewMessages: List<MessageItem> = emptyList(),
     val excludedMessageIds: Set<Long> = emptySet(),
     val isPreviewLoading: Boolean = false,
+    val hasMoreOlderMessages: Boolean = false,
+    val isLoadingOlderMessages: Boolean = false,
     val isSettingsOpen: Boolean = false,
     val viewerFile: java.io.File? = null,
     val showStatsDialog: Boolean = false,
@@ -268,9 +270,12 @@ class MainViewModel : ViewModel() {
     }
 
     fun openThreadPreview(thread: ConversationThread) {
+        val initialBatchSize = prefs.initialMessageBatchSize.value
         _uiState.value = _uiState.value.copy(
             selectedThreadForPreview = thread,
             isPreviewLoading = true,
+            hasMoreOlderMessages = false,
+            isLoadingOlderMessages = false,
             previewMessages = emptyList(),
             filteredPreviewMessages = emptyList(),
             threadSearchQuery = "",
@@ -281,12 +286,40 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             val messages = app.currentTelephonyRepository.getMessagesForThread(
                 threadId = thread.threadId,
-                resolveContacts = prefs.resolveContacts.value && _uiState.value.hasContactsPermission
+                resolveContacts = prefs.resolveContacts.value && _uiState.value.hasContactsPermission,
+                limit = initialBatchSize
             )
             _uiState.value = _uiState.value.copy(
                 previewMessages = messages,
                 filteredPreviewMessages = messages,
-                isPreviewLoading = false
+                isPreviewLoading = false,
+                hasMoreOlderMessages = thread.messageCount > messages.size
+            )
+        }
+    }
+
+    fun loadOlderPreviewMessages() {
+        val thread = _uiState.value.selectedThreadForPreview ?: return
+        val currentMessages = _uiState.value.previewMessages
+        if (_uiState.value.isLoadingOlderMessages || currentMessages.isEmpty()) return
+
+        val oldestTimestamp = currentMessages.firstOrNull()?.timestamp ?: return
+        val scrollBatchSize = prefs.scrollMessageBatchSize.value
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingOlderMessages = true)
+            val olderMessages = app.currentTelephonyRepository.getMessagesForThread(
+                threadId = thread.threadId,
+                resolveContacts = prefs.resolveContacts.value && _uiState.value.hasContactsPermission,
+                limit = scrollBatchSize,
+                beforeTimestamp = oldestTimestamp
+            )
+            val combined = (olderMessages + currentMessages).distinctBy { it.messageId }.sortedBy { it.timestamp }
+            _uiState.value = _uiState.value.copy(
+                previewMessages = combined,
+                filteredPreviewMessages = if (_uiState.value.threadSearchQuery.isBlank()) combined else _uiState.value.filteredPreviewMessages,
+                isLoadingOlderMessages = false,
+                hasMoreOlderMessages = thread.messageCount > combined.size && olderMessages.isNotEmpty()
             )
         }
     }
@@ -338,7 +371,9 @@ class MainViewModel : ViewModel() {
             filteredPreviewMessages = emptyList(),
             threadSearchQuery = "",
             isThreadSearchActive = false,
-            excludedMessageIds = emptySet()
+            excludedMessageIds = emptySet(),
+            hasMoreOlderMessages = false,
+            isLoadingOlderMessages = false
         )
     }
 
