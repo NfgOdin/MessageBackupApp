@@ -152,7 +152,7 @@ class TelephonyRepositoryImpl(
             // Also search MMS text parts
             val mmsPartUri = Uri.parse("content://mms/part")
             val partProjection = arrayOf("mid", "text")
-            val partSelection = "ct = 'text/plain' AND text LIKE ?"
+            val partSelection = "(ct LIKE 'text/%' OR ct = 'application/txt' OR ct = 'text/plain') AND text LIKE ?"
             val partArgs = arrayOf("%$query%")
             val matchingMmsIds = mutableSetOf<Long>()
 
@@ -163,7 +163,8 @@ class TelephonyRepositoryImpl(
                 partArgs,
                 null
             )?.use { c ->
-                val midIdx = c.getColumnIndex("mid")
+                var midIdx = c.getColumnIndex("mid")
+                if (midIdx == -1) midIdx = c.getColumnIndex("m_id")
                 if (midIdx != -1) {
                     while (c.moveToNext()) {
                         matchingMmsIds.add(c.getLong(midIdx))

@@ -964,11 +964,11 @@ fun SettingsScreen(
                                         if (detectedGeminiModels.isNotEmpty()) {
                                             "Gemini Model (${detectedGeminiModels.size} available — tap arrow)"
                                         } else {
-                                            "Gemini Model Name (★ gemini-2.0-flash)"
+                                            "Gemini Model Name (★ gemini-flash-lite-latest)"
                                         }
                                     )
                                 },
-                                placeholder = { Text("gemini-2.0-flash") },
+                                placeholder = { Text("gemini-flash-lite-latest") },
                                 singleLine = true,
                                 trailingIcon = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1027,12 +1027,28 @@ fun SettingsScreen(
                                                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                                 )
-                                                if (modelName == "gemini-2.0-flash") {
-                                                    Text(
-                                                        text = "★ Recommended (Fast & intelligent)",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
+                                                when (modelName) {
+                                                    "gemini-flash-lite-latest" -> {
+                                                        Text(
+                                                            text = "★ Recommended (Fastest & most responsive)",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+                                                    "gemini-3.8-flash" -> {
+                                                        Text(
+                                                            text = "★ Flagship Flash (Advanced reasoning)",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.tertiary
+                                                        )
+                                                    }
+                                                    "gemini-3.5-flash-lite" -> {
+                                                        Text(
+                                                            text = "★ Fast & Efficient",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.secondary
+                                                        )
+                                                    }
                                                 }
                                             }
                                         },
@@ -1055,7 +1071,7 @@ fun SettingsScreen(
                         }
 
                         Text(
-                            text = if (detectedGeminiModels.isNotEmpty()) "Tap arrow to switch models. Defaults to Gemini 2.0 Flash." else "Tap refresh icon to fetch all active models available on your Google account.",
+                            text = if (detectedGeminiModels.isNotEmpty()) "Tap arrow to switch models. Recommended: Gemini Flash-Lite Latest." else "Tap refresh icon to fetch all active models available on your Google account.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp)

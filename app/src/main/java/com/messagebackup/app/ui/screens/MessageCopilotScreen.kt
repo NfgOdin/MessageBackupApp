@@ -60,6 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.messagebackup.app.ads.AdManager
 import com.messagebackup.app.data.preferences.AppPreferences
@@ -226,7 +227,8 @@ fun MessageCopilotScreen(
                         )
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Surface(
                                 color = MaterialTheme.colorScheme.primaryContainer,
@@ -237,14 +239,18 @@ fun MessageCopilotScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                    softWrap = false,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
                             Text(
                                 text = "• $targetContactName (${currentMessages.size} msgs)",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
                         }
                     }
@@ -265,38 +271,47 @@ fun MessageCopilotScreen(
                                     showArcadeDialog = true
                                 }
                             }
-                            .padding(end = 4.dp)
+                            .padding(end = 2.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                         ) {
                             Icon(
                                 imageVector = if (isAdsRemoved) Icons.Default.AutoAwesome else Icons.Default.Bolt,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(14.dp),
                                 tint = if (isAdsRemoved) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = if (isAdsRemoved) "PRO" else "$aiCredits Credits",
-                                style = MaterialTheme.typography.labelMedium,
+                                text = if (isAdsRemoved) "PRO" else "$aiCredits",
+                                style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
 
                     if (!isAdsRemoved) {
-                        IconButton(onClick = { showArcadeDialog = true }) {
-                            Icon(imageVector = Icons.Default.VideoLibrary, contentDescription = "Reward Arcade")
+                        IconButton(
+                            onClick = { showArcadeDialog = true },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.VideoLibrary, contentDescription = "Reward Arcade", modifier = Modifier.size(20.dp))
                         }
                     }
 
-                    IconButton(onClick = { showGuideDialog = true }) {
-                        Icon(imageVector = Icons.Default.HelpOutline, contentDescription = "Setup Guide")
+                    IconButton(
+                        onClick = { showGuideDialog = true },
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.HelpOutline, contentDescription = "Setup Guide", modifier = Modifier.size(20.dp))
                     }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(imageVector = Icons.Default.Settings, contentDescription = "AI Settings")
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Settings, contentDescription = "AI Settings", modifier = Modifier.size(20.dp))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

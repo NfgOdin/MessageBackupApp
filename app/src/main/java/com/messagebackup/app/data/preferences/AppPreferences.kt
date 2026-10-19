@@ -93,7 +93,7 @@ class AppPreferences(context: Context) {
     private val _geminiApiKey = MutableStateFlow(prefs.getString(KEY_GEMINI_API_KEY, "") ?: "")
     val geminiApiKey: StateFlow<String> = _geminiApiKey.asStateFlow()
 
-    private val _geminiModel = MutableStateFlow(prefs.getString(KEY_GEMINI_MODEL, "gemini-2.0-flash") ?: "gemini-2.0-flash")
+    private val _geminiModel = MutableStateFlow(prefs.getString(KEY_GEMINI_MODEL, "gemini-flash-lite-latest") ?: "gemini-flash-lite-latest")
     val geminiModel: StateFlow<String> = _geminiModel.asStateFlow()
 
     private val _ollamaEndpoint = MutableStateFlow(prefs.getString(KEY_OLLAMA_ENDPOINT, "http://100.0.0.1:11434") ?: "http://100.0.0.1:11434")
@@ -271,7 +271,7 @@ class AppPreferences(context: Context) {
     }
 
     fun setGeminiModel(model: String) {
-        val clean = model.trim().ifBlank { "gemini-2.0-flash" }
+        val clean = model.trim().removePrefix("models/").ifBlank { "gemini-flash-lite-latest" }
         prefs.edit().putString(KEY_GEMINI_MODEL, clean).apply()
         _geminiModel.value = clean
     }

@@ -1035,39 +1035,10 @@ fun MainScreen(
                     }
                 }
 
-                // Loading State
-                uiState.isLoading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                }
-
-                // Empty State
-                uiState.filteredThreads.isEmpty() -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = if (uiState.searchQuery.isNotBlank()) "No Matching Conversations" else "No Messages Found",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = if (uiState.searchQuery.isNotBlank()) "Try searching for a different contact name or number." else "No SMS/MMS messages found.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                // Main Conversation List
+                // Main Conversation List & Search
                 else -> {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        // Collapsible Search Bar
+                        // Collapsible Search Bar (always visible while search is active, even if 0 results match!)
                         AnimatedVisibility(visible = uiState.isSearchActive) {
                             OutlinedTextField(
                                 value = uiState.searchQuery,
@@ -1087,20 +1058,49 @@ fun MainScreen(
                             )
                         }
 
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(uiState.filteredThreads, key = { it.threadId }) { thread ->
-                                val isSelected = uiState.selectedThreadIds.contains(thread.threadId)
-                                ConversationItem(
-                                    thread = thread,
-                                    isSelected = isSelected,
-                                    isSelectionMode = uiState.isSelectionMode,
-                                    onToggleSelect = { viewModel.toggleThreadSelection(thread.threadId) },
-                                    onClick = { viewModel.openThreadPreview(thread) }
-                                )
+                        when {
+                            uiState.isLoading -> {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator()
+                                }
                             }
+                            uiState.filteredThreads.isEmpty() -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = if (uiState.searchQuery.isNotBlank()) "No Matching Conversations" else "No Messages Found",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = if (uiState.searchQuery.isNotBlank()) "No messages found matching \"${uiState.searchQuery}\"" else "No SMS/MMS messages found.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            else -> {
+                                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                    items(uiState.filteredThreads, key = { it.threadId }) { thread ->
+                                        val isSelected = uiState.selectedThreadIds.contains(thread.threadId)
+                                        ConversationItem(
+                                            thread = thread,
+                                            isSelected = isSelected,
+                                            isSelectionMode = uiState.isSelectionMode,
+                                            onToggleSelect = { viewModel.toggleThreadSelection(thread.threadId) },
+                                            onClick = { viewModel.openThreadPreview(thread) }
+                                        )
+                                    }
 
-                            item {
-                                Spacer(modifier = Modifier.height(96.dp))
+                                    item {
+                                        Spacer(modifier = Modifier.height(96.dp))
+                                    }
+                                }
                             }
                         }
                     }
