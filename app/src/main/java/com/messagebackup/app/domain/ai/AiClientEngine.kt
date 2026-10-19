@@ -83,6 +83,76 @@ class AiClientEngine {
     }
 
     /**
+     * Queries the Google Gemini models API to discover all available models that support generateContent.
+     */
+    suspend fun fetchGeminiModels(apiKey: String): Result<List<String>> = withContext(Dispatchers.IO) {
+        if (apiKey.isBlank()) {
+            return@withContext Result.failure(Exception("Gemini API key is required to list available models."))
+        }
+        try {
+            val url = URL("https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 8000
+                readTimeout = 12000
+            }
+
+            val responseCode = conn.responseCode
+            if (responseCode == 200) {
+                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(responseText)
+                val modelsArray = json.optJSONArray("models") ?: JSONArray()
+                val resultList = mutableListOf<String>()
+
+                for (i in 0 until modelsArray.length()) {
+                    val m = modelsArray.getJSONObject(i)
+                    val rawName = m.optString("name", "")
+                    val shortName = rawName.removePrefix("models/")
+                    val methods = m.optJSONArray("supportedGenerationMethods")
+
+                    var canGenerate = false
+                    if (methods != null) {
+                        for (j in 0 until methods.length()) {
+                            if (methods.optString(j) == "generateContent") {
+                                canGenerate = true
+                                break
+                            }
+                        }
+                    }
+
+                    // Only include models that support generateContent
+                    if (canGenerate && shortName.isNotBlank()) {
+                        resultList.add(shortName)
+                    }
+                }
+
+                // Sort models so 2.0 / 2.5 / modern flash models appear first
+                resultList.sortWith { a, b ->
+                    when {
+                        a == "gemini-2.0-flash" -> -1
+                        b == "gemini-2.0-flash" -> 1
+                        a.contains("2.0-flash") && !b.contains("2.0-flash") -> -1
+                        !a.contains("2.0-flash") && b.contains("2.0-flash") -> 1
+                        a.contains("flash") && !b.contains("flash") -> -1
+                        !a.contains("flash") && b.contains("flash") -> 1
+                        else -> a.compareTo(b)
+                    }
+                }
+
+                if (resultList.isEmpty()) {
+                    resultList.add("gemini-2.0-flash")
+                }
+                Result.success(resultList)
+            } else {
+                val err = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP $responseCode"
+                Result.failure(Exception("Failed to fetch models ($responseCode): $err"))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("Network error fetching Gemini models: ${e.localizedMessage ?: "Unknown error"}"))
+        }
+    }
+
+    /**
      * Ask O.D.I.N. a question given a list of target messages as the grounding context.
      */
     suspend fun queryOdin(
