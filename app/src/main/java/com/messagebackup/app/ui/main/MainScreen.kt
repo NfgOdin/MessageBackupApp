@@ -219,6 +219,11 @@ fun MainScreen(
         } else {
             uiState.globalCopilotMessages
         }
+        val isMessagesLoading = if (uiState.selectedThreadForPreview != null) {
+            uiState.isPreviewLoading
+        } else {
+            uiState.isCopilotLoadingMessages
+        }
         com.messagebackup.app.ui.screens.MessageCopilotScreen(
             prefs = prefs,
             adManager = viewModel.adManager,
@@ -226,6 +231,7 @@ fun MainScreen(
             threads = uiState.threads,
             currentMessages = targetMessages,
             targetContactName = targetName,
+            isLoadingMessages = isMessagesLoading,
             onNavigateBack = {
                 viewModel.adManager.showInterstitialAd(activity, isAdsRemoved) {
                     viewModel.setCopilotOpen(false)

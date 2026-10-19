@@ -33,6 +33,12 @@ interface TelephonyRepository {
     suspend fun getMessagesForThread(threadId: Long, resolveContacts: Boolean): List<MessageItem>
 
     /**
+     * Retrieves the most recent messages across all conversation threads.
+     * Useful for global grounding and copilot insights.
+     */
+    suspend fun getRecentMessagesAcrossConversations(maxMessages: Int = 350, resolveContacts: Boolean): List<MessageItem>
+
+    /**
      * Reads the binary stream of an MMS attachment given its content URI.
      *
      * @param contentUri Content URI (e.g. content://mms/part/123)

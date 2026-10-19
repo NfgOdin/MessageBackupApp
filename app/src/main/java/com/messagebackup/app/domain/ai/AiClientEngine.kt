@@ -186,6 +186,12 @@ class AiClientEngine {
         customSystemPrompt: String = ""
     ): AiQueryResult = withContext(Dispatchers.IO) {
         try {
+            if (messages.isEmpty()) {
+                return@withContext AiQueryResult.Error(
+                    "No messages were found to analyze. Please verify that your messages are finished indexing or that SMS permissions are enabled."
+                )
+            }
+
             // Build compact, structured context from messages
             val contextTranscript = buildContextTranscript(messages)
 
@@ -195,9 +201,15 @@ class AiClientEngine {
                 DEFAULT_SYSTEM_INSTRUCTION
             }
 
+            val targetScope = if (targetContactName == "All Conversations" || targetContactName.isBlank()) {
+                "recent messages across all conversation threads"
+            } else {
+                "messages with '$targetContactName'"
+            }
+
             val systemInstruction = """
                 $baseInstruction
-                You are currently analyzing messages with '$targetContactName'.
+                You are currently analyzing $targetScope.
                 
                 === MESSAGE TRANSCRIPT START ===
                 $contextTranscript

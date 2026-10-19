@@ -37,6 +37,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -92,6 +93,7 @@ fun MessageCopilotScreen(
     onNavigateBack: () -> Unit,
     onOpenSettings: () -> Unit,
     initialPrompt: String? = null,
+    isLoadingMessages: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     androidx.activity.compose.BackHandler(onBack = onNavigateBack)
@@ -122,10 +124,15 @@ fun MessageCopilotScreen(
     var isThinking by remember { mutableStateOf(false) }
 
     val chatMessages = remember {
+        val greeting = if (targetContactName == "All Conversations" || targetContactName.isBlank()) {
+            "Greetings! I am O.D.I.N. (Omniscient Document & Insights Navigator). Ask me anything across your recent message archive — such as dates, deadlines, reservations, door codes, or summaries."
+        } else {
+            "Greetings! I am O.D.I.N. (Omniscient Document & Insights Navigator). Ask me anything about your conversations with $targetContactName — such as door codes, reservations, past agreements, or summaries."
+        }
         mutableStateListOf(
             OdinChatMessage(
                 sender = OdinChatMessage.MessageSender.ODIN,
-                text = "Greetings! I am O.D.I.N. (Omniscient Document & Insights Navigator). Ask me anything about your conversations with $targetContactName — such as door codes, reservations, past agreements, or summaries."
+                text = greeting
             )
         )
     }
@@ -150,6 +157,16 @@ fun MessageCopilotScreen(
     fun sendPrompt(promptText: String) {
         val trimmed = promptText.trim()
         if (trimmed.isBlank() || isThinking) return
+
+        if (isLoadingMessages) {
+            Toast.makeText(context, "Indexing conversations, please wait a moment...", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (currentMessages.isEmpty()) {
+            Toast.makeText(context, "No messages available to analyze in this conversation archive.", Toast.LENGTH_LONG).show()
+            return
+        }
 
         // Credit check for free users
         if (!isAdsRemoved && aiCredits <= 0) {
@@ -208,8 +225,11 @@ fun MessageCopilotScreen(
         }
     }
 
-    LaunchedEffect(initialPrompt) {
-        if (!initialPrompt.isNullOrBlank()) {
+    var initialPromptHandled by remember { mutableStateOf(false) }
+
+    LaunchedEffect(initialPrompt, isLoadingMessages, currentMessages.size) {
+        if (!initialPrompt.isNullOrBlank() && !initialPromptHandled && !isLoadingMessages && currentMessages.isNotEmpty()) {
+            initialPromptHandled = true
             sendPrompt(initialPrompt)
         }
     }
@@ -244,14 +264,29 @@ fun MessageCopilotScreen(
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
-                            Text(
-                                text = "• $targetContactName (${currentMessages.size} msgs)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
+                            if (isLoadingMessages) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(12.dp),
+                                    strokeWidth = 1.5.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "• Indexing conversations...",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            } else {
+                                Text(
+                                    text = "• $targetContactName (${currentMessages.size} msgs)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                            }
                         }
                     }
                 },
@@ -345,6 +380,12 @@ fun MessageCopilotScreen(
                 )
             }
 
+            if (isLoadingMessages) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             // Quick Starter Chips
             LazyRow(
                 modifier = Modifier
@@ -407,7 +448,12 @@ fun MessageCopilotScreen(
                     OutlinedTextField(
                         value = inputText,
                         onValueChange = { inputText = it },
-                        placeholder = { Text("Ask O.D.I.N. about messages...") },
+                        placeholder = {
+                            Text(
+                                if (isLoadingMessages) "Indexing conversations for O.D.I.N...."
+                                else "Ask O.D.I.N. about messages..."
+                            )
+                        },
                         maxLines = 3,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(20.dp)

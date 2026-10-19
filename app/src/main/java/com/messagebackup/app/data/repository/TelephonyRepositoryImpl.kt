@@ -217,6 +217,144 @@ class TelephonyRepositoryImpl(
         messages
     }
 
+    override suspend fun getRecentMessagesAcrossConversations(
+        maxMessages: Int,
+        resolveContacts: Boolean
+    ): List<MessageItem> = withContext(Dispatchers.IO) {
+        val messages = mutableListOf<MessageItem>()
+        val threadNameCache = mutableMapOf<Long, String>()
+
+        // 1. Fetch recent SMS messages across all threads
+        try {
+            val projection = arrayOf(
+                Telephony.Sms._ID,
+                Telephony.Sms.THREAD_ID,
+                Telephony.Sms.ADDRESS,
+                Telephony.Sms.BODY,
+                Telephony.Sms.DATE,
+                Telephony.Sms.TYPE
+            )
+            contentResolver.query(
+                Telephony.Sms.CONTENT_URI,
+                projection,
+                null,
+                null,
+                "${Telephony.Sms.DATE} DESC LIMIT $maxMessages"
+            )?.use { cursor ->
+                val idIdx = cursor.getColumnIndexOrThrow(Telephony.Sms._ID)
+                val threadIdIdx = cursor.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
+                val addressIdx = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+                val bodyIdx = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
+                val dateIdx = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
+                val typeIdx = cursor.getColumnIndexOrThrow(Telephony.Sms.TYPE)
+
+                while (cursor.moveToNext()) {
+                    val msgId = cursor.getLong(idIdx)
+                    val tId = cursor.getLong(threadIdIdx)
+                    val rawAddress = cursor.getString(addressIdx) ?: ""
+                    val body = cursor.getString(bodyIdx) ?: ""
+                    val date = cursor.getLong(dateIdx)
+                    val type = cursor.getInt(typeIdx)
+                    val isIncoming = (type == Telephony.Sms.MESSAGE_TYPE_INBOX)
+
+                    val contactName = threadNameCache.getOrPut(tId) {
+                        if (resolveContacts && rawAddress.isNotBlank()) {
+                            resolveContactName(rawAddress) ?: rawAddress
+                        } else rawAddress.ifBlank { "Contact" }
+                    }
+
+                    val sender = if (isIncoming) contactName else "Me (to $contactName)"
+                    val recipient = if (isIncoming) "Me" else contactName
+
+                    messages.add(
+                        MessageItem(
+                            messageId = msgId,
+                            threadId = tId,
+                            type = MessageType.SMS,
+                            direction = if (isIncoming) MessageDirection.INCOMING else MessageDirection.OUTGOING,
+                            sender = sender,
+                            recipient = recipient,
+                            body = body,
+                            timestamp = date,
+                            attachments = emptyList()
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching global SMS for copilot", e)
+        }
+
+        // 2. Fetch recent MMS messages across all threads
+        try {
+            val projection = arrayOf(
+                Telephony.Mms._ID,
+                Telephony.Mms.THREAD_ID,
+                Telephony.Mms.DATE,
+                Telephony.Mms.MESSAGE_BOX
+            )
+            val mmsLimit = maxMessages / 2
+            contentResolver.query(
+                Telephony.Mms.CONTENT_URI,
+                projection,
+                null,
+                null,
+                "${Telephony.Mms.DATE} DESC LIMIT $mmsLimit"
+            )?.use { cursor ->
+                val idIdx = cursor.getColumnIndexOrThrow(Telephony.Mms._ID)
+                val threadIdIdx = cursor.getColumnIndexOrThrow(Telephony.Mms.THREAD_ID)
+                val dateIdx = cursor.getColumnIndexOrThrow(Telephony.Mms.DATE)
+                val msgBoxIdx = cursor.getColumnIndexOrThrow(Telephony.Mms.MESSAGE_BOX)
+
+                while (cursor.moveToNext()) {
+                    val mmsId = cursor.getLong(idIdx)
+                    val tId = cursor.getLong(threadIdIdx)
+                    val rawDate = cursor.getLong(dateIdx)
+                    val date = if (rawDate < 100000000000L) rawDate * 1000L else rawDate
+                    val msgBox = cursor.getInt(msgBoxIdx)
+                    val isIncoming = (msgBox == Telephony.Mms.MESSAGE_BOX_INBOX)
+
+                    val (textBody, attachments) = parseMmsParts(mmsId)
+                    if (textBody.isBlank() && attachments.isEmpty()) continue
+
+                    val address = getMmsAddress(mmsId, isSender = isIncoming)
+                    val contactName = threadNameCache.getOrPut(tId) {
+                        if (resolveContacts && address.isNotBlank()) {
+                            resolveContactName(address) ?: address
+                        } else address.ifBlank { "Contact" }
+                    }
+
+                    val sender = if (isIncoming) contactName else "Me (to $contactName)"
+                    val recipient = if (isIncoming) "Me" else contactName
+
+                    messages.add(
+                        MessageItem(
+                            messageId = mmsId,
+                            threadId = tId,
+                            type = MessageType.MMS,
+                            direction = if (isIncoming) MessageDirection.INCOMING else MessageDirection.OUTGOING,
+                            sender = sender,
+                            recipient = recipient,
+                            body = textBody,
+                            timestamp = date,
+                            attachments = attachments
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching global MMS for copilot", e)
+        }
+
+        // Sort chronologically ascending for copilot context
+        messages.sortBy { it.timestamp }
+        if (messages.size > maxMessages) {
+            messages.takeLast(maxMessages)
+        } else {
+            messages
+        }
+    }
+
     override suspend fun getAttachmentBytes(contentUri: Uri): ByteArray? = withContext(Dispatchers.IO) {
         try {
             contentResolver.openInputStream(contentUri)?.use { inputStream: InputStream ->

@@ -58,6 +58,7 @@ data class MainUiState(
     val stats: com.messagebackup.app.model.ConversationStats? = null,
     val statsTargetThreadId: Long? = null,
     val isCopilotOpen: Boolean = false,
+    val isCopilotLoadingMessages: Boolean = false,
     val copilotInitialPrompt: String? = null,
     val globalCopilotMessages: List<MessageItem> = emptyList(),
     val showRestoreDialog: Boolean = false,
@@ -121,35 +122,30 @@ class MainViewModel : ViewModel() {
     }
 
     fun setCopilotOpen(open: Boolean, initialPrompt: String? = null) {
+        val needsGlobalLoad = open && _uiState.value.selectedThreadForPreview == null && _uiState.value.globalCopilotMessages.isEmpty()
         _uiState.value = _uiState.value.copy(
             isCopilotOpen = open,
+            isCopilotLoadingMessages = if (open) needsGlobalLoad else false,
             copilotInitialPrompt = initialPrompt
         )
-        if (open && _uiState.value.selectedThreadForPreview == null && _uiState.value.globalCopilotMessages.isEmpty()) {
+        if (needsGlobalLoad) {
             loadGlobalCopilotContext()
         }
     }
 
-    private fun loadGlobalCopilotContext() {
+    fun loadGlobalCopilotContext(forceRefresh: Boolean = false) {
+        if (!forceRefresh && _uiState.value.globalCopilotMessages.isNotEmpty()) return
         viewModelScope.launch {
-            val sampleThreads = _uiState.value.threads.take(15)
+            _uiState.value = _uiState.value.copy(isCopilotLoadingMessages = true)
             val resolve = prefs.resolveContacts.value && _uiState.value.hasContactsPermission
-            val combined = mutableListOf<MessageItem>()
-            for (thread in sampleThreads) {
-                val msgs = app.currentTelephonyRepository.getMessagesForThread(
-                    threadId = thread.threadId,
-                    resolveContacts = resolve
-                ).takeLast(15).map { msg ->
-                    if (msg.direction == com.messagebackup.app.model.MessageDirection.OUTGOING) {
-                        msg.copy(sender = "Me (to ${thread.displayName})")
-                    } else {
-                        msg.copy(sender = thread.displayName)
-                    }
-                }
-                combined.addAll(msgs)
-            }
-            combined.sortBy { it.timestamp }
-            _uiState.value = _uiState.value.copy(globalCopilotMessages = combined)
+            val messages = app.currentTelephonyRepository.getRecentMessagesAcrossConversations(
+                maxMessages = 350,
+                resolveContacts = resolve
+            )
+            _uiState.value = _uiState.value.copy(
+                globalCopilotMessages = messages,
+                isCopilotLoadingMessages = false
+            )
         }
     }
 
@@ -231,6 +227,9 @@ class MainViewModel : ViewModel() {
                     isLoading = false
                 )
                 applySearchFilter(_uiState.value.searchQuery, list)
+                if (_uiState.value.globalCopilotMessages.isEmpty()) {
+                    loadGlobalCopilotContext()
+                }
             }
         }
     }

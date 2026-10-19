@@ -190,6 +190,14 @@ class MockTelephonyRepository : TelephonyRepository {
         }
     }
 
+    override suspend fun getRecentMessagesAcrossConversations(
+        maxMessages: Int,
+        resolveContacts: Boolean
+    ): List<MessageItem> {
+        val all = sampleMessages.values.flatten().sortedBy { it.timestamp }
+        return if (all.size > maxMessages) all.takeLast(maxMessages) else all
+    }
+
     override suspend fun getAttachmentBytes(contentUri: Uri): ByteArray {
         return mockSampleImageBytes
     }
