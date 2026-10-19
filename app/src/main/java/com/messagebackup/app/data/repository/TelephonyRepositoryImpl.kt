@@ -47,6 +47,25 @@ class TelephonyRepositoryImpl(
             Telephony.Threads.RECIPIENT_IDS
         )
 
+        // Pre-query threads that have MMS attachments in a single batch query to avoid N queries
+        val mmsThreadIds = mutableSetOf<Long>()
+        try {
+            contentResolver.query(
+                Telephony.Mms.CONTENT_URI,
+                arrayOf("DISTINCT ${Telephony.Mms.THREAD_ID}"),
+                null,
+                null,
+                null
+            )?.use { mmsCursor ->
+                val tidIdx = mmsCursor.getColumnIndex(Telephony.Mms.THREAD_ID)
+                if (tidIdx != -1) {
+                    while (mmsCursor.moveToNext()) {
+                        mmsThreadIds.add(mmsCursor.getLong(tidIdx))
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
         var cursor: Cursor? = null
         try {
             cursor = contentResolver.query(
@@ -77,8 +96,8 @@ class TelephonyRepositoryImpl(
                         resolveContactName(address)
                     } else null
 
-                    // Check if thread contains MMS attachments
-                    val hasAttachment = checkThreadHasMms(threadId)
+                    // Check if thread contains MMS attachments via pre-queried set
+                    val hasAttachment = mmsThreadIds.contains(threadId)
 
                     threads.add(
                         ConversationThread(
@@ -101,6 +120,84 @@ class TelephonyRepositoryImpl(
 
         emit(threads)
     }.flowOn(Dispatchers.IO)
+
+    override suspend fun searchThreadIdsByMessageBody(query: String): Set<Long> = withContext(Dispatchers.IO) {
+        val matchingThreadIds = mutableSetOf<Long>()
+        if (query.isBlank()) return@withContext matchingThreadIds
+
+        try {
+            // Search SMS body for query substring
+            val smsProjection = arrayOf(Telephony.Sms.THREAD_ID)
+            val smsSelection = "${Telephony.Sms.BODY} LIKE ?"
+            val smsArgs = arrayOf("%$query%")
+            contentResolver.query(
+                Telephony.Sms.CONTENT_URI,
+                smsProjection,
+                smsSelection,
+                smsArgs,
+                null
+            )?.use { c ->
+                val tidIdx = c.getColumnIndex(Telephony.Sms.THREAD_ID)
+                if (tidIdx != -1) {
+                    while (c.moveToNext()) {
+                        matchingThreadIds.add(c.getLong(tidIdx))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error searching SMS by body", e)
+        }
+
+        try {
+            // Also search MMS text parts
+            val mmsPartUri = Uri.parse("content://mms/part")
+            val partProjection = arrayOf("mid", "text")
+            val partSelection = "ct = 'text/plain' AND text LIKE ?"
+            val partArgs = arrayOf("%$query%")
+            val matchingMmsIds = mutableSetOf<Long>()
+
+            contentResolver.query(
+                mmsPartUri,
+                partProjection,
+                partSelection,
+                partArgs,
+                null
+            )?.use { c ->
+                val midIdx = c.getColumnIndex("mid")
+                if (midIdx != -1) {
+                    while (c.moveToNext()) {
+                        matchingMmsIds.add(c.getLong(midIdx))
+                    }
+                }
+            }
+
+            // Map MMS IDs back to thread IDs
+            if (matchingMmsIds.isNotEmpty()) {
+                val mmsIdsChunked = matchingMmsIds.chunked(100)
+                for (chunk in mmsIdsChunked) {
+                    val inClause = chunk.joinToString(",")
+                    contentResolver.query(
+                        Telephony.Mms.CONTENT_URI,
+                        arrayOf(Telephony.Mms.THREAD_ID),
+                        "${Telephony.Mms._ID} IN ($inClause)",
+                        null,
+                        null
+                    )?.use { c ->
+                        val tidIdx = c.getColumnIndex(Telephony.Mms.THREAD_ID)
+                        if (tidIdx != -1) {
+                            while (c.moveToNext()) {
+                                matchingThreadIds.add(c.getLong(tidIdx))
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error searching MMS by body", e)
+        }
+
+        matchingThreadIds
+    }
 
     override suspend fun getMessagesForThread(
         threadId: Long,

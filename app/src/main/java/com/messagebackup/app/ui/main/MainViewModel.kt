@@ -101,11 +101,13 @@ class MainViewModel : ViewModel() {
     }
 
     fun onPermissionsChecked(hasSms: Boolean, hasContacts: Boolean) {
+        val hadSms = _uiState.value.hasSmsPermission
         _uiState.value = _uiState.value.copy(
             hasSmsPermission = hasSms,
             hasContactsPermission = hasContacts
         )
-        if (hasSms) {
+        // Only load threads if we didn't have permission before or if cache is empty
+        if (hasSms && (!hadSms || _uiState.value.threads.isEmpty())) {
             loadThreads()
         }
     }
@@ -151,6 +153,8 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    private var searchJob: kotlinx.coroutines.Job? = null
+
     fun setSearchQuery(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
         applySearchFilter(query, _uiState.value.threads)
@@ -172,27 +176,51 @@ class MainViewModel : ViewModel() {
     }
 
     private fun applySearchFilter(query: String, allThreads: List<ConversationThread>) {
-        val baseList = if (query.isBlank()) {
-            allThreads
-        } else {
-            val q = query.trim().lowercase()
-            allThreads.filter {
-                it.displayName.lowercase().contains(q) ||
-                        it.address.lowercase().contains(q) ||
-                        it.snippet.lowercase().contains(q)
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            val sortedList = sortThreadList(allThreads)
+            _uiState.value = _uiState.value.copy(filteredThreads = sortedList)
+            return
+        }
+
+        val q = query.trim().lowercase()
+
+        // 1. Immediate in-memory filter (name, phone number, latest snippet)
+        val directMatches = allThreads.filter {
+            it.displayName.lowercase().contains(q) ||
+                    it.address.lowercase().contains(q) ||
+                    it.snippet.lowercase().contains(q)
+        }
+        _uiState.value = _uiState.value.copy(filteredThreads = sortThreadList(directMatches))
+
+        // 2. Asynchronous deep search across all past messages in SQLite telephony database
+        searchJob = viewModelScope.launch {
+            val deepMatchingThreadIds = app.currentTelephonyRepository.searchThreadIdsByMessageBody(query.trim())
+            if (deepMatchingThreadIds.isNotEmpty()) {
+                val combinedMatches = allThreads.filter {
+                    it.displayName.lowercase().contains(q) ||
+                            it.address.lowercase().contains(q) ||
+                            it.snippet.lowercase().contains(q) ||
+                            deepMatchingThreadIds.contains(it.threadId)
+                }
+                _uiState.value = _uiState.value.copy(filteredThreads = sortThreadList(combinedMatches))
             }
         }
-
-        val sortedList = when (_uiState.value.sortOption) {
-            ThreadSortOption.RECENT -> baseList.sortedByDescending { it.timestamp }
-            ThreadSortOption.MESSAGE_COUNT -> baseList.sortedByDescending { it.messageCount }
-            ThreadSortOption.NAME -> baseList.sortedBy { it.displayName.lowercase() }
-        }
-
-        _uiState.value = _uiState.value.copy(filteredThreads = sortedList)
     }
 
-    fun loadThreads() {
+    private fun sortThreadList(list: List<ConversationThread>): List<ConversationThread> {
+        return when (_uiState.value.sortOption) {
+            ThreadSortOption.RECENT -> list.sortedByDescending { it.timestamp }
+            ThreadSortOption.MESSAGE_COUNT -> list.sortedByDescending { it.messageCount }
+            ThreadSortOption.NAME -> list.sortedBy { it.displayName.lowercase() }
+        }
+    }
+
+    fun loadThreads(forceRefresh: Boolean = false) {
+        // If not a force refresh and we already have cached threads, avoid redundant loading
+        if (!forceRefresh && _uiState.value.threads.isNotEmpty()) {
+            return
+        }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             app.currentTelephonyRepository.getConversationThreads(

@@ -632,7 +632,7 @@ fun MainScreen(
                                 )
                             }
                         }
-                        IconButton(onClick = { viewModel.loadThreads() }) {
+                        IconButton(onClick = { viewModel.loadThreads(forceRefresh = true) }) {
                             Icon(imageVector = Icons.Default.Refresh, contentDescription = "Refresh")
                         }
                         IconButton(onClick = { showMenu = true }) {

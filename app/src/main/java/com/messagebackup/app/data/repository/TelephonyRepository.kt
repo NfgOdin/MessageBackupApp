@@ -18,6 +18,12 @@ interface TelephonyRepository {
     fun getConversationThreads(resolveContacts: Boolean): Flow<List<ConversationThread>>
 
     /**
+     * Searches message bodies (both SMS and MMS text parts) across all conversations
+     * and returns the set of conversation thread IDs that contain matching messages.
+     */
+    suspend fun searchThreadIdsByMessageBody(query: String): Set<Long>
+
+    /**
      * Retrieves all messages (SMS + MMS) for a specific thread, sorted ascending by timestamp.
      *
      * @param threadId Unique thread ID.

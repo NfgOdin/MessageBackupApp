@@ -232,8 +232,8 @@ class AiClientEngine {
         topP: Float
     ): AiQueryResult {
         val cleanModel = modelName.trim().removePrefix("models/").ifBlank { "gemini-2.0-flash" }
-        // Attempt user-configured model (defaults to gemini-2.0-flash), with automatic fallbacks
-        val candidateModels = listOf(cleanModel, "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash").distinct()
+        // Attempt user-configured model first, with modern 2.0 / 2.5 active fallbacks (1.5-flash is retired)
+        val candidateModels = listOf(cleanModel, "gemini-2.0-flash", "gemini-2.5-flash").distinct()
 
         var lastError = "Unable to reach Gemini API"
 
@@ -288,11 +288,11 @@ class AiClientEngine {
                     return AiQueryResult.Error("Gemini returned an empty response.")
                 } else if (code == 404) {
                     val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP 404"
-                    lastError = "Model '$model' not found: $errorText"
+                    lastError = "Model '$model' (HTTP 404): $errorText"
                     continue
                 } else {
                     val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP $code"
-                    return AiQueryResult.Error("Gemini API Error ($code): $errorText")
+                    return AiQueryResult.Error("Gemini API Error ($code on '$model'): $errorText")
                 }
             } catch (e: Exception) {
                 lastError = e.localizedMessage ?: "Network connection error"

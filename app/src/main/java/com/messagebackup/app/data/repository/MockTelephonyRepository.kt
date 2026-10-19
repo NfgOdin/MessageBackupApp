@@ -166,6 +166,14 @@ class MockTelephonyRepository : TelephonyRepository {
         emit(list)
     }
 
+    override suspend fun searchThreadIdsByMessageBody(query: String): Set<Long> {
+        if (query.isBlank()) return emptySet()
+        val q = query.trim().lowercase()
+        return sampleMessages.filter { (_, msgs) ->
+            msgs.any { it.body.lowercase().contains(q) }
+        }.keys
+    }
+
     override suspend fun getMessagesForThread(
         threadId: Long,
         resolveContacts: Boolean
