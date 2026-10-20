@@ -34,6 +34,9 @@ class AppPreferences(context: Context) {
         private const val KEY_AI_CREDITS = "ai_credits"
         private const val KEY_AUTO_BACKUP_CREDITS = "auto_backup_credits"
         private const val KEY_AUTO_BACKUP_ENABLED = "auto_backup_enabled"
+        private const val KEY_AUTO_BACKUP_FREQUENCY_DAYS = "auto_backup_frequency_days"
+        private const val KEY_AUTO_BACKUP_REQUIRES_WIFI = "auto_backup_requires_wifi"
+        private const val KEY_LAST_AUTO_BACKUP_TIMESTAMP = "last_auto_backup_timestamp"
         private const val KEY_AI_PROVIDER = "ai_provider"
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
         private const val KEY_GEMINI_MODEL = "gemini_model"
@@ -80,6 +83,15 @@ class AppPreferences(context: Context) {
 
     private val _autoBackupEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_BACKUP_ENABLED, false))
     val autoBackupEnabled: StateFlow<Boolean> = _autoBackupEnabled.asStateFlow()
+
+    private val _autoBackupFrequencyDays = MutableStateFlow(prefs.getInt(KEY_AUTO_BACKUP_FREQUENCY_DAYS, 1))
+    val autoBackupFrequencyDays: StateFlow<Int> = _autoBackupFrequencyDays.asStateFlow()
+
+    private val _autoBackupRequiresWifi = MutableStateFlow(prefs.getBoolean(KEY_AUTO_BACKUP_REQUIRES_WIFI, true))
+    val autoBackupRequiresWifi: StateFlow<Boolean> = _autoBackupRequiresWifi.asStateFlow()
+
+    private val _lastAutoBackupTimestamp = MutableStateFlow(prefs.getLong(KEY_LAST_AUTO_BACKUP_TIMESTAMP, 0L))
+    val lastAutoBackupTimestamp: StateFlow<Long> = _lastAutoBackupTimestamp.asStateFlow()
 
     private val _appLockEnabled = MutableStateFlow(prefs.getBoolean(KEY_APP_LOCK_ENABLED, false))
     val appLockEnabled: StateFlow<Boolean> = _appLockEnabled.asStateFlow()
@@ -287,6 +299,23 @@ class AppPreferences(context: Context) {
     fun setAutoBackupEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_AUTO_BACKUP_ENABLED, enabled).apply()
         _autoBackupEnabled.value = enabled
+    }
+
+    fun setAutoBackupFrequencyDays(days: Int) {
+        val safe = days.coerceIn(1, 30)
+        prefs.edit().putInt(KEY_AUTO_BACKUP_FREQUENCY_DAYS, safe).apply()
+        _autoBackupFrequencyDays.value = safe
+    }
+
+    fun setAutoBackupRequiresWifi(requires: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_BACKUP_REQUIRES_WIFI, requires).apply()
+        _autoBackupRequiresWifi.value = requires
+    }
+
+    fun recordAutoBackupCompleted() {
+        val now = System.currentTimeMillis()
+        prefs.edit().putLong(KEY_LAST_AUTO_BACKUP_TIMESTAMP, now).apply()
+        _lastAutoBackupTimestamp.value = now
     }
 
     fun setAiProvider(provider: String) {

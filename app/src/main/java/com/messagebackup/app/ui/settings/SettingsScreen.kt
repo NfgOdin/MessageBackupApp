@@ -749,135 +749,33 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 7. Automated Scheduled Backups
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isAutoBackupUnlocked || autoBackupCredits > 0) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Folder,
-                                contentDescription = "Schedule",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                            Text(
-                                text = "Automatic Scheduled Backups",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                        }
-                        Switch(
-                            checked = autoBackupEnabled && (isAutoBackupUnlocked || autoBackupCredits > 0),
-                            onCheckedChange = { enabled ->
-                                if (enabled && !isAutoBackupUnlocked && autoBackupCredits <= 0) {
-                                    Toast.makeText(context, "Claim free Auto-Backup credits in Reward Arcade or unlock Pro first!", Toast.LENGTH_SHORT).show()
-                                    showRewardArcade = true
-                                } else {
-                                    prefs.setAutoBackupEnabled(enabled)
-                                    if (enabled) {
-                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                                            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                                        }
-                                        com.messagebackup.app.worker.AutoBackupWorker.scheduleAutoBackup(context)
-                                        Toast.makeText(context, "Nightly Auto-Backup enabled!", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        com.messagebackup.app.worker.AutoBackupWorker.cancelAutoBackup(context)
-                                        Toast.makeText(context, "Auto-Backup disabled.", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            }
-                        )
+            // 7. Automated Cloud & Scheduled Backups
+            com.messagebackup.app.ui.components.AutoBackupConfigSection(
+                prefs = prefs,
+                isUnlocked = isAutoBackupUnlocked,
+                credits = autoBackupCredits,
+                enabled = autoBackupEnabled,
+                frequencyDays = prefs.autoBackupFrequencyDays.collectAsState().value,
+                requiresWifi = prefs.autoBackupRequiresWifi.collectAsState().value,
+                lastRunTimestamp = prefs.lastAutoBackupTimestamp.collectAsState().value,
+                destination = outputDestination,
+                safFolderDisplay = safFolderDisplay,
+                autoBackupPrice = autoBackupPrice,
+                productPrice = productPrice,
+                onClaimCredits = { showRewardArcade = true },
+                onPurchaseUnlimited = { billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_AUTO_BACKUP) },
+                onPurchasePro = { billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_REMOVE_ADS) },
+                onRequestNotifications = {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (isAutoBackupUnlocked)
-                            "100% Optional: Toggle on to automatically export conversations nightly while charging to your chosen destination."
-                        else
-                            "Automatically archive SMS/MMS messages nightly in the background. Use free Reward Arcade credits, buy standalone ($autoBackupPrice), or get Pro ($productPrice)!",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    if (!isAutoBackupUnlocked) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Current Credit: $autoBackupCredits Night(s)",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                                Text(
-                                    text = "Claim Free Nights >",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.clickable { showRewardArcade = true }
-                                )
-                            }
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = { billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_AUTO_BACKUP) },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(text = "Unlimited ($autoBackupPrice)")
-                            }
-                            OutlinedButton(
-                                onClick = { billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_REMOVE_ADS) },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(text = "Get Pro ($productPrice)")
-                            }
-                        }
-                    } else {
-                        val destinationText = when (outputDestination) {
-                            OutputDestination.GOOGLE_DRIVE -> "Google Drive"
-                            OutputDestination.ONEDRIVE -> "Microsoft OneDrive"
-                            OutputDestination.DROPBOX -> "Dropbox"
-                            OutputDestination.WEBDAV_NAS -> "WebDAV / Local NAS"
-                            OutputDestination.PERSISTENT_DIRECTORY -> safFolderDisplay
-                            OutputDestination.SHARE_SHEET -> "Share Sheet"
-                        }
-                        Text(
-                            text = if (autoBackupEnabled) "✓ Active: Nightly backup to $destinationText" else "⏸ Paused: Toggle switch above to enable nightly backup to $destinationText",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (autoBackupEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
+                },
+                context = context
+            )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 7. O.D.I.N. (Omniscient Document & Insights Navigator) AI Configuration
+            // 8. O.D.I.N. (Omniscient Document & Insights Navigator) AI Configuration
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 modifier = Modifier.fillMaxWidth()

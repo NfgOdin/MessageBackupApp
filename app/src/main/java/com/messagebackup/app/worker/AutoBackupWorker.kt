@@ -34,13 +34,22 @@ class AutoBackupWorker(
         const val WORK_NAME = "MessageBackupPeriodicWorker"
         private const val CHANNEL_ID = "backup_notifications"
 
-        fun scheduleAutoBackup(context: Context, intervalDays: Long = 1L) {
+        fun scheduleAutoBackup(
+            context: Context,
+            intervalDays: Long = 1L,
+            requiresWifi: Boolean = true
+        ) {
             val constraints = Constraints.Builder()
                 .setRequiresCharging(true)
                 .setRequiresBatteryNotLow(true)
+                .apply {
+                    if (requiresWifi) {
+                        setRequiredNetworkType(NetworkType.UNMETERED)
+                    }
+                }
                 .build()
 
-            val workRequest = PeriodicWorkRequestBuilder<AutoBackupWorker>(intervalDays, TimeUnit.DAYS)
+            val workRequest = PeriodicWorkRequestBuilder<AutoBackupWorker>(intervalDays.coerceAtLeast(1L), TimeUnit.DAYS)
                 .setConstraints(constraints)
                 .build()
 
@@ -145,6 +154,7 @@ class AutoBackupWorker(
                         contentIntent = pendingIntent
                     )
                 }
+                app.appPreferences.recordAutoBackupCompleted()
                 Result.success()
             } else {
                 Result.retry()
