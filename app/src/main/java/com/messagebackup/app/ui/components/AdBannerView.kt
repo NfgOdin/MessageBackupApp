@@ -30,9 +30,7 @@ fun AdBannerView(
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        modifier = modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
+        modifier = modifier.fillMaxWidth()
     ) {
         Box(
             modifier = Modifier.fillMaxWidth(),

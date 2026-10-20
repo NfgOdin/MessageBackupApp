@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.PaddingValues
@@ -817,8 +818,12 @@ fun MainScreen(
             }
         },
         bottomBar = {
-            if (uiState.selectedThreadForPreview != null) {
-                Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+            ) {
+                if (uiState.selectedThreadForPreview != null) {
                     com.messagebackup.app.ui.components.HuginnMessageComposerBar(
                         thread = uiState.selectedThreadForPreview!!,
                         recentMessages = uiState.previewMessages,
@@ -827,9 +832,7 @@ fun MainScreen(
                         isAdsRemoved = isAdsRemoved,
                         onRequireCredits = { showRewardArcade = true }
                     )
-                    AdBannerView(isAdsRemoved = isAdsRemoved)
                 }
-            } else {
                 AdBannerView(isAdsRemoved = isAdsRemoved)
             }
         },
