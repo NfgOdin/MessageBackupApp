@@ -313,43 +313,54 @@ fun ConversationStatsDialog(
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp))
 
-                    // Most Used Emojis
+                    // Most Used Emojis (Organized into 2 rows for spacious padding)
                     if (stats.topEmojis.isNotEmpty()) {
                         Text(
                             text = "Top Emojis",
                             style = MaterialTheme.typography.titleMedium
                         )
                         Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            stats.topEmojis.forEach { (emoji, count) ->
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.padding(vertical = 2.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+
+                        val chunkedEmojis = stats.topEmojis.chunked(3)
+                        chunkedEmojis.forEach { rowEmojis ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                rowEmojis.forEach { (emoji, count) ->
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.weight(1f)
                                     ) {
-                                        Text(text = emoji, style = MaterialTheme.typography.titleSmall)
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "$count",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(text = emoji, style = MaterialTheme.typography.titleSmall)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "$count",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
                                     }
+                                }
+                                // Fill remaining slots if row has fewer than 3 items
+                                for (i in rowEmojis.size until 3) {
+                                    Spacer(modifier = Modifier.weight(1f))
                                 }
                             }
                         }
                         HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp))
                     }
 
-                    // Top Words Breakdown
+                    // Top Words Breakdown with Underlined Section Headers
                     if (stats.topSentWords.isNotEmpty() || stats.topReceivedWords.isNotEmpty()) {
                         Text(
                             text = "Most Frequent Words",
@@ -359,36 +370,56 @@ fun ConversationStatsDialog(
                         Row(modifier = Modifier.fillMaxWidth()) {
                             // You sent
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "You Said Most",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Column {
+                                    Text(
+                                        text = "You Said Most",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        thickness = 1.5.dp,
+                                        modifier = Modifier
+                                            .width(90.dp)
+                                            .padding(top = 2.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
                                 stats.topSentWords.forEach { (word, count) ->
                                     Text(
                                         text = "• \"$word\" ($count)",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(vertical = 1.dp)
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(16.dp))
                             // They sent
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "They Said Most",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.secondary
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Column {
+                                    Text(
+                                        text = "They Said Most",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        thickness = 1.5.dp,
+                                        modifier = Modifier
+                                            .width(95.dp)
+                                            .padding(top = 2.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
                                 stats.topReceivedWords.forEach { (word, count) ->
                                     Text(
                                         text = "• \"$word\" ($count)",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(vertical = 1.dp)
                                     )
                                 }
                             }
