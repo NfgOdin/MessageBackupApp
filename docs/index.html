@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Policy - Message Backup &amp; Export</title>
+    <title>Privacy Policy - Muninn: Message Memory &amp; Vault</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -16,60 +16,91 @@
             justify-content: center;
         }
         .container {
-            max-width: 760px;
+            max-width: 780px;
             width: 100%;
             background: #ffffff;
-            padding: 32px 28px;
-            border-radius: 12px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            padding: 36px 32px;
+            border-radius: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
-        h1 { color: #0084ff; margin-top: 0; }
-        h2 { color: #1c1e21; border-bottom: 1px solid #e4e6eb; padding-bottom: 8px; margin-top: 28px; }
+        h1 { color: #0284c7; margin-top: 0; }
+        h2 { color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-top: 28px; }
         ul { padding-left: 20px; }
         li { margin-bottom: 8px; }
+        code {
+            background-color: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #0f172a;
+        }
         .badge {
             display: inline-block;
-            background: #e7f3ff;
-            color: #0084ff;
-            padding: 4px 10px;
-            border-radius: 16px;
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 6px 12px;
+            border-radius: 20px;
             font-size: 0.85rem;
             font-weight: 600;
             margin-bottom: 16px;
+        }
+        .highlight-box {
+            background-color: #f8fafc;
+            border-left: 4px solid #0284c7;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin: 16px 0;
+            font-size: 0.95rem;
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <span class="badge">100% On-Device Privacy Guaranteed</span>
+    <span class="badge">🛡️ 100% On-Device Privacy Guaranteed</span>
     <h1>Privacy Policy</h1>
-    <p><strong>Effective Date:</strong> October 17, 2026</p>
-    <p><strong>Message Backup &amp; Export</strong> ("we", "our", or "us") is dedicated to protecting your privacy. This Privacy Policy outlines how your personal information is treated when using our mobile application.</p>
+    <p><strong>Effective Date:</strong> October 20, 2026</p>
+    <p><strong>Muninn: Message Memory &amp; Vault</strong> ("we", "our", or "us") is dedicated to protecting your privacy. This Privacy Policy outlines how your data and personal information are treated when using the Muninn mobile application on Android.</p>
+
+    <div class="highlight-box">
+        <strong>Our Privacy Promise:</strong> We do not operate remote servers to collect, harvest, monitor, inspect, or sell your private text messages, photos, phone numbers, or contact records. Everything stays on your device.
+    </div>
 
     <h2>1. On-Device Processing &amp; Zero Data Transmission</h2>
-    <p>Your privacy is our core engineering principle:</p>
     <ul>
-        <li><strong>Strictly Local:</strong> All message querying, contact resolution, document generation (PDF, HTML, Markdown), and zip compression occur entirely on your local device.</li>
-        <li><strong>No Cloud Servers:</strong> We do not operate remote servers to store, monitor, inspect, or sell your personal SMS/MMS messages, attachments, or contact records.</li>
-        <li><strong>User-Initiated Sharing:</strong> Exported files remain in your local app cache or designated folder until you explicitly choose to share them via the standard Android system share sheet.</li>
+        <li><strong>Strictly Local:</strong> Message querying, contact resolution, Conversation Insights analytics, promise detection, and document formatting (PDF, HTML, Desktop Offline Viewer, CSV, Plain Text) occur exclusively on your local device.</li>
+        <li><strong>No Cloud Servers:</strong> We maintain zero proprietary servers storing or transmitting your personal conversations or media.</li>
+        <li><strong>User-Initiated Sharing:</strong> Exported archives remain in your private device storage or chosen folder until you explicitly choose to share them via Android's native system share sheet or connect your own cloud storage.</li>
     </ul>
 
-    <h2>2. Permissions Used and Why</h2>
+    <h2>2. Artificial Intelligence (O.D.I.N. AI &amp; Commitment Radar)</h2>
     <ul>
-        <li><code>READ_SMS</code> &amp; <code>RECEIVE_MMS</code>: Required to read your conversation histories and extract media parts for formatting into documents.</li>
-        <li><code>READ_CONTACTS</code> (Optional): Used only to resolve phone numbers into contact book names for easy identification. Can be disabled in Settings at any time.</li>
-        <li><code>INTERNET</code>: Required exclusively by Google AdMob (to serve ads/video rewards) and Google Play Billing (to process in-app purchases and tips).</li>
+        <li><strong>Local AI Mode (Ollama):</strong> When using an on-premise Ollama endpoint on your private network, 100% of your message data stays entirely within your private home network.</li>
+        <li><strong>Cloud AI Mode (Google Gemini BYOK):</strong> When using cloud AI, queries are executed using your own personal Gemini API key directly to Google's official endpoints. Message excerpts are transmitted solely to fulfill your explicit query.</li>
+        <li><strong>Commitment Radar:</strong> Uses on-device pattern recognition and regex. No message data is transmitted to third parties for radar detection.</li>
     </ul>
 
-    <h2>3. Third-Party Advertising &amp; Billing Partners</h2>
-    <p>The application integrates compliant third-party SDKs:</p>
+    <h2>3. Biometric &amp; Vault Security</h2>
+    <p>Muninn supports biometric authentication (Fingerprint / Face Unlock) and salted SHA-256 PIN protection. Biometric authentication is handled by Android's hardware-backed Keystore and BiometricPrompt system. Biometric data is never accessible to Muninn or transmitted off-device.</p>
+
+    <h2>4. Permissions Used and Why</h2>
     <ul>
-        <li><strong>Google AdMob &amp; User Messaging Platform (UMP):</strong> Delivers advertising and handles GDPR/UK consent in Europe. <a href="https://policies.google.com/privacy" target="_blank">Google Privacy Policy</a>.</li>
-        <li><strong>Google Play In-App Billing:</strong> Processes one-time upgrades to remove ads and voluntary tips securely.</li>
+        <li><code>READ_SMS</code> &amp; <code>RECEIVE_MMS</code>: Required to read past conversation threads and embedded multimedia attachments for archiving.</li>
+        <li><code>READ_CONTACTS</code> (Optional): Used only to match phone numbers with local address book names. Can be disabled at any time in Settings.</li>
+        <li><code>INTERNET</code>: Required for Google AdMob advertising, Google Play In-App Billing, and user-initiated cloud backup syncs (Google Drive, OneDrive, Dropbox, WebDAV).</li>
+        <li><code>USE_BIOMETRIC</code>: Required to unlock the application and uncloak the private Media Vault.</li>
+        <li><code>POST_NOTIFICATIONS</code>: Required to notify you of completed scheduled auto-backups and export status.</li>
     </ul>
 
-    <h2>4. Contact Us</h2>
-    <p>If you have questions about this privacy statement, you can reach out via our GitHub repository or support channels.</p>
+    <h2>5. Third-Party Advertising &amp; Billing Partners</h2>
+    <p>Muninn integrates compliant third-party SDKs:</p>
+    <ul>
+        <li><strong>Google AdMob &amp; User Messaging Platform (UMP):</strong> Delivers advertising (Banner, Interstitial, Rewarded Video, and Rewarded Interstitials) and handles regional GDPR/UK consent. <a href="https://policies.google.com/privacy" target="_blank">Google Privacy Policy</a>.</li>
+        <li><strong>Google Play In-App Billing:</strong> Processes one-time upgrades to remove ads, unlock lifetime Pro features, and accept voluntary tips securely.</li>
+    </ul>
+
+    <h2>6. Contact Us</h2>
+    <p>If you have questions about this privacy statement, you can reach out via our official GitHub repository:</p>
+    <p><a href="https://github.com/NfgOdin/MessageBackupApp" target="_blank">https://github.com/NfgOdin/MessageBackupApp</a></p>
 </div>
 </body>
 </html>
