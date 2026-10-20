@@ -136,6 +136,7 @@ fun MainScreen(
     val autoBackupCredits by prefs.autoBackupCredits.collectAsState()
     val alwaysPromptExportOptions by prefs.alwaysPromptExportOptions.collectAsState()
     val isOnboardingCompleted by prefs.isOnboardingCompleted.collectAsState()
+    val aiEngine = remember { com.messagebackup.app.domain.ai.AiClientEngine() }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -816,7 +817,21 @@ fun MainScreen(
             }
         },
         bottomBar = {
-            AdBannerView(isAdsRemoved = isAdsRemoved)
+            if (uiState.selectedThreadForPreview != null) {
+                Column {
+                    com.messagebackup.app.ui.components.HuginnMessageComposerBar(
+                        thread = uiState.selectedThreadForPreview!!,
+                        recentMessages = uiState.previewMessages,
+                        prefs = prefs,
+                        aiEngine = aiEngine,
+                        isAdsRemoved = isAdsRemoved,
+                        onRequireCredits = { showRewardArcade = true }
+                    )
+                    AdBannerView(isAdsRemoved = isAdsRemoved)
+                }
+            } else {
+                AdBannerView(isAdsRemoved = isAdsRemoved)
+            }
         },
         floatingActionButton = {
             if (uiState.selectedThreadForPreview != null) {
