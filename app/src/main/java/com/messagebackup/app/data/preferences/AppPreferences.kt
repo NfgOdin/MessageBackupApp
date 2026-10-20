@@ -56,6 +56,7 @@ class AppPreferences(context: Context) {
         private const val KEY_HUGINN_AD_PROGRESS = "huginn_ad_progress"
         private const val KEY_HUGINN_PERMANENT_UNLOCKED = "huginn_permanent_unlocked"
         private const val KEY_ODIN_PERMANENT_UNLOCKED = "odin_permanent_unlocked"
+        private const val KEY_ANIMATIONS_ENABLED = "animations_enabled"
 
         // Privacy PIN & Biometric Lock Preferences
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
@@ -175,6 +176,9 @@ class AppPreferences(context: Context) {
 
     private val _huginnComposerEnabled = MutableStateFlow(prefs.getBoolean(KEY_HUGINN_COMPOSER_ENABLED, true))
     val huginnComposerEnabled: StateFlow<Boolean> = _huginnComposerEnabled.asStateFlow()
+
+    private val _animationsEnabled = MutableStateFlow(prefs.getBoolean(KEY_ANIMATIONS_ENABLED, true))
+    val animationsEnabled: StateFlow<Boolean> = _animationsEnabled.asStateFlow()
 
     private val _resolveContacts = MutableStateFlow(prefs.getBoolean(KEY_RESOLVE_CONTACTS, true))
     val resolveContacts: StateFlow<Boolean> = _resolveContacts.asStateFlow()
@@ -512,6 +516,11 @@ class AppPreferences(context: Context) {
     fun setOdinCustomSystemPrompt(prompt: String) {
         prefs.edit().putString(KEY_ODIN_CUSTOM_SYSTEM_PROMPT, prompt.trim()).apply()
         _odinCustomSystemPrompt.value = prompt.trim()
+    }
+
+    fun setAnimationsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ANIMATIONS_ENABLED, enabled).apply()
+        _animationsEnabled.value = enabled
     }
 
     fun resetOdinSystemPrompt() {

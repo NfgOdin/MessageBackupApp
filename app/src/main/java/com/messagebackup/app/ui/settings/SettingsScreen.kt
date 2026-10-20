@@ -115,6 +115,7 @@ fun SettingsScreen(
     val initialMessageBatchSize by prefs.initialMessageBatchSize.collectAsState()
     val scrollMessageBatchSize by prefs.scrollMessageBatchSize.collectAsState()
     val fastPaginationEnabled by prefs.fastPaginationEnabled.collectAsState()
+    val animationsEnabled by prefs.animationsEnabled.collectAsState()
     val isAdsRemoved by billingManager.isAdsRemoved.collectAsState()
     val productPrice by billingManager.productPrice.collectAsState()
     val isAutoBackupUnlocked by billingManager.isAutoBackupUnlocked.collectAsState()
@@ -2153,6 +2154,33 @@ Rules:
                         )
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Universal Animations & Visual Effects Toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Visual Effects & Animations",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Toggle all soaring flight, celebration bursts, and PTT audio waveforms.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = animationsEnabled,
+                    onCheckedChange = { prefs.setAnimationsEnabled(it) }
+                )
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))

@@ -36,6 +36,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,8 +79,10 @@ fun PunchCardUnlockedDialog(
     totalSteps: Int = 3,
     onDismiss: () -> Unit
 ) {
-    val scaleAnim = remember { Animatable(0.2f) }
-    val confettiProgress = remember { Animatable(0f) }
+    val animationsEnabled = com.messagebackup.app.MessageBackupApp.instance.appPreferences.animationsEnabled.collectAsState().value
+
+    val scaleAnim = remember { Animatable(if (animationsEnabled) 0.2f else 1f) }
+    val confettiProgress = remember { Animatable(if (animationsEnabled) 0f else 1f) }
     val glowRotateAnim = remember { Animatable(0f) }
 
     val confettiColors = listOf(
@@ -91,46 +95,54 @@ fun PunchCardUnlockedDialog(
     )
 
     val particles = remember {
-        List(45) {
-            val angle = Random.nextDouble(0.0, 2 * PI)
-            val speed = Random.nextFloat() * 260f + 120f
-            ConfettiParticle(
-                initialX = 0f,
-                initialY = 0f,
-                angle = angle,
-                speed = speed,
-                color = confettiColors[Random.nextInt(confettiColors.size)],
-                size = Random.nextFloat() * 10f + 6f,
-                rotationSpeed = Random.nextFloat() * 720f - 360f
+        if (!animationsEnabled) emptyList() else {
+            List(45) {
+                val angle = Random.nextDouble(0.0, 2 * PI)
+                val speed = Random.nextFloat() * 260f + 120f
+                ConfettiParticle(
+                    initialX = 0f,
+                    initialY = 0f,
+                    angle = angle,
+                    speed = speed,
+                    color = confettiColors[Random.nextInt(confettiColors.size)],
+                    size = Random.nextFloat() * 10f + 6f,
+                    rotationSpeed = Random.nextFloat() * 720f - 360f
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (animationsEnabled) {
+            // Pop-in bounce animation
+            scaleAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
             )
         }
     }
 
     LaunchedEffect(Unit) {
-        // Pop-in bounce animation
-        scaleAnim.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
-        )
-    }
-
-    LaunchedEffect(Unit) {
-        // Confetti burst animation
-        confettiProgress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 1400, easing = FastOutSlowInEasing)
-        )
-    }
-
-    LaunchedEffect(Unit) {
-        // Infinite slow rotation for celebration aura
-        glowRotateAnim.animateTo(
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 8000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
+        if (animationsEnabled) {
+            // Confetti burst animation
+            confettiProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 1400, easing = FastOutSlowInEasing)
             )
-        )
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (animationsEnabled) {
+            // Infinite slow rotation for celebration aura
+            glowRotateAnim.animateTo(
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 8000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                )
+            )
+        }
     }
 
     Dialog(

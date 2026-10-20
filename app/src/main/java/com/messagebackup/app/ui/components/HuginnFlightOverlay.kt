@@ -12,6 +12,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -49,7 +51,17 @@ fun HuginnFlightOverlay(
     onFlightCompleted: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = com.messagebackup.app.MessageBackupApp.instance
+    val animationsEnabled = app.appPreferences.animationsEnabled.collectAsState().value
+
     if (!isFlying) return
+    if (!animationsEnabled) {
+        LaunchedEffect(isFlying) {
+            onFlightCompleted()
+        }
+        return
+    }
 
     val progress = remember { Animatable(0f) }
     val configuration = LocalConfiguration.current
