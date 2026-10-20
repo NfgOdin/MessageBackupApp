@@ -6,6 +6,7 @@ import java.io.File
  * Supported document export formats.
  */
 enum class ExportFormat(val extension: String, val displayName: String, val mimeType: String) {
+    DESKTOP_VIEWER("html", "Interactive Desktop Web Viewer (index.html)", "text/html"),
     PDF("pdf", "PDF Document (.pdf)", "application/pdf"),
     HTML("html", "HTML Web Page (.html)", "text/html"),
     JSON("json", "JSON Backup (.json) [Required for Restore]", "application/json"),

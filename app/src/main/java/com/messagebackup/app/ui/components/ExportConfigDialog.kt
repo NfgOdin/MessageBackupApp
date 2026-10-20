@@ -107,7 +107,13 @@ fun ExportConfigDialog(
                         Spacer(modifier = Modifier.width(6.dp))
                         Column {
                             Text(text = format.displayName, style = MaterialTheme.typography.bodyMedium)
-                            if (format == ExportFormat.JSON || format == ExportFormat.XML) {
+                            if (format == ExportFormat.DESKTOP_VIEWER) {
+                                Text(
+                                    text = "💻 Includes offline index.html app with search & full media viewer for Mac/PC",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else if (format == ExportFormat.JSON || format == ExportFormat.XML) {
                                 Text(
                                     text = "⚠️ Required format to restore conversations back to an Android phone",
                                     style = MaterialTheme.typography.labelSmall,

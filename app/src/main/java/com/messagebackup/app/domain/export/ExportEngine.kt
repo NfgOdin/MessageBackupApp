@@ -32,6 +32,7 @@ class ExportEngine(
     private val telephonyRepository: TelephonyRepository,
     private val markdownFormatter: MarkdownFormatter = MarkdownFormatter(),
     private val htmlFormatter: HtmlFormatter = HtmlFormatter(),
+    private val desktopHtmlViewerFormatter: DesktopHtmlViewerFormatter = DesktopHtmlViewerFormatter(),
     private val plainTextFormatter: PlainTextFormatter = PlainTextFormatter(),
     private val pdfFormatter: PdfFormatter = PdfFormatter(context),
     private val csvFormatter: CsvFormatter = CsvFormatter(),
@@ -73,6 +74,8 @@ class ExportEngine(
             val activePassword = options.zipPassword?.takeIf { it.isNotBlank() }
 
             val totalThreads = threads.size
+            val processedThreadsMap = mutableMapOf<ConversationThread, List<MessageItem>>()
+
             val writeAllThreads: suspend ((String, ByteArray) -> Unit) -> Unit = { putEntry ->
                 for ((tIndex, thread) in threads.withIndex()) {
                     onProgress?.invoke(
@@ -95,6 +98,7 @@ class ExportEngine(
                         customEnd = options.customEndDate
                     )
                     totalProcessedMessages += messages.size
+                    processedThreadsMap[thread] = messages
 
                     val threadDirName = sanitizeFilename("${thread.displayName}_${thread.threadId}")
                     val mediaDirEntry = "$threadDirName/media/"
@@ -150,6 +154,16 @@ class ExportEngine(
                             )
                         } else {
                             val documentContent = when (options.format) {
+                                ExportFormat.DESKTOP_VIEWER -> htmlFormatter.formatConversationPart(
+                                    thread = thread,
+                                    messages = chunk,
+                                    currentPart = partNum,
+                                    totalParts = totalParts,
+                                    prevFileName = prevFileName,
+                                    nextFileName = nextFileName,
+                                    theme = options.theme,
+                                    mediaSubdir = "media/"
+                                )
                                 ExportFormat.HTML -> htmlFormatter.formatConversationPart(
                                     thread = thread,
                                     messages = chunk,
@@ -191,6 +205,20 @@ class ExportEngine(
                         }
                         putEntry(zipEntryPath, entryBytes)
                     }
+                }
+
+                // If Desktop Viewer format is selected, generate the interactive root index.html
+                if (options.format == ExportFormat.DESKTOP_VIEWER) {
+                    onProgress?.invoke(
+                        totalThreads,
+                        totalThreads,
+                        "Building interactive Desktop Web Viewer (index.html)..."
+                    )
+                    val indexHtml = desktopHtmlViewerFormatter.generateDesktopViewer(
+                        threadsWithMessages = processedThreadsMap,
+                        mediaSubdirPrefix = "media/"
+                    )
+                    putEntry("index.html", indexHtml.toByteArray(Charsets.UTF_8))
                 }
             }
 
