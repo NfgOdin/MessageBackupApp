@@ -66,6 +66,9 @@ fun ExportConfigDialog(
     var showDatePicker by remember { mutableStateOf(false) }
 
     var selectedMaxPerFile by remember { mutableStateOf(initialMaxPerFile) }
+    var customSplitInput by remember(initialMaxPerFile) {
+        mutableStateOf(if (initialMaxPerFile > 0) initialMaxPerFile.toString() else "")
+    }
     var includeMedia by remember { mutableStateOf(true) }
     var destination by remember { mutableStateOf(initialDestination) }
     var useZipPassword by remember { mutableStateOf(false) }
@@ -189,21 +192,79 @@ fun ExportConfigDialog(
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
-                val splitOptions = listOf(0 to "No Split (Single File - Default)", 50 to "50 messages", 100 to "100 messages", 250 to "250 messages")
-                splitOptions.forEach { (limit, label) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // "No Split" option
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selectedMaxPerFile = limit }
-                            .padding(vertical = 2.dp),
+                            .weight(1f)
+                            .clickable { selectedMaxPerFile = 0 }
+                            .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
-                            selected = (selectedMaxPerFile == limit),
-                            onClick = { selectedMaxPerFile = limit }
+                            selected = (selectedMaxPerFile == 0),
+                            onClick = { selectedMaxPerFile = 0 }
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = label, style = MaterialTheme.typography.bodyMedium)
+                        Text(text = "No Split", style = MaterialTheme.typography.bodyMedium)
+                    }
+
+                    // "Split" option
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                val targetLimit = customSplitInput.toIntOrNull()?.takeIf { it > 0 } ?: 50
+                                selectedMaxPerFile = targetLimit
+                            }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = (selectedMaxPerFile > 0),
+                            onClick = {
+                                val targetLimit = customSplitInput.toIntOrNull()?.takeIf { it > 0 } ?: 50
+                                selectedMaxPerFile = targetLimit
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = "Split", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+
+                // Input box appears under Split option when selected
+                if (selectedMaxPerFile > 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, top = 2.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.OutlinedTextField(
+                            value = customSplitInput,
+                            onValueChange = { newValue ->
+                                val filtered = newValue.filter { it.isDigit() }.take(5)
+                                customSplitInput = filtered
+                                val parsed = filtered.toIntOrNull()
+                                selectedMaxPerFile = if (parsed != null && parsed > 0) parsed else 50
+                            },
+                            placeholder = { Text("50") },
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                            ),
+                            modifier = Modifier.width(90.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "messages per file",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
 

@@ -165,6 +165,9 @@ fun SettingsScreen(
     var isProCardExpanded by remember { mutableStateOf(!isAdsRemoved) }
     var isSaveLocationExpanded by remember { mutableStateOf(false) }
     var isPaginationExpanded by remember { mutableStateOf(false) }
+    var customSplitInput by remember(maxMessagesPerFile) {
+        mutableStateOf(if (maxMessagesPerFile > 0) maxMessagesPerFile.toString() else "")
+    }
     var isFormatPickerExpanded by remember { mutableStateOf(false) }
     var isPerformanceExpanded by remember { mutableStateOf(false) }
     var isOdinExpanded by remember { mutableStateOf(false) }
@@ -782,21 +785,85 @@ fun SettingsScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        val paginationOptions = listOf(0 to "No Split (Single File - Default)", 50 to "50 messages per file", 100 to "100 messages per file", 250 to "250 messages per file")
-                        paginationOptions.forEach { (limit, label) ->
+                        // Radio Row: No Split vs Split side by side
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // "No Split" option
                             Row(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { prefs.setMaxMessagesPerFile(limit) }
-                                    .padding(vertical = 3.dp),
+                                    .weight(1f)
+                                    .clickable { prefs.setMaxMessagesPerFile(0) }
+                                    .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 RadioButton(
-                                    selected = (maxMessagesPerFile == limit),
-                                    onClick = { prefs.setMaxMessagesPerFile(limit) }
+                                    selected = (maxMessagesPerFile == 0),
+                                    onClick = { prefs.setMaxMessagesPerFile(0) }
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = label, style = MaterialTheme.typography.bodyMedium)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = "No Split", style = MaterialTheme.typography.bodyMedium)
+                            }
+
+                            // "Split" option
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        val targetLimit = customSplitInput.toIntOrNull()?.takeIf { it > 0 } ?: 50
+                                        prefs.setMaxMessagesPerFile(targetLimit)
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (maxMessagesPerFile > 0),
+                                    onClick = {
+                                        val targetLimit = customSplitInput.toIntOrNull()?.takeIf { it > 0 } ?: 50
+                                        prefs.setMaxMessagesPerFile(targetLimit)
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = "Split", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+
+                        // Input box appears when Split is selected
+                        if (maxMessagesPerFile > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 12.dp, top = 2.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = customSplitInput,
+                                    onValueChange = { newValue ->
+                                        val filtered = newValue.filter { it.isDigit() }.take(5)
+                                        customSplitInput = filtered
+                                        val parsed = filtered.toIntOrNull()
+                                        if (parsed != null && parsed > 0) {
+                                            prefs.setMaxMessagesPerFile(parsed)
+                                        } else {
+                                            // Fallback graceful default to 50
+                                            prefs.setMaxMessagesPerFile(50)
+                                        }
+                                    },
+                                    placeholder = { Text("50") },
+                                    singleLine = true,
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                    ),
+                                    modifier = Modifier.width(90.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "messages per file",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
