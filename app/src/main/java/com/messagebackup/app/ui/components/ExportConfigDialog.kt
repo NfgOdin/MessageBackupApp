@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.messagebackup.app.model.DateRangeFilter
 import com.messagebackup.app.model.ExportFormat
@@ -307,7 +308,48 @@ fun ExportConfigDialog(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                // 6. Optional AES-256 Archive Password Encryption
+                // 6. Court-Ready Legal & Forensic Evidentiary Mode
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            legalEvidenceMode = !legalEvidenceMode
+                            if (legalEvidenceMode) {
+                                selectedFormat = ExportFormat.PDF
+                            }
+                        }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = legalEvidenceMode,
+                        onCheckedChange = {
+                            legalEvidenceMode = it
+                            if (it) {
+                                selectedFormat = ExportFormat.PDF
+                            }
+                        }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "⚖️ Court-Ready Legal & Forensic Mode",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = "Dual UTC+Local timestamps, certified Bates numbering, participant headers, and SHA-256 tamper-evident digital fingerprint.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // 7. Optional AES-256 Archive Password Encryption
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

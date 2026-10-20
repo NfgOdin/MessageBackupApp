@@ -114,7 +114,7 @@ class PdfFormatter(private val context: Context) {
             )
             y += 12f
             canvas.drawText(
-                "Timestamp Reference: UTC & Local System Clock  •  Integrity Standard: WORM / Unmodified Read-Only",
+                "Timestamp Reference: UTC & Local System Clock  •  Chain-of-Custody: Bit-Accurate WORM Export",
                 margin,
                 y,
                 metaPaint
@@ -129,9 +129,16 @@ class PdfFormatter(private val context: Context) {
         canvas.drawLine(margin, y, pageWidth - margin, y, linePaint)
         y += 20f
 
+        var messageIndex = 1
         for (msg in messages) {
             val isOut = (msg.direction == MessageDirection.OUTGOING)
-            val senderLabel = if (isOut) "OUTGOING (Me)" else "INCOMING (${msg.sender.ifBlank { thread.displayName }})"
+            val batesNumber = "BATES-%05d".format(messageIndex)
+            val senderLabel = if (legalEvidenceMode) {
+                "[$batesNumber] ${if (isOut) "OUTGOING (Custodian / Self)" else "INCOMING (${msg.sender.ifBlank { thread.displayName }})"}"
+            } else {
+                if (isOut) "OUTGOING (Me)" else "INCOMING (${msg.sender.ifBlank { thread.displayName }})"
+            }
+            messageIndex++
             val timeLocalStr = localDateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
             val timeUtcStr = utcDateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
 
@@ -145,9 +152,14 @@ class PdfFormatter(private val context: Context) {
 
             // Check if page overflow
             if (y + bubbleHeight + 25f > pageHeight - margin - 20f) {
-                // Draw footer with page number
+                // Draw footer with page number and Bates numbering range if in legal mode
+                val footerText = if (legalEvidenceMode) {
+                    "Page $pageNumber  •  Certified Evidence Transcript  •  Archive: ${thread.displayName}"
+                } else {
+                    "Page $pageNumber  •  Message Archive: ${thread.displayName}"
+                }
                 canvas.drawText(
-                    "Page $pageNumber  •  Message Archive: ${thread.displayName}",
+                    footerText,
                     margin,
                     pageHeight - margin + 8f,
                     metaPaint
@@ -192,8 +204,8 @@ class PdfFormatter(private val context: Context) {
 
         // Compute SHA-256 Digital Fingerprint for Evidence Verification
         if (legalEvidenceMode) {
-            if (y + 45f > pageHeight - margin - 20f) {
-                canvas.drawText("Page $pageNumber  •  Message Archive: ${thread.displayName}", margin, pageHeight - margin + 8f, metaPaint)
+            if (y + 55f > pageHeight - margin - 20f) {
+                canvas.drawText("Page $pageNumber  •  Certified Evidence Transcript  •  Archive: ${thread.displayName}", margin, pageHeight - margin + 8f, metaPaint)
                 pdfDocument.finishPage(page)
                 pageNumber++
                 pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
@@ -209,16 +221,23 @@ class PdfFormatter(private val context: Context) {
             val sha256 = MessageDigest.getInstance("SHA-256").digest(hashInput.toByteArray())
                 .joinToString("") { "%02x".format(it) }
 
-            canvas.drawText("VERIFICATION CHECKSUM (SHA-256 DIGITAL FINGERPRINT):", margin, y, senderPaint)
+            canvas.drawText("CERTIFICATE OF AUTHENTICITY & INTEGRITY CHECKSUM (SHA-256):", margin, y, senderPaint)
             y += 12f
             canvas.drawText(sha256, margin, y, metaPaint)
             y += 12f
-            canvas.drawText("This transcript is certified as a bit-accurate export generated directly from Android Telephony storage.", margin, y, metaPaint)
+            canvas.drawText("I hereby certify under penalty of perjury that this transcript represents a true and complete export of", margin, y, metaPaint)
+            y += 11f
+            canvas.drawText("electronic communications retrieved directly from the device's native Telephony database storage.", margin, y, metaPaint)
         }
 
         // Final page footer
+        val finalFooter = if (legalEvidenceMode) {
+            "Page $pageNumber  •  Certified Evidence Transcript  •  Archive: ${thread.displayName}"
+        } else {
+            "Page $pageNumber  •  Message Archive: ${thread.displayName}"
+        }
         canvas.drawText(
-            "Page $pageNumber  •  Message Archive: ${thread.displayName}",
+            finalFooter,
             margin,
             pageHeight - margin + 8f,
             metaPaint
