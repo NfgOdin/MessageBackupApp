@@ -782,7 +782,7 @@ fun CreditArcadeDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // $0.99 THE EYE OF MÍMIR (O.D.I.N. Permanent AI Intelligence Unlock)
+                    // $0.99 AN EYE FOR MÍMIR (O.D.I.N. Permanent AI Intelligence Unlock)
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
@@ -809,7 +809,7 @@ fun CreditArcadeDialog(
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column {
-                                        Text("👁️ The Eye of Mímir", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                        Text("👁️ An Eye for Mímir", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                                         Text("Sacrifice an eye for infinite knowledge", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
@@ -832,7 +832,7 @@ fun CreditArcadeDialog(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // $0.99 Huginn Forever
+                    // $0.99 HUGINN'S FLIGHT (Huginn Live Dispatch Unlock)
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -844,33 +844,45 @@ fun CreditArcadeDialog(
                                 billing.launchBillingFlow(activity, BillingManager.PRODUCT_UNLOCK_HUGINN)
                             }
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text("🪶 Raven's Wing (Huginn Dispatch)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                    Text("Unlock composer bar forever (No ads needed)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_rune_ansuz),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text("🪶 Huginn’s Flight", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                        Text("Unleash the flight of thought across the realms", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = { billing.launchBillingFlow(activity, BillingManager.PRODUCT_UNLOCK_HUGINN) },
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(billing.huginnPrice.value ?: "$0.99")
                                 }
                             }
-                            OutlinedButton(
-                                onClick = { billing.launchBillingFlow(activity, BillingManager.PRODUCT_UNLOCK_HUGINN) },
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("$0.99")
-                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "“Huginn and Muninn fly each dawn across the earth...”\nUnlocks the Huginn Live Composer Bar forever with direct dispatch, thought counsel, and zero ads.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
+                            )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // $0.99 Jera Auto-Backup Forever
+                    // $0.99 DRAUPNIR'S RING (Jera Nightly Auto-Backup Forever)
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -882,27 +894,39 @@ fun CreditArcadeDialog(
                                 billing.launchBillingFlow(activity, BillingManager.PRODUCT_AUTO_BACKUP)
                             }
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text("🌾 Golden Harvest (Jera Auto-Backup)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                    Text("Automated backups forever (No ads needed)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_rune_jera),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text("💍 Draupnir’s Ring", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                        Text("Endless nightly duplication into the vault", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = { billing.launchBillingFlow(activity, BillingManager.PRODUCT_AUTO_BACKUP) },
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(billing.autoBackupPrice.value ?: "$0.99")
                                 }
                             }
-                            OutlinedButton(
-                                onClick = { billing.launchBillingFlow(activity, BillingManager.PRODUCT_AUTO_BACKUP) },
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("$0.99")
-                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "“Every ninth night, golden rings drop from it of equal weight...”\nUnlocks automated scheduled backups forever with uninterrupted overnight memory archiving.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
+                            )
                         }
                     }
 
