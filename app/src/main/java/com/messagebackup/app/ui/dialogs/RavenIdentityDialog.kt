@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -43,6 +44,7 @@ import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -87,12 +89,20 @@ fun RavenIdentityDialog(
     val cryptoEngine = remember { RavenCryptoEngine(context) }
     val qrManager = remember { RavenQrManager(context) }
     val dbHelper = remember { RavenDatabaseHelper(context) }
+    val socketTransport = remember { com.messagebackup.app.domain.mesh.RavenSocketTransport(context, scope) }
 
     var selectedTab by remember { mutableIntStateOf(0) }
     val myCallSign = remember { cryptoEngine.getRavenCallSign() }
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var peersList by remember { mutableStateOf<List<RavenPeer>>(emptyList()) }
     var isLoadingQr by remember { mutableStateOf(true) }
+    var peerForDirectPing by remember { mutableStateOf<RavenPeer?>(null) }
+    var pingMessageText by remember { mutableStateOf("⚡ Raven Whisper: Greetings from Muninn!") }
+    var isSendingPing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        socketTransport.startServer()
+    }
 
     fun refreshPeers() {
         scope.launch(Dispatchers.IO) {
@@ -104,8 +114,21 @@ fun RavenIdentityDialog(
     }
 
     LaunchedEffect(Unit) {
+        socketTransport.incomingMessages.collect { incoming ->
+            Toast.makeText(
+                context,
+                "🪶 New Raven from ${incoming.senderDisplayName}:\n${incoming.messageText}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
         refreshPeers()
-        val bmp = qrManager.generateHandshakeQrBitmap(displayName = "Me")
+        val bmp = qrManager.generateHandshakeQrBitmap(
+            displayName = "Me",
+            localIp = com.messagebackup.app.domain.migration.DirectLocalMigrationManager.getLocalIpAddress()
+        )
         qrBitmap = bmp
         isLoadingQr = false
     }
@@ -396,19 +419,33 @@ fun RavenIdentityDialog(
                                             }
                                         }
 
-                                        IconButton(
-                                            onClick = {
-                                                scope.launch(Dispatchers.IO) {
-                                                    dbHelper.deletePeer(peer.peerId)
-                                                    refreshPeers()
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            IconButton(
+                                                onClick = {
+                                                    peerForDirectPing = peer
                                                 }
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Send,
+                                                    contentDescription = "Send Direct Message",
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
                                             }
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Delete,
-                                                contentDescription = "Remove Peer",
-                                                tint = MaterialTheme.colorScheme.error
-                                            )
+
+                                            IconButton(
+                                                onClick = {
+                                                    scope.launch(Dispatchers.IO) {
+                                                        dbHelper.deletePeer(peer.peerId)
+                                                        refreshPeers()
+                                                    }
+                                                }
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Remove Peer",
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -460,5 +497,78 @@ fun RavenIdentityDialog(
                 }
             }
         }
+    }
+
+    // Direct Encrypted Ping Dialog
+    peerForDirectPing?.let { targetPeer ->
+        var targetIpInput by remember { mutableStateOf(targetPeer.lastKnownIp ?: "") }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { peerForDirectPing = null },
+            title = {
+                Text("Transmit Raven Whisper")
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Sending authenticated AES-256-GCM encrypted packet to ${targetPeer.displayName} (${targetPeer.peerId})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    androidx.compose.material3.OutlinedTextField(
+                        value = targetIpInput,
+                        onValueChange = { targetIpInput = it },
+                        label = { Text("Peer Local IP (Wi-Fi)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    androidx.compose.material3.OutlinedTextField(
+                        value = pingMessageText,
+                        onValueChange = { pingMessageText = it },
+                        label = { Text("Encrypted Message") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isSendingPing = true
+                        scope.launch(Dispatchers.IO) {
+                            val res = socketTransport.sendMessageToPeer(
+                                peer = targetPeer,
+                                text = pingMessageText,
+                                targetIp = targetIpInput.trim()
+                            )
+                            withContext(Dispatchers.Main) {
+                                isSendingPing = false
+                                when (res) {
+                                    is com.messagebackup.app.domain.mesh.RavenSendResult.Success -> {
+                                        Toast.makeText(context, "🪶 Raven packet delivered!", Toast.LENGTH_SHORT).show()
+                                        peerForDirectPing = null
+                                    }
+                                    is com.messagebackup.app.domain.mesh.RavenSendResult.Error -> {
+                                        Toast.makeText(context, "⚠️ " + res.errorMessage, Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    enabled = !isSendingPing && targetIpInput.isNotBlank() && pingMessageText.isNotBlank()
+                ) {
+                    if (isSendingPing) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Send E2EE Packet")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { peerForDirectPing = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

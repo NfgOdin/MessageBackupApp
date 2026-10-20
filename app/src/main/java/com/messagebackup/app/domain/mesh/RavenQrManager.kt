@@ -23,9 +23,13 @@ class RavenQrManager(private val context: Context) {
     /**
      * Generates a high-contrast QR code bitmap containing the cryptographic handshake payload.
      */
-    suspend fun generateHandshakeQrBitmap(displayName: String, sizePx: Int = 512): Bitmap? = withContext(Dispatchers.IO) {
+    suspend fun generateHandshakeQrBitmap(
+        displayName: String,
+        localIp: String? = null,
+        sizePx: Int = 512
+    ): Bitmap? = withContext(Dispatchers.IO) {
         try {
-            val payload = cryptoEngine.buildHandshakePayload(displayName = displayName)
+            val payload = cryptoEngine.buildHandshakePayload(displayName = displayName, localIp = localIp)
             val bitMatrix = QRCodeWriter().encode(payload, BarcodeFormat.QR_CODE, sizePx, sizePx)
             val width = bitMatrix.width
             val height = bitMatrix.height
