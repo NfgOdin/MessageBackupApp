@@ -1882,8 +1882,9 @@ fun SettingsScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Message Backup & Export v1.0.0",
+                text = "Muninn: Message Memory & Vault v1.0.0",
                 style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable {
                     devTapCount++
                     if (devTapCount >= 7) {
@@ -1895,7 +1896,7 @@ fun SettingsScreen(
                 }
             )
             Text(
-                text = "Private on-device SMS/MMS archive utility.",
+                text = "Private on-device message memory vault, phone migration & AI intelligence.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -97,7 +97,7 @@ class DesktopHtmlViewerFormatter {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Message Backup Archive - Desktop Viewer</title>
+    <title>Muninn Archive - Desktop Viewer</title>
     <style>
         :root {
             --bg-base: #0f172a;
@@ -540,9 +540,9 @@ class DesktopHtmlViewerFormatter {
         <div class="sidebar-header">
             <div class="brand-title">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                <span>Message Backup Archive</span>
+                <span>Muninn: Message Memory &amp; Vault</span>
             </div>
-            <div class="brand-subtitle" id="archive-stats-text">Standalone Desktop Viewer &bull; 0 KB Cloud</div>
+            <div class="brand-subtitle" id="archive-stats-text">Standalone Offline Desktop Viewer &bull; 0 KB Cloud</div>
             <div class="search-box">
                 <span class="search-icon">&#128269;</span>
                 <input type="text" id="thread-search" class="search-input" placeholder="Search contacts & threads..." oninput="filterThreads()">
