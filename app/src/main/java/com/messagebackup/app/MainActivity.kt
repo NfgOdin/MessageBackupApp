@@ -57,6 +57,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntentAction(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra("OPEN_RUNIC_ARCADE", false) == true) {
+            viewModel.setShowRewardArcade(true)
+        }
         when (intent?.action) {
             com.messagebackup.app.widget.OdinSearchWidgetProvider.ACTION_OPEN_ODIN -> {
                 viewModel.setCopilotOpen(true)

@@ -76,7 +76,8 @@ data class MainUiState(
     val vaultProgressMessage: String = "",
     val vaultMediaItems: List<com.messagebackup.app.model.VaultMediaItem> = emptyList(),
     val showCommitmentRadar: Boolean = false,
-    val showMigrationDialog: Boolean = false
+    val showMigrationDialog: Boolean = false,
+    val showRewardArcade: Boolean = false
 )
 
 /**
@@ -978,6 +979,10 @@ class MainViewModel : ViewModel() {
 
     fun setShowMigrationDialog(show: Boolean) {
         _uiState.value = _uiState.value.copy(showMigrationDialog = show)
+    }
+
+    fun setShowRewardArcade(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showRewardArcade = show)
     }
 
     fun loadMediaVault(forceRefresh: Boolean = false) {

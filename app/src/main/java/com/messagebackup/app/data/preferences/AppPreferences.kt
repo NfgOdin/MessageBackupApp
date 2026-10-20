@@ -52,6 +52,9 @@ class AppPreferences(context: Context) {
         private const val KEY_ODIN_CUSTOM_SYSTEM_PROMPT = "odin_custom_system_prompt"
         private const val KEY_HUGINN_COMPOSER_ENABLED = "huginn_composer_enabled"
         private const val KEY_ANSUZ_CREDITS = "ansuz_credits"
+        private const val KEY_HUGINN_LEASE_EXPIRY_MS = "huginn_lease_expiry_ms"
+        private const val KEY_HUGINN_AD_PROGRESS = "huginn_ad_progress"
+        private const val KEY_HUGINN_PERMANENT_UNLOCKED = "huginn_permanent_unlocked"
 
         // Privacy PIN & Biometric Lock Preferences
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
@@ -90,6 +93,18 @@ class AppPreferences(context: Context) {
     // Punch-card progress towards next Auto-Backup credit (0, 1, or 2 out of 3)
     private val _backupAdProgress = MutableStateFlow(prefs.getInt(KEY_BACKUP_AD_PROGRESS, 0))
     val backupAdProgress: StateFlow<Int> = _backupAdProgress.asStateFlow()
+
+    // Huginn 72-hour lease expiry timestamp (supports infinite stacking)
+    private val _huginnLeaseExpiryMs = MutableStateFlow(prefs.getLong(KEY_HUGINN_LEASE_EXPIRY_MS, 0L))
+    val huginnLeaseExpiryMs: StateFlow<Long> = _huginnLeaseExpiryMs.asStateFlow()
+
+    // Huginn 5-ad punch card progress (0 to 5)
+    private val _huginnAdProgress = MutableStateFlow(prefs.getInt(KEY_HUGINN_AD_PROGRESS, 0))
+    val huginnAdProgress: StateFlow<Int> = _huginnAdProgress.asStateFlow()
+
+    // Standalone $0.99 permanent Huginn unlock
+    private val _isHuginnPermanentUnlocked = MutableStateFlow(prefs.getBoolean(KEY_HUGINN_PERMANENT_UNLOCKED, false))
+    val isHuginnPermanentUnlocked: StateFlow<Boolean> = _isHuginnPermanentUnlocked.asStateFlow()
 
     private val _autoBackupEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_BACKUP_ENABLED, false))
     val autoBackupEnabled: StateFlow<Boolean> = _autoBackupEnabled.asStateFlow()
@@ -313,6 +328,55 @@ class AppPreferences(context: Context) {
         val diff = (System.currentTimeMillis() - lastTime) / 1000L
         val remaining = 60L - diff
         return if (remaining > 0L) remaining else 0L
+    }
+
+    fun isHuginnActive(isAdsRemoved: Boolean = false): Boolean {
+        if (isAdsRemoved || _isHuginnPermanentUnlocked.value) return true
+        return System.currentTimeMillis() < _huginnLeaseExpiryMs.value
+    }
+
+    fun getHuginnRemainingTimeMs(): Long {
+        val remaining = _huginnLeaseExpiryMs.value - System.currentTimeMillis()
+        return if (remaining > 0L) remaining else 0L
+    }
+
+    /**
+     * Stacking lease mechanism: Adds 3 days (72 hours) to the Huginn lease.
+     * If already active, the new 72 hours are appended directly on top of the existing balance.
+     * Returns the new expiration timestamp in milliseconds.
+     */
+    fun addHuginnLeaseDays(days: Int = 3): Long {
+        val durationMillis = days * 24L * 60L * 60L * 1000L
+        val currentExpiry = _huginnLeaseExpiryMs.value
+        val now = System.currentTimeMillis()
+        val baseTime = if (currentExpiry > now) currentExpiry else now
+        val newExpiry = baseTime + durationMillis
+        prefs.edit().putLong(KEY_HUGINN_LEASE_EXPIRY_MS, newExpiry).apply()
+        _huginnLeaseExpiryMs.value = newExpiry
+        return newExpiry
+    }
+
+    /**
+     * Records a watched ad for Huginn punch card (5 ads = +3 days lease stacked).
+     * @return true if 5th punch unlocked/stacked 3 days, false if punch was recorded (1..4 of 5).
+     */
+    fun recordHuginnAdWatched(): Boolean {
+        val nextProgress = _huginnAdProgress.value + 1
+        return if (nextProgress >= 5) {
+            prefs.edit().putInt(KEY_HUGINN_AD_PROGRESS, 0).apply()
+            _huginnAdProgress.value = 0
+            addHuginnLeaseDays(3)
+            true
+        } else {
+            prefs.edit().putInt(KEY_HUGINN_AD_PROGRESS, nextProgress).apply()
+            _huginnAdProgress.value = nextProgress
+            false
+        }
+    }
+
+    fun setHuginnPermanentUnlocked(unlocked: Boolean) {
+        prefs.edit().putBoolean(KEY_HUGINN_PERMANENT_UNLOCKED, unlocked).apply()
+        _isHuginnPermanentUnlocked.value = unlocked
     }
 
     /**

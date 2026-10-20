@@ -72,6 +72,9 @@ private data class ConfettiParticle(
  */
 @Composable
 fun PunchCardUnlockedDialog(
+    title: String = "+1 Auto-Backup Night Unlocked!",
+    description: String = "All 3 ads watched! Your automated overnight backup credit is now safely banked in your account.",
+    totalSteps: Int = 3,
     onDismiss: () -> Unit
 ) {
     val scaleAnim = remember { Animatable(0.2f) }
@@ -233,7 +236,7 @@ fun PunchCardUnlockedDialog(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "+1 Auto-Backup Night Unlocked!",
+                        text = title,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -243,7 +246,7 @@ fun PunchCardUnlockedDialog(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = "All 3 ads watched! Your automated overnight backup credit is now safely banked in your account.",
+                        text = description,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -252,7 +255,7 @@ fun PunchCardUnlockedDialog(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 3 Completed Badges Preview
+                    // Completed Badges Preview
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
@@ -267,7 +270,7 @@ fun PunchCardUnlockedDialog(
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            for (step in 1..3) {
+                            for (step in 1..totalSteps) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = Icons.Default.CheckCircle,

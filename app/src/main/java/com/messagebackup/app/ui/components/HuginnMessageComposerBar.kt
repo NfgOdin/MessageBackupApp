@@ -88,12 +88,24 @@ fun HuginnMessageComposerBar(
     val scope = rememberCoroutineScope()
 
     val ansuzCredits by prefs.ansuzCredits.collectAsState()
+    val huginnLeaseExpiryMs by prefs.huginnLeaseExpiryMs.collectAsState()
+    val isHuginnPermanentUnlocked by prefs.isHuginnPermanentUnlocked.collectAsState()
+
+    val isHuginnActive = isAdsRemoved || isHuginnPermanentUnlocked || (System.currentTimeMillis() < huginnLeaseExpiryMs)
+    val remainingHours = if (huginnLeaseExpiryMs > System.currentTimeMillis()) {
+        (huginnLeaseExpiryMs - System.currentTimeMillis()) / (1000L * 60L * 60L)
+    } else 0L
+
     var textInput by remember { mutableStateOf("") }
     var isThinking by remember { mutableStateOf(false) }
     var thoughtSuggestion by remember { mutableStateOf<String?>(null) }
     var showThoughtSheet by remember { mutableStateOf(false) }
 
     fun triggerOdinThought(actionType: String) {
+        if (!isHuginnActive) {
+            onRequireCredits()
+            return
+        }
         val currentCredits = prefs.ansuzCredits.value
         if (!isAdsRemoved && currentCredits <= 0) {
             onRequireCredits()
@@ -341,10 +353,21 @@ fun HuginnMessageComposerBar(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = if (isAdsRemoved) "• PRO Unlimited" else "• $ansuzCredits ᚫ Ansuz",
+                text = if (isAdsRemoved) {
+                    "• PRO Unlimited"
+                } else if (isHuginnPermanentUnlocked) {
+                    "• Unlocked • $ansuzCredits ᚫ"
+                } else if (isHuginnActive) {
+                    val days = remainingHours / 24
+                    val hrs = remainingHours % 24
+                    val timeStr = if (days > 0) "${days}d ${hrs}h" else "${hrs}h"
+                    "• ⏱️ $timeStr left • $ansuzCredits ᚫ"
+                } else {
+                    "• 🔒 Lease Expired"
+                },
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = if (isHuginnActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
@@ -407,18 +430,34 @@ fun HuginnMessageComposerBar(
             // Send Button
             Surface(
                 shape = CircleShape,
-                color = if (textInput.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                color = if (!isHuginnActive) {
+                    MaterialTheme.colorScheme.errorContainer
+                } else if (textInput.isNotBlank()) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                },
                 modifier = Modifier
                     .size(44.dp)
-                    .clickable(enabled = textInput.isNotBlank()) {
-                        dispatchSms(textInput)
+                    .clickable {
+                        if (!isHuginnActive) {
+                            onRequireCredits()
+                        } else if (textInput.isNotBlank()) {
+                            dispatchSms(textInput)
+                        }
                     }
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send",
-                        tint = if (textInput.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        imageVector = if (!isHuginnActive) Icons.Default.Close else Icons.AutoMirrored.Filled.Send,
+                        contentDescription = if (!isHuginnActive) "Unlock Huginn" else "Send",
+                        tint = if (!isHuginnActive) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else if (textInput.isNotBlank()) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        },
                         modifier = Modifier.size(20.dp)
                     )
                 }

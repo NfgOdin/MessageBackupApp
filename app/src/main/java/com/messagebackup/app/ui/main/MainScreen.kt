@@ -147,6 +147,13 @@ fun MainScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var isMessageSelectionMode by remember { mutableStateOf(false) }
     var showRewardArcade by remember { mutableStateOf(false) }
+    val viewModelShowRewardArcade = uiState.showRewardArcade
+    LaunchedEffect(viewModelShowRewardArcade) {
+        if (viewModelShowRewardArcade) {
+            showRewardArcade = true
+            viewModel.setShowRewardArcade(false)
+        }
+    }
     var showRavenMeshDialog by remember { mutableStateOf(false) }
     var showOnboarding by remember { mutableStateOf(!isOnboardingCompleted) }
     var isAppSessionUnlocked by remember { mutableStateOf(false) }
