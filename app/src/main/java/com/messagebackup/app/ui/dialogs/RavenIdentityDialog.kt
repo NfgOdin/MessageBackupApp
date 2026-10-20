@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.QrCode
@@ -92,7 +93,8 @@ fun RavenIdentityDialog(
     val socketTransport = remember { com.messagebackup.app.domain.mesh.RavenSocketTransport(context, scope) }
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    val myCallSign = remember { cryptoEngine.getRavenCallSign() }
+    var myCallSign by remember { mutableStateOf(cryptoEngine.getRavenCallSign()) }
+    var showEditNameDialog by remember { mutableStateOf(false) }
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var peersList by remember { mutableStateOf<List<RavenPeer>>(emptyList()) }
     var isLoadingQr by remember { mutableStateOf(true) }
@@ -235,13 +237,30 @@ fun RavenIdentityDialog(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text(
-                            text = myCallSign,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = myCallSign,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            IconButton(
+                                onClick = { showEditNameDialog = true },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Call-Sign Name",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                         Text(
                             text = "Hardware-backed EC P-256 Key",
                             style = MaterialTheme.typography.labelSmall,
@@ -566,6 +585,64 @@ fun RavenIdentityDialog(
             },
             dismissButton = {
                 TextButton(onClick = { peerForDirectPing = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Edit Call-Sign / Custom Name Dialog
+    if (showEditNameDialog) {
+        val currentPrefix = myCallSign.removePrefix("raven://").substringBeforeLast("-")
+        var customNameInput by remember { mutableStateOf(currentPrefix) }
+
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showEditNameDialog = false },
+            title = { Text("Customize Raven Call-Sign") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Choose your moniker or Norse call-sign. Your hardware-backed cryptographic suffix will be automatically appended to preserve global peer uniqueness.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    androidx.compose.material3.OutlinedTextField(
+                        value = customNameInput,
+                        onValueChange = { customNameInput = it.take(20) },
+                        label = { Text("Call-Sign / Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmed = customNameInput.trim()
+                        if (trimmed.isNotBlank()) {
+                            cryptoEngine.setRavenCallSignAlias(trimmed)
+                            myCallSign = cryptoEngine.getRavenCallSign()
+                            showEditNameDialog = false
+                            // Regenerate QR with updated name
+                            scope.launch(Dispatchers.IO) {
+                                val bmp = qrManager.generateHandshakeQrBitmap(
+                                    displayName = trimmed,
+                                    localIp = com.messagebackup.app.domain.migration.DirectLocalMigrationManager.getLocalIpAddress()
+                                )
+                                withContext(Dispatchers.Main) {
+                                    qrBitmap = bmp
+                                }
+                            }
+                        }
+                    },
+                    enabled = customNameInput.isNotBlank()
+                ) {
+                    Text("Save Identity")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditNameDialog = false }) {
                     Text("Cancel")
                 }
             }

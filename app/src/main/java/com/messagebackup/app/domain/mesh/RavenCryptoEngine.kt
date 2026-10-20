@@ -94,6 +94,19 @@ class RavenCryptoEngine(private val context: Context) {
     }
 
     /**
+     * Updates the user's custom Call-Sign name/alias while preserving cryptographic uniqueness.
+     */
+    fun setRavenCallSignAlias(customAlias: String) {
+        val clean = customAlias.trim().filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+        if (clean.isBlank()) return
+        val pubBytes = getOrCreateIdentityKeyPair().public.encoded
+        val hash = java.security.MessageDigest.getInstance("SHA-256").digest(pubBytes)
+        val suffix = String.format("%02X%02X", hash[0], hash[1])
+        val newMoniker = if (clean.endsWith("-$suffix", ignoreCase = true)) clean else "$clean-$suffix"
+        sharedPrefs.edit().putString(PREF_CALLSIGN_MONIKER, newMoniker).apply()
+    }
+
+    /**
      * Signs raw text or payload bytes with the private key.
      */
     fun signData(data: ByteArray): String {
