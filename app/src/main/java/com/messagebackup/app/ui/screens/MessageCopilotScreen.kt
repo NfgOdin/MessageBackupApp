@@ -319,12 +319,21 @@ fun MessageCopilotScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                         ) {
-                            Icon(
-                                imageVector = if (isAdsRemoved) Icons.Default.AutoAwesome else Icons.Default.Bolt,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = if (isAdsRemoved) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
-                            )
+                            if (isAdsRemoved) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            } else {
+                                Icon(
+                                    painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_raido),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = if (isAdsRemoved) "PRO" else "$aiCredits",

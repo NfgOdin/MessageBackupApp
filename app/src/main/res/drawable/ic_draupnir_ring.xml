@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Draupnir - The Sacred Self-Replicating Arm Ring of Odin -->
+    <!-- Heavy Torc / Arm Ring Circle with Penannular Norse Gap -->
+    <path
+        android:pathData="M8,6.5 A8.5,8.5 0 1,0 16,6.5"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"/>
+    <!-- Left Terminal Knot / Beast Head Finial -->
+    <path
+        android:pathData="M8,6.5 L6.5,4.5 L9.5,4.5 Z"
+        android:fillColor="#FFFFFFFF"/>
+    <!-- Right Terminal Knot / Beast Head Finial -->
+    <path
+        android:pathData="M16,6.5 L14.5,4.5 L17.5,4.5 Z"
+        android:fillColor="#FFFFFFFF"/>
+    <!-- Inner Radiant Core Dot (The Drop / Multiplication Spark) -->
+    <path
+        android:pathData="M12,11.5 A1.5,1.5 0 1,0 12.01,11.5 Z"
+        android:fillColor="#FFFFFFFF"/>
+</vector>

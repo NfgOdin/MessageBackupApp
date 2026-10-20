@@ -608,14 +608,14 @@ fun MainScreen(
                                             color = MaterialTheme.colorScheme.onTertiaryContainer
                                         )
                                     } else {
-                                        // AI Query Credits
+                                        // O.D.I.N. AI Query Runes
                                         Icon(
-                                            imageVector = Icons.Default.Bolt,
-                                            contentDescription = "AI Credits",
+                                            painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_raido),
+                                            contentDescription = "Odin's Runes",
                                             modifier = Modifier.size(13.dp),
                                             tint = MaterialTheme.colorScheme.primary
                                         )
-                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
                                         Text(
                                             text = "$aiCredits",
                                             style = MaterialTheme.typography.labelSmall,
@@ -631,14 +631,14 @@ fun MainScreen(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
 
-                                        // Auto-Backup Credits
+                                        // Auto-Backup Draupnir Rings
                                         Icon(
-                                            imageVector = Icons.Default.Refresh,
-                                            contentDescription = "Backup Credits",
+                                            painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_draupnir_ring),
+                                            contentDescription = "Draupnir Rings",
                                             modifier = Modifier.size(13.dp),
                                             tint = MaterialTheme.colorScheme.primary
                                         )
-                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
                                         Text(
                                             text = "$autoBackupCredits",
                                             style = MaterialTheme.typography.labelSmall,
@@ -750,7 +750,7 @@ fun MainScreen(
                                     Column {
                                         Text("Reward Arcade")
                                         Text(
-                                            if (isAdsRemoved) "PRO License Active" else "⚡ $aiCredits AI • 🔄 $autoBackupCredits Backups",
+                                            if (isAdsRemoved) "PRO License Active" else "ᚱ $aiCredits Runes • 💍 $autoBackupCredits Draupnir",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )
