@@ -62,7 +62,8 @@ data class ExportOptions(
     val excludedMessageIds: Set<Long> = emptySet(),
     val outputType: OutputDestination = OutputDestination.SHARE_SHEET,
     val zipPassword: String? = null,
-    val legalEvidenceMode: Boolean = false
+    val legalEvidenceMode: Boolean = false,
+    val customWatermarkText: String? = null
 )
 
 /**

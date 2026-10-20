@@ -601,6 +601,32 @@ class MainViewModel : ViewModel() {
                 threads.take(15)
             }
 
+            // Word, Emoji, and Timing Analysis
+            val stopWords = setOf(
+                "the", "be", "to", "of", "and", "a", "in", "that", "have", "i", "it", "for", "not",
+                "on", "with", "he", "as", "you", "do", "at", "this", "but", "his", "by", "from",
+                "they", "we", "say", "her", "she", "or", "an", "will", "my", "one", "all", "would",
+                "there", "their", "what", "so", "up", "out", "if", "about", "who", "get", "which",
+                "go", "me", "when", "make", "can", "like", "time", "no", "just", "him", "know",
+                "take", "people", "into", "year", "your", "good", "some", "could", "them", "see",
+                "other", "than", "then", "now", "look", "only", "come", "its", "over", "think",
+                "also", "back", "after", "use", "two", "how", "our", "work", "first", "well",
+                "way", "even", "new", "want", "because", "any", "these", "give", "day", "most", "us",
+                "is", "am", "are", "was", "were", "been", "has", "had", "did", "im", "dont", "cant", "ok", "yeah"
+            )
+
+            val sentWordCounts = mutableMapOf<String, Int>()
+            val receivedWordCounts = mutableMapOf<String, Int>()
+            val emojiCounts = mutableMapOf<String, Int>()
+            val emojiRegex = Regex("[\\p{So}\\p{Sk}\\p{Cs}\\x{1F300}-\\x{1FAFF}]")
+
+            var sentResponseGaps = 0L
+            var sentResponseCount = 0
+            var receivedResponseGaps = 0L
+            var receivedResponseCount = 0
+            var threadInitiatedByYou = 0
+            var threadInitiatedByOther = 0
+
             for ((index, thread) in sampleThreads.withIndex()) {
                 val pct = 15 + ((index.toFloat() / sampleThreads.size.toFloat()) * 80f).toInt()
                 _uiState.value = _uiState.value.copy(
@@ -610,9 +636,21 @@ class MainViewModel : ViewModel() {
                 val messages = app.currentTelephonyRepository.getMessagesForThread(
                     threadId = thread.threadId,
                     resolveContacts = false
-                )
+                ).sortedBy { it.timestamp }
+
+                if (messages.isNotEmpty()) {
+                    if (messages.first().direction == com.messagebackup.app.model.MessageDirection.OUTGOING) {
+                        threadInitiatedByYou++
+                    } else {
+                        threadInitiatedByOther++
+                    }
+                }
+
+                var prevMsg: com.messagebackup.app.model.MessageItem? = null
+
                 for (msg in messages) {
-                    if (msg.direction == com.messagebackup.app.model.MessageDirection.OUTGOING) totalSent++ else totalReceived++
+                    val isOutgoing = (msg.direction == com.messagebackup.app.model.MessageDirection.OUTGOING)
+                    if (isOutgoing) totalSent++ else totalReceived++
                     if (msg.type == com.messagebackup.app.model.MessageType.SMS) totalSms++ else totalMms++
                     totalMedia += msg.attachments.size
 
@@ -622,16 +660,63 @@ class MainViewModel : ViewModel() {
 
                     if (oldestTime == null || msg.timestamp < oldestTime) oldestTime = msg.timestamp
                     if (newestTime == null || msg.timestamp > newestTime) newestTime = msg.timestamp
+
+                    // Compute Response Velocity (gaps between alternating messages < 12 hours)
+                    if (prevMsg != null && prevMsg.direction != msg.direction) {
+                        val diffMillis = msg.timestamp - prevMsg.timestamp
+                        if (diffMillis in 1000..(12 * 3600 * 1000L)) {
+                            val diffMins = diffMillis / (60 * 1000L)
+                            if (isOutgoing) {
+                                sentResponseGaps += diffMins
+                                sentResponseCount++
+                            } else {
+                                receivedResponseGaps += diffMins
+                                receivedResponseCount++
+                            }
+                        }
+                    }
+                    prevMsg = msg
+
+                    // Word frequency extraction
+                    val body = msg.body
+                    if (!body.isNullOrBlank()) {
+                        // Extract emojis
+                        emojiRegex.findAll(body).forEach { match ->
+                            val emoji = match.value
+                            emojiCounts[emoji] = (emojiCounts[emoji] ?: 0) + 1
+                        }
+
+                        // Extract clean words
+                        val words = body.lowercase()
+                            .replace(Regex("[^a-z0-9\\s]"), " ")
+                            .split(Regex("\\s+"))
+                            .filter { it.length > 2 && it !in stopWords }
+
+                        val targetMap = if (isOutgoing) sentWordCounts else receivedWordCounts
+                        for (w in words) {
+                            targetMap[w] = (targetMap[w] ?: 0) + 1
+                        }
+                    }
                 }
             }
 
             _uiState.value = _uiState.value.copy(
                 statsProgressPct = 98,
-                statsProgressMessage = "Finalizing activity patterns & insights..."
+                statsProgressMessage = "Finalizing vocabulary & relationship insights..."
             )
 
             val busiestHour = hourCounts.indices.maxByOrNull { hourCounts[it] }
             val busiestDay = dayOfWeekCounts.maxByOrNull { it.value }?.key?.name?.lowercase()?.replaceFirstChar { it.uppercase() }
+
+            val topSent = sentWordCounts.entries.sortedByDescending { it.value }.take(5).map { it.key to it.value }
+            val topReceived = receivedWordCounts.entries.sortedByDescending { it.value }.take(5).map { it.key to it.value }
+            val topEmojisList = emojiCounts.entries.sortedByDescending { it.value }.take(6).map { it.key to it.value }
+
+            val avgSentMins = if (sentResponseCount > 0) sentResponseGaps / sentResponseCount else null
+            val avgReceivedMins = if (receivedResponseCount > 0) receivedResponseGaps / receivedResponseCount else null
+
+            val totalInits = (threadInitiatedByYou + threadInitiatedByOther).coerceAtLeast(1)
+            val initiationRatio = threadInitiatedByYou.toFloat() / totalInits.toFloat()
 
             val stats = com.messagebackup.app.model.ConversationStats(
                 totalThreads = totalThreads,
@@ -645,7 +730,13 @@ class MainViewModel : ViewModel() {
                 newestTimestamp = newestTime,
                 topContacts = topContacts,
                 busiestHour = busiestHour,
-                busiestDayOfWeek = busiestDay
+                busiestDayOfWeek = busiestDay,
+                topSentWords = topSent,
+                topReceivedWords = topReceived,
+                topEmojis = topEmojisList,
+                avgSentResponseMins = avgSentMins,
+                avgReceivedResponseMins = avgReceivedMins,
+                initiationRatio = initiationRatio
             )
 
             if (targetThreadId == null) {

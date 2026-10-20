@@ -300,7 +300,101 @@ fun ConversationStatsDialog(
 
                     PatternRow(label = "Archive Span", value = "$oldestStr — $newestStr")
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                    // Dynamics & Response Speed
+                    if (stats.avgSentResponseMins != null || stats.avgReceivedResponseMins != null) {
+                        val sentSpeed = stats.avgSentResponseMins?.let { "$it mins" } ?: "< 1 min"
+                        val recSpeed = stats.avgReceivedResponseMins?.let { "$it mins" } ?: "< 1 min"
+                        PatternRow(label = "Your Avg Reply Speed", value = sentSpeed)
+                        PatternRow(label = "Their Avg Reply Speed", value = recSpeed)
+                    }
+
+                    val initPct = (stats.initiationRatio * 100).toInt()
+                    PatternRow(label = "Conversation Starter", value = "$initPct% You • ${100 - initPct}% Them")
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp))
+
+                    // Most Used Emojis
+                    if (stats.topEmojis.isNotEmpty()) {
+                        Text(
+                            text = "Top Emojis",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            stats.topEmojis.forEach { (emoji, count) ->
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(text = emoji, style = MaterialTheme.typography.titleSmall)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "$count",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp))
+                    }
+
+                    // Top Words Breakdown
+                    if (stats.topSentWords.isNotEmpty() || stats.topReceivedWords.isNotEmpty()) {
+                        Text(
+                            text = "Most Frequent Words",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            // You sent
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "You Said Most",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                stats.topSentWords.forEach { (word, count) ->
+                                    Text(
+                                        text = "• \"$word\" ($count)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            // They sent
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "They Said Most",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                stats.topReceivedWords.forEach { (word, count) ->
+                                    Text(
+                                        text = "• \"$word\" ($count)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp))
+                    }
 
                     // Top Contacts
                     if (stats.topContacts.isNotEmpty()) {

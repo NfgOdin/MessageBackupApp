@@ -105,6 +105,7 @@ fun MediaVaultScreen(
     adManager: AdManager,
     isAdsRemoved: Boolean,
     onRefresh: () -> Unit,
+    onJumpToThread: ((Long) -> Unit)? = null,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -423,6 +424,10 @@ fun MediaVaultScreen(
             com.messagebackup.app.ui.dialogs.MediaLightboxDialog(
                 items = filteredItems,
                 initialIndex = initialIndex,
+                onJumpToThread = { threadId ->
+                    lightboxIndex = null
+                    onJumpToThread?.invoke(threadId)
+                },
                 onDismiss = { lightboxIndex = null }
             )
         } else {

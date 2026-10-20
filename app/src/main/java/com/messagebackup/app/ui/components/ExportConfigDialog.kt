@@ -76,6 +76,8 @@ fun ExportConfigDialog(
     var useZipPassword by remember { mutableStateOf(false) }
     var zipPassword by remember { mutableStateOf("") }
     var legalEvidenceMode by remember { mutableStateOf(false) }
+    var enableWatermark by remember { mutableStateOf(false) }
+    var watermarkText by remember { mutableStateOf("CONFIDENTIAL RECORD") }
 
     val scrollState = rememberScrollState()
     val dateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy").withZone(ZoneId.systemDefault())
@@ -534,6 +536,51 @@ fun ExportConfigDialog(
                     }
                 }
 
+                // Progressive Disclosure: Watermark Sub-option inside Legal Mode
+                if (legalEvidenceMode) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 32.dp, top = 4.dp, bottom = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { enableWatermark = !enableWatermark },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = enableWatermark,
+                                onCheckedChange = { enableWatermark = it }
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Apply Custom Document Watermark",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        if (enableWatermark) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            androidx.compose.material3.OutlinedTextField(
+                                value = watermarkText,
+                                onValueChange = { watermarkText = it },
+                                label = { Text("Watermark Text") },
+                                placeholder = { Text("e.g. EXHIBIT A, CONFIDENTIAL, CASE #") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(
+                                text = "Printed as a subtle, certified diagonal overlay across each evidentiary page.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+                }
+
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 // 7. Optional AES-256 Archive Password Encryption
@@ -597,7 +644,8 @@ fun ExportConfigDialog(
                             customEndDate = customEndDate,
                             outputType = destination,
                             zipPassword = if (useZipPassword) zipPassword.trim() else null,
-                            legalEvidenceMode = legalEvidenceMode
+                            legalEvidenceMode = legalEvidenceMode,
+                            customWatermarkText = if (legalEvidenceMode && enableWatermark) watermarkText.trim() else null
                         )
                     )
                 }

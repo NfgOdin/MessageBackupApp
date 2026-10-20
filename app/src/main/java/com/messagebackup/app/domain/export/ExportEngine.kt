@@ -150,7 +150,8 @@ class ExportEngine(
                                 messages = chunk,
                                 currentPart = partNum,
                                 totalParts = totalParts,
-                                legalEvidenceMode = options.legalEvidenceMode
+                                legalEvidenceMode = options.legalEvidenceMode,
+                                customWatermarkText = options.customWatermarkText
                             )
                         } else {
                             val documentContent = when (options.format) {

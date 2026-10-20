@@ -284,6 +284,13 @@ fun MainScreen(
             adManager = viewModel.adManager,
             isAdsRemoved = isAdsRemoved,
             onRefresh = { viewModel.loadMediaVault(forceRefresh = true) },
+            onJumpToThread = { threadId ->
+                val targetThread = uiState.threads.find { it.threadId == threadId }
+                if (targetThread != null) {
+                    viewModel.setVaultOpen(false)
+                    viewModel.openThreadPreview(targetThread)
+                }
+            },
             onNavigateBack = {
                 viewModel.adManager.showInterstitialAd(activity, isAdsRemoved) {
                     viewModel.setVaultOpen(false)

@@ -1,8 +1,10 @@
 package com.messagebackup.app.domain.export
 
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.messagebackup.app.model.ConversationThread
 import com.messagebackup.app.model.MessageDirection
@@ -33,7 +35,8 @@ class PdfFormatter(private val context: Context) {
         messages: List<MessageItem>,
         currentPart: Int = 1,
         totalParts: Int = 1,
-        legalEvidenceMode: Boolean = false
+        legalEvidenceMode: Boolean = false,
+        customWatermarkText: String? = null
     ): ByteArray {
         val pdfDocument = PdfDocument()
 
@@ -96,6 +99,25 @@ class PdfFormatter(private val context: Context) {
             strokeWidth = 1f
             isAntiAlias = true
         }
+
+        val watermarkPaint = Paint().apply {
+            color = Color.argb(32, 100, 110, 120) // Subtle transparent watermark
+            textSize = 38f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            isAntiAlias = true
+        }
+
+        fun drawWatermarkIfEnabled(c: Canvas) {
+            if (!customWatermarkText.isNullOrBlank()) {
+                c.save()
+                c.rotate(-45f, pageWidth / 2f, pageHeight / 2f)
+                c.drawText(customWatermarkText.uppercase(), pageWidth / 2f, pageHeight / 2f, watermarkPaint)
+                c.restore()
+            }
+        }
+
+        drawWatermarkIfEnabled(canvas)
 
         var y = margin + 10f
 
@@ -169,6 +191,7 @@ class PdfFormatter(private val context: Context) {
                 pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
                 page = pdfDocument.startPage(pageInfo)
                 canvas = page.canvas
+                drawWatermarkIfEnabled(canvas)
                 y = margin + 15f
             }
 
@@ -211,6 +234,7 @@ class PdfFormatter(private val context: Context) {
                 pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
                 page = pdfDocument.startPage(pageInfo)
                 canvas = page.canvas
+                drawWatermarkIfEnabled(canvas)
                 y = margin + 15f
             }
             y += 10f

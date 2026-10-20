@@ -530,6 +530,38 @@ class DesktopHtmlViewerFormatter {
             padding: 1px 3px;
         }
 
+        /* PRINT & COURT TRANSCRIPT STYLING */
+        @media print {
+            body {
+                background: #ffffff !important;
+                color: #000000 !important;
+                display: block !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            #sidebar, .chat-actions, .search-box, #lightbox {
+                display: none !important;
+            }
+            #main-pane {
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            .chat-messages {
+                overflow: visible !important;
+                height: auto !important;
+            }
+            .message-bubble {
+                border: 1px solid #ccc !important;
+                color: #000000 !important;
+                background: #f8f9fa !important;
+                page-break-inside: avoid;
+            }
+            .message-body {
+                color: #000000 !important;
+            }
+        }
+
         /* SCROLLBARS */
         ::-webkit-scrollbar {
             width: 8px;
