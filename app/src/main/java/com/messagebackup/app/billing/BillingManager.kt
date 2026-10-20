@@ -100,45 +100,57 @@ class BillingManager(
     }
 
     fun startConnection() {
-        billingClient.startConnection(object : BillingClientStateListener {
-            override fun onBillingSetupFinished(billingResult: BillingResult) {
-                if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                    queryPurchases()
-                    queryProductDetails()
+        try {
+            billingClient.startConnection(object : BillingClientStateListener {
+                override fun onBillingSetupFinished(billingResult: BillingResult) {
+                    if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                        queryPurchases()
+                        queryProductDetails()
+                    }
                 }
-            }
 
-            override fun onBillingServiceDisconnected() {
-                // Retry connection on next request
-            }
-        })
+                override fun onBillingServiceDisconnected() {
+                    // Retry connection on next request
+                }
+            })
+        } catch (_: Exception) {
+            // Gracefully ignore on devices without Google Play Services (e.g., Amazon Fire OS)
+        }
     }
 
     fun restorePurchases(onComplete: (Boolean) -> Unit = {}) {
-        val params = QueryPurchasesParams.newBuilder()
-            .setProductType(BillingClient.ProductType.INAPP)
-            .build()
+        try {
+            val params = QueryPurchasesParams.newBuilder()
+                .setProductType(BillingClient.ProductType.INAPP)
+                .build()
 
-        billingClient.queryPurchasesAsync(params) { billingResult, purchases ->
-            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                handlePurchasesList(purchases)
-                val isProActive = _isAdsRemoved.value
-                onComplete(isProActive)
-            } else {
-                onComplete(false)
+            billingClient.queryPurchasesAsync(params) { billingResult, purchases ->
+                if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                    handlePurchasesList(purchases)
+                    val isProActive = _isAdsRemoved.value
+                    onComplete(isProActive)
+                } else {
+                    onComplete(false)
+                }
             }
+        } catch (_: Exception) {
+            onComplete(false)
         }
     }
 
     private fun queryPurchases() {
-        val params = QueryPurchasesParams.newBuilder()
-            .setProductType(BillingClient.ProductType.INAPP)
-            .build()
+        try {
+            val params = QueryPurchasesParams.newBuilder()
+                .setProductType(BillingClient.ProductType.INAPP)
+                .build()
 
-        billingClient.queryPurchasesAsync(params) { billingResult, purchases ->
-            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                handlePurchasesList(purchases)
+            billingClient.queryPurchasesAsync(params) { billingResult, purchases ->
+                if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                    handlePurchasesList(purchases)
+                }
             }
+        } catch (_: Exception) {
+            // Play services not available
         }
     }
 
@@ -194,25 +206,40 @@ class BillingManager(
     }
 
     fun launchBillingFlow(activity: Activity, productId: String = PRODUCT_REMOVE_ADS) {
-        val details = _productDetailsMap.value[productId]
-        if (details != null) {
-            val flowParams = BillingFlowParams.newBuilder()
-                .setProductDetailsParamsList(
-                    listOf(
-                        BillingFlowParams.ProductDetailsParams.newBuilder()
-                            .setProductDetails(details)
-                            .build()
+        try {
+            val details = _productDetailsMap.value[productId]
+            if (details != null) {
+                val flowParams = BillingFlowParams.newBuilder()
+                    .setProductDetailsParamsList(
+                        listOf(
+                            BillingFlowParams.ProductDetailsParams.newBuilder()
+                                .setProductDetails(details)
+                                .build()
+                        )
                     )
-                )
-                .build()
-            billingClient.launchBillingFlow(activity, flowParams)
-        } else {
-            // Re-query in background in case connection was delayed
-            queryProductDetails()
+                    .build()
+                val result = billingClient.launchBillingFlow(activity, flowParams)
+                if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                    android.widget.Toast.makeText(
+                        activity,
+                        "Store unavailable on this device. You can earn all perks 100% free in the Arcade!",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            } else {
+                // Re-query in background in case connection was delayed
+                queryProductDetails()
+                android.widget.Toast.makeText(
+                    activity,
+                    "Connecting to store... If unavailable, all perks can be earned free in the Arcade!",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        } catch (_: Exception) {
             android.widget.Toast.makeText(
                 activity,
-                "Connecting to Google Play Store... Please try again in a moment.",
-                android.widget.Toast.LENGTH_SHORT
+                "Store service not available on this device. All features can be earned free in the Arcade!",
+                android.widget.Toast.LENGTH_LONG
             ).show()
         }
     }
