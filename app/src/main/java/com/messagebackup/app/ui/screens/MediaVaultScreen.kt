@@ -147,8 +147,13 @@ fun MediaVaultScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
+                        val countText = if (filteredItems.size == mediaItems.size) {
+                            "${mediaItems.size} total attachments"
+                        } else {
+                            "${filteredItems.size} of ${mediaItems.size} attachments"
+                        }
                         Text(
-                            text = "${filteredItems.size} items â€¢ ${mediaItems.size} total attachments",
+                            text = countText,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -533,7 +538,7 @@ private fun MediaPreviewDialog(
     val context = LocalContext.current
     var fullBitmap by remember(item.uriString) { mutableStateOf<android.graphics.Bitmap?>(null) }
     val dateStr = remember(item.timestamp) {
-        SimpleDateFormat("MMM dd, yyyy â€¢ h:mm a", Locale.getDefault()).format(Date(item.timestamp))
+        SimpleDateFormat("MMM dd, yyyy • h:mm a", Locale.getDefault()).format(Date(item.timestamp))
     }
 
     LaunchedEffect(item.uriString) {
