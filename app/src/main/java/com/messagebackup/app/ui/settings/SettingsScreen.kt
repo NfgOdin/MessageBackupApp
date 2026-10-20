@@ -487,254 +487,179 @@ fun SettingsScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                         Spacer(modifier = Modifier.height(8.dp))
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { prefs.setOutputDestination(OutputDestination.SHARE_SHEET) }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(
-                    selected = (outputDestination == OutputDestination.SHARE_SHEET),
-                    onClick = { prefs.setOutputDestination(OutputDestination.SHARE_SHEET) }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column {
-                    Text(text = "Android Share Sheet (Default)", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = "Opens Drive, Gmail, WhatsApp, or local file manager",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+                        val isCloudSelected = outputDestination in listOf(
+                            OutputDestination.GOOGLE_DRIVE,
+                            OutputDestination.ONEDRIVE,
+                            OutputDestination.DROPBOX,
+                            OutputDestination.WEBDAV_NAS
+                        )
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { folderPickerLauncher.launch(null) }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(
-                    selected = (outputDestination == OutputDestination.PERSISTENT_DIRECTORY),
-                    onClick = { folderPickerLauncher.launch(null) }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Save to Custom Folder (SD / Device)", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = "Folder: $safFolderDisplay (Tap to select)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                Icon(imageVector = Icons.Default.Folder, contentDescription = "Folder", tint = MaterialTheme.colorScheme.primary)
-            }
-
-            // Google Drive Cloud Destination
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (!isAutoBackupUnlocked) {
-                            showDriveUnlockDialog = true
-                        } else {
-                            prefs.setOutputDestination(OutputDestination.GOOGLE_DRIVE)
-                        }
-                    }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(
-                    selected = (outputDestination == OutputDestination.GOOGLE_DRIVE),
-                    onClick = {
-                        if (!isAutoBackupUnlocked) {
-                            showDriveUnlockDialog = true
-                        } else {
-                            prefs.setOutputDestination(OutputDestination.GOOGLE_DRIVE)
-                        }
-                    }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "Google Drive (Cloud Sync)", style = MaterialTheme.typography.bodyMedium)
-                        if (!isAutoBackupUnlocked) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = MaterialTheme.shapes.extraSmall,
-                                modifier = Modifier.padding(start = 6.dp)
+                        // 2-choice category switch: Local & Device vs Cloud Vault
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        if (isCloudSelected) {
+                                            prefs.setOutputDestination(OutputDestination.SHARE_SHEET)
+                                        }
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
+                                RadioButton(
+                                    selected = !isCloudSelected,
+                                    onClick = {
+                                        if (isCloudSelected) {
+                                            prefs.setOutputDestination(OutputDestination.SHARE_SHEET)
+                                        }
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = "Local / Device", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        if (!isCloudSelected) {
+                                            if (!isAutoBackupUnlocked) {
+                                                showDriveUnlockDialog = true
+                                            } else {
+                                                prefs.setOutputDestination(OutputDestination.GOOGLE_DRIVE)
+                                            }
+                                        }
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isCloudSelected,
+                                    onClick = {
+                                        if (!isCloudSelected) {
+                                            if (!isAutoBackupUnlocked) {
+                                                showDriveUnlockDialog = true
+                                            } else {
+                                                prefs.setOutputDestination(OutputDestination.GOOGLE_DRIVE)
+                                            }
+                                        }
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = "Cloud Vault", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (!isCloudSelected) {
+                            // Local Options: Share Sheet vs Custom Folder
+                            Column(modifier = Modifier.padding(start = 12.dp)) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { prefs.setOutputDestination(OutputDestination.SHARE_SHEET) }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = (outputDestination == OutputDestination.SHARE_SHEET),
+                                        onClick = { prefs.setOutputDestination(OutputDestination.SHARE_SHEET) }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(text = "Android Share Sheet (Default)", style = MaterialTheme.typography.bodyMedium)
+                                        Text(
+                                            text = "Opens Drive, Gmail, WhatsApp, or local file manager",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { folderPickerLauncher.launch(null) }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = (outputDestination == OutputDestination.PERSISTENT_DIRECTORY),
+                                        onClick = { folderPickerLauncher.launch(null) }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = "Save to Custom Folder (SD / Device)", style = MaterialTheme.typography.bodyMedium)
+                                        Text(
+                                            text = "Folder: $safFolderDisplay (Tap to select)",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Icon(imageVector = Icons.Default.Folder, contentDescription = "Folder", tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        } else {
+                            // Cloud Vault Options: Compact Cloud Provider Chips/Pills
+                            Column(modifier = Modifier.padding(start = 12.dp)) {
+                                val cloudProviders = listOf(
+                                    OutputDestination.GOOGLE_DRIVE to "Google Drive",
+                                    OutputDestination.ONEDRIVE to "OneDrive",
+                                    OutputDestination.DROPBOX to "Dropbox",
+                                    OutputDestination.WEBDAV_NAS to "WebDAV / NAS"
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    cloudProviders.forEach { (dest, label) ->
+                                        val isChosen = (outputDestination == dest)
+                                        Surface(
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = if (isChosen) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable {
+                                                    if (!isAutoBackupUnlocked) {
+                                                        showDriveUnlockDialog = true
+                                                    } else {
+                                                        prefs.setOutputDestination(dest)
+                                                    }
+                                                }
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Normal,
+                                                textAlign = TextAlign.Center,
+                                                color = if (isChosen) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+                                val cloudSubtitle = when (outputDestination) {
+                                    OutputDestination.GOOGLE_DRIVE -> "Upload directly to your Google Drive account"
+                                    OutputDestination.ONEDRIVE -> "Upload directly to your Microsoft OneDrive storage"
+                                    OutputDestination.DROPBOX -> "Upload directly to your Dropbox cloud account"
+                                    OutputDestination.WEBDAV_NAS -> "Upload to local Synology, Nextcloud, or WebDAV server"
+                                    else -> "Direct cloud storage upload"
+                                }
                                 Text(
-                                    text = "PRO / AUTO",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    text = if (isAutoBackupUnlocked) cloudSubtitle else "Unlock Cloud Vault with Auto-Backup ($autoBackupPrice) or Pro ($productPrice)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isAutoBackupUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
-                    }
-                    Text(
-                        text = if (isAutoBackupUnlocked) "Direct cloud upload to your Google Drive account" else "Unlock with Auto-Backup ($autoBackupPrice) or Pro ($productPrice)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isAutoBackupUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Icon(imageVector = Icons.Default.CloudUpload, contentDescription = "Drive", tint = MaterialTheme.colorScheme.primary)
-            }
-
-            // Microsoft OneDrive
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (!isAutoBackupUnlocked) {
-                            showDriveUnlockDialog = true
-                        } else {
-                            prefs.setOutputDestination(OutputDestination.ONEDRIVE)
-                        }
-                    }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(
-                    selected = (outputDestination == OutputDestination.ONEDRIVE),
-                    onClick = {
-                        if (!isAutoBackupUnlocked) {
-                            showDriveUnlockDialog = true
-                        } else {
-                            prefs.setOutputDestination(OutputDestination.ONEDRIVE)
-                        }
-                    }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "Microsoft OneDrive", style = MaterialTheme.typography.bodyMedium)
-                        if (!isAutoBackupUnlocked) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = MaterialTheme.shapes.extraSmall,
-                                modifier = Modifier.padding(start = 6.dp)
-                            ) {
-                                Text(
-                                    text = "PRO / AUTO",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
-                    }
-                    Text(
-                        text = if (isAutoBackupUnlocked) "Direct cloud upload to your OneDrive storage" else "Unlock with Auto-Backup ($autoBackupPrice) or Pro ($productPrice)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isAutoBackupUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Icon(imageVector = Icons.Default.CloudUpload, contentDescription = "OneDrive", tint = MaterialTheme.colorScheme.primary)
-            }
-
-            // Dropbox
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (!isAutoBackupUnlocked) {
-                            showDriveUnlockDialog = true
-                        } else {
-                            prefs.setOutputDestination(OutputDestination.DROPBOX)
-                        }
-                    }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(
-                    selected = (outputDestination == OutputDestination.DROPBOX),
-                    onClick = {
-                        if (!isAutoBackupUnlocked) {
-                            showDriveUnlockDialog = true
-                        } else {
-                            prefs.setOutputDestination(OutputDestination.DROPBOX)
-                        }
-                    }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "Dropbox", style = MaterialTheme.typography.bodyMedium)
-                        if (!isAutoBackupUnlocked) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = MaterialTheme.shapes.extraSmall,
-                                modifier = Modifier.padding(start = 6.dp)
-                            ) {
-                                Text(
-                                    text = "PRO / AUTO",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
-                    }
-                    Text(
-                        text = if (isAutoBackupUnlocked) "Direct cloud upload to your Dropbox account" else "Unlock with Auto-Backup ($autoBackupPrice) or Pro ($productPrice)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isAutoBackupUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Icon(imageVector = Icons.Default.CloudUpload, contentDescription = "Dropbox", tint = MaterialTheme.colorScheme.primary)
-            }
-
-            // WebDAV / Local NAS / Nextcloud
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (!isAutoBackupUnlocked) {
-                            showDriveUnlockDialog = true
-                        } else {
-                            prefs.setOutputDestination(OutputDestination.WEBDAV_NAS)
-                        }
-                    }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(
-                    selected = (outputDestination == OutputDestination.WEBDAV_NAS),
-                    onClick = {
-                        if (!isAutoBackupUnlocked) {
-                            showDriveUnlockDialog = true
-                        } else {
-                            prefs.setOutputDestination(OutputDestination.WEBDAV_NAS)
-                        }
-                    }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "WebDAV / Local NAS / Nextcloud", style = MaterialTheme.typography.bodyMedium)
-                        if (!isAutoBackupUnlocked) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = MaterialTheme.shapes.extraSmall,
-                                modifier = Modifier.padding(start = 6.dp)
-                            ) {
-                                Text(
-                                    text = "PRO / AUTO",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
-                    }
-                    Text(
-                        text = if (isAutoBackupUnlocked) "Upload to private home server, Synology, or Nextcloud" else "Unlock with Auto-Backup ($autoBackupPrice) or Pro ($productPrice)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isAutoBackupUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Icon(imageVector = Icons.Default.Lan, contentDescription = "WebDAV", tint = MaterialTheme.colorScheme.primary)
-            }
                     } // End if (isSaveLocationExpanded)
                 }
             }
@@ -912,7 +837,46 @@ fun SettingsScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        ExportFormat.values().forEach { format ->
+                        Text(
+                            text = "VISUAL ARCHIVE",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        )
+                        listOf(ExportFormat.HTML, ExportFormat.DESKTOP_VIEWER, ExportFormat.PDF).forEach { format ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { prefs.setDefaultFormat(format) }
+                                    .padding(vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (defaultFormat == format),
+                                    onClick = { prefs.setDefaultFormat(format) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(text = format.displayName, style = MaterialTheme.typography.bodyMedium)
+                                    if (format == ExportFormat.DESKTOP_VIEWER) {
+                                        Text(
+                                            text = "Offline index.html viewer with search & media",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "DATA & SPREADSHEET",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        )
+                        listOf(ExportFormat.CSV, ExportFormat.MARKDOWN, ExportFormat.PLAIN_TEXT).forEach { format ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -926,6 +890,37 @@ fun SettingsScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(text = format.displayName, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "PHONE RESTORATION",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        )
+                        listOf(ExportFormat.JSON, ExportFormat.XML).forEach { format ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { prefs.setDefaultFormat(format) }
+                                    .padding(vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (defaultFormat == format),
+                                    onClick = { prefs.setDefaultFormat(format) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(text = format.displayName, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        text = "Standard backup format for restoring to phone",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
@@ -1347,6 +1342,65 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
+                    // O.D.I.N. Persona Preset Pills
+                    Text(
+                        text = "O.D.I.N. Response Style",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val isPrecise = (odinTemperature <= 0.25f)
+                        val isBalanced = (odinTemperature > 0.25f && odinTemperature <= 0.75f)
+                        val isCreative = (odinTemperature > 0.75f)
+
+                        listOf(
+                            Triple("Precise", "Forensic", isPrecise) to {
+                                prefs.setOdinTemperature(0.15f)
+                                prefs.setOdinTopP(0.85f)
+                            },
+                            Triple("Balanced", "Default", isBalanced) to {
+                                prefs.setOdinTemperature(0.70f)
+                                prefs.setOdinTopP(0.95f)
+                            },
+                            Triple("Creative", "Chatty", isCreative) to {
+                                prefs.setOdinTemperature(0.95f)
+                                prefs.setOdinTopP(0.98f)
+                            }
+                        ).forEach { (meta, action) ->
+                            val (title, subtitle, selected) = meta
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { action() }
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = title,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = subtitle,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     // Collapsible Advanced Model Tuning & System Prompt Section
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -1570,23 +1624,13 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 8. Privacy PIN & Biometric Lock
+            // 8. Privacy PIN & Biometric Lock (Streamlined Master Vault Lock)
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "🔒 Privacy PIN & Biometric Lock",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Protect your message archive and O.D.I.N. Copilot with your phone's Fingerprint / Face Unlock or a custom SHA-256 Privacy PIN.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    val isAnyLockActive = appLockEnabled || odinLockEnabled
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1594,57 +1638,113 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(text = "Lock App on Startup", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             Text(
-                                text = "Require PIN or Biometrics when opening the app",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "🔒 App Vault Lock",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (isAnyLockActive) "Protected with Fingerprint / PIN" else "Disabled (Tap to protect your archives)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isAnyLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Switch(
-                            checked = appLockEnabled,
-                            onCheckedChange = { enabled ->
-                                prefs.setAppLockEnabled(enabled)
-                                if (enabled && privacyPinHash.isBlank()) {
-                                    showSetPinDialog = true
+                            checked = isAnyLockActive,
+                            onCheckedChange = { enable ->
+                                if (enable) {
+                                    prefs.setAppLockEnabled(true)
+                                    prefs.setOdinLockEnabled(true)
+                                    if (privacyPinHash.isBlank()) {
+                                        showSetPinDialog = true
+                                    }
+                                } else {
+                                    prefs.setAppLockEnabled(false)
+                                    prefs.setOdinLockEnabled(false)
                                 }
                             }
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    if (isAnyLockActive) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = "Lock O.D.I.N. & Document Viewer", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                text = "Require PIN or Biometrics before opening AI or viewing archives",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = odinLockEnabled,
-                            onCheckedChange = { enabled ->
-                                prefs.setOdinLockEnabled(enabled)
-                                if (enabled && privacyPinHash.isBlank()) {
-                                    showSetPinDialog = true
+                        Column(modifier = Modifier.padding(start = 8.dp)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val newState = !appLockEnabled
+                                        prefs.setAppLockEnabled(newState)
+                                        if (newState && privacyPinHash.isBlank()) showSetPinDialog = true
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.Checkbox(
+                                    checked = appLockEnabled,
+                                    onCheckedChange = { newState ->
+                                        prefs.setAppLockEnabled(newState)
+                                        if (newState && privacyPinHash.isBlank()) showSetPinDialog = true
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column {
+                                    Text(text = "Lock App on Launch", style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        text = "Require authentication when opening Muninn",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
-                        )
-                    }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val newState = !odinLockEnabled
+                                        prefs.setOdinLockEnabled(newState)
+                                        if (newState && privacyPinHash.isBlank()) showSetPinDialog = true
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.Checkbox(
+                                    checked = odinLockEnabled,
+                                    onCheckedChange = { newState ->
+                                        prefs.setOdinLockEnabled(newState)
+                                        if (newState && privacyPinHash.isBlank()) showSetPinDialog = true
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column {
+                                    Text(text = "Lock O.D.I.N. & Document Viewer", style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        text = "Require authentication before opening AI or viewing archives",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
 
-                    OutlinedButton(
-                        onClick = { showSetPinDialog = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(if (privacyPinHash.isNotBlank()) "Change Custom Privacy PIN" else "Set Custom Privacy PIN")
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            OutlinedButton(
+                                onClick = { showSetPinDialog = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(if (privacyPinHash.isNotBlank()) "Change Security PIN" else "Set Custom Security PIN")
+                            }
+                        }
                     }
                 }
             }

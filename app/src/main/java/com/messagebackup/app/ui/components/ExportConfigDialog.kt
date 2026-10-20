@@ -1,6 +1,7 @@
 package com.messagebackup.app.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -89,13 +91,22 @@ fun ExportConfigDialog(
                     .fillMaxWidth()
                     .verticalScroll(scrollState)
             ) {
-                // 1. Document Format
+                // 1. Document Format (Categorized into Visual Archive, Data & Text, and Backup)
                 Text(
                     text = "Document Format",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
-                ExportFormat.values().forEach { format ->
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Visual / Reading Formats
+                Text(
+                    text = "VISUAL ARCHIVE",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                )
+                listOf(ExportFormat.HTML, ExportFormat.DESKTOP_VIEWER, ExportFormat.PDF).forEach { format ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -112,17 +123,66 @@ fun ExportConfigDialog(
                             Text(text = format.displayName, style = MaterialTheme.typography.bodyMedium)
                             if (format == ExportFormat.DESKTOP_VIEWER) {
                                 Text(
-                                    text = "💻 Includes offline index.html app with search & full media viewer for Mac/PC",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            } else if (format == ExportFormat.JSON || format == ExportFormat.XML) {
-                                Text(
-                                    text = "⚠️ Required format to restore conversations back to an Android phone",
+                                    text = "💻 Includes offline index.html viewer for PC/Mac with search & media",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "DATA & SPREADSHEET",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                )
+                listOf(ExportFormat.CSV, ExportFormat.MARKDOWN, ExportFormat.PLAIN_TEXT).forEach { format ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedFormat = format }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = (selectedFormat == format),
+                            onClick = { selectedFormat = format }
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = format.displayName, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "PHONE RESTORATION",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                )
+                listOf(ExportFormat.JSON, ExportFormat.XML).forEach { format ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedFormat = format }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = (selectedFormat == format),
+                            onClick = { selectedFormat = format }
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Column {
+                            Text(text = format.displayName, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                text = "⚠️ Standard schema to restore messages back to phone",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }
@@ -270,32 +330,92 @@ fun ExportConfigDialog(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                // 4. Date Range Filter & Custom Picker
+                // 4. Date Range Filter (Streamlined All Time vs Filter by Date)
                 Text(
                     text = "Date Range Filter",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
-                DateRangeFilter.values().forEach { range ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // "All Time" option
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                selectedDateRange = range
-                                if (range == DateRangeFilter.CUSTOM) showDatePicker = true
-                            }
-                            .padding(vertical = 2.dp),
+                            .weight(1f)
+                            .clickable { selectedDateRange = DateRangeFilter.ALL_TIME }
+                            .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
-                            selected = (selectedDateRange == range),
+                            selected = (selectedDateRange == DateRangeFilter.ALL_TIME),
+                            onClick = { selectedDateRange = DateRangeFilter.ALL_TIME }
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = "All Time", style = MaterialTheme.typography.bodyMedium)
+                    }
+
+                    // "Filter by Date" option
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                if (selectedDateRange == DateRangeFilter.ALL_TIME) {
+                                    selectedDateRange = DateRangeFilter.LAST_30_DAYS
+                                }
+                            }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = (selectedDateRange != DateRangeFilter.ALL_TIME),
                             onClick = {
-                                selectedDateRange = range
-                                if (range == DateRangeFilter.CUSTOM) showDatePicker = true
+                                if (selectedDateRange == DateRangeFilter.ALL_TIME) {
+                                    selectedDateRange = DateRangeFilter.LAST_30_DAYS
+                                }
                             }
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = range.displayName, style = MaterialTheme.typography.bodyMedium)
+                        Text(text = "Filter by Date", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+
+                // If Filter by Date is selected, show quick chips for 30D, 90D, 1Y, and Custom
+                if (selectedDateRange != DateRangeFilter.ALL_TIME) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, top = 2.dp, bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val chips = listOf(
+                            DateRangeFilter.LAST_30_DAYS to "30 Days",
+                            DateRangeFilter.LAST_90_DAYS to "90 Days",
+                            DateRangeFilter.LAST_YEAR to "1 Year",
+                            DateRangeFilter.CUSTOM to "Custom..."
+                        )
+                        chips.forEach { (range, label) ->
+                            val isSelected = (selectedDateRange == range)
+                            androidx.compose.material3.Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.clickable {
+                                    selectedDateRange = range
+                                    if (range == DateRangeFilter.CUSTOM) showDatePicker = true
+                                }
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -305,7 +425,7 @@ fun ExportConfigDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 32.dp, top = 2.dp),
+                            .padding(start = 16.dp, top = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(text = "Range: $startStr - $endStr", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)

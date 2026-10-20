@@ -846,17 +846,53 @@ fun MainScreen(
                     }
                 }
             } else if (uiState.isSelectionMode && uiState.selectedThreadIds.isNotEmpty()) {
-                FloatingActionButton(
-                    onClick = { initiateExport() },
-                    containerColor = MaterialTheme.colorScheme.primary
+                // Floating Batch Actions Pill
+                Surface(
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shadowElevation = 6.dp,
+                    tonalElevation = 6.dp,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(imageVector = Icons.Default.FileDownload, contentDescription = "Export")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "Export (${uiState.selectedThreadIds.size})")
+                        Text(
+                            text = "${uiState.selectedThreadIds.size} Selected",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+
+                        Button(
+                            onClick = { initiateExport() },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            shape = RoundedCornerShape(20.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FileDownload,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = "Export", style = MaterialTheme.typography.labelMedium)
+                        }
+
+                        IconButton(
+                            onClick = { viewModel.clearSelection() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear Selection",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }
