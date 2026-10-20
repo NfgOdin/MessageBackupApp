@@ -56,9 +56,9 @@ import androidx.compose.ui.draw.clip
 import com.messagebackup.app.ads.AdManager
 import com.messagebackup.app.data.preferences.AppPreferences
 
-enum class RewardOption(val title: String, val subtitle: String, val iconVector: androidx.compose.ui.graphics.vector.ImageVector) {
-    ODIN_AI("+2 O.D.I.N. AI Queries", "Watch 1 ad -> Instant +2 message intelligence queries", Icons.Default.AutoAwesome),
-    AUTO_BACKUP("+1 Auto-Backup Night (3 Ads)", "Watch 3 ads -> Unlocks 1 automated backup night", Icons.Default.Schedule)
+enum class RewardOption(val amountLabel: String, val subtitle: String, val iconResId: Int) {
+    ODIN_AI("+2", "Watch 1 short ad to receive 2 Runes for O.D.I.N. AI message queries", com.messagebackup.app.R.drawable.ic_rune_raido),
+    AUTO_BACKUP("+1", "Watch 3 short ads to receive 1 Draupnir Ring for scheduled cloud backup", com.messagebackup.app.R.drawable.ic_draupnir_ring)
 }
 
 /**
@@ -224,19 +224,26 @@ fun CreditArcadeDialog(
                                 selected = isSelected,
                                 onClick = { selectedOption = option }
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = option.iconVector,
-                                contentDescription = null,
-                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = option.title,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = option.amountLabel,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Icon(
+                                        painter = androidx.compose.ui.res.painterResource(id = option.iconResId),
+                                        contentDescription = null,
+                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = option.subtitle,
                                     style = MaterialTheme.typography.labelSmall,
