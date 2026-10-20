@@ -138,9 +138,9 @@ fun MessageCopilotScreen(
 
     val chatMessages = remember {
         val greeting = if (targetContactName == "All Conversations" || targetContactName.isBlank()) {
-            "Greetings! I am O.D.I.N. (Omniscient Document & Insights Navigator). Ask me anything across your recent message archive — such as dates, deadlines, reservations, door codes, or summaries."
+            "Hail, traveler. I am O.D.I.N. (Omniscient Document & Insights Navigator). My raven Muninn remembers all words, oaths, dates, and secrets in these vaults. What wisdom or forgotten truth dost thou seek?"
         } else {
-            "Greetings! I am O.D.I.N. (Omniscient Document & Insights Navigator). Ask me anything about your conversations with $targetContactName — such as door codes, reservations, past agreements, or summaries."
+            "Hail, traveler. I am O.D.I.N. The archives of your words with $targetContactName are open before me. Ask of their oaths, door codes, dates, or hidden truths, and Muninn shall find them."
         }
         mutableStateListOf(
             OdinChatMessage(

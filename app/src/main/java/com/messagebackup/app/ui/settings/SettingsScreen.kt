@@ -1657,7 +1657,22 @@ fun SettingsScreen(
                             ) {
                                 Button(
                                     onClick = {
-                                        val concise = "You are O.D.I.N., an ultra-concise assistant. Answer factually in 1-2 bullet points. Never include conversational filler."
+                                        prefs.resetOdinSystemPrompt()
+                                        promptEditText = ""
+                                        Toast.makeText(context, "Activated Allfather Signature Persona!", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("👑 Allfather", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                                Button(
+                                    onClick = {
+                                        val concise = """You are O.D.I.N. Concise Assistant.
+Rules:
+1. Answer strictly based on facts and dates in the message transcript.
+2. Provide answers in 1-2 direct bullet points.
+3. No filler, greetings, or conversational preamble. State the facts immediately."""
                                         promptEditText = concise
                                         prefs.setOdinCustomSystemPrompt(concise)
                                     },
@@ -1668,7 +1683,11 @@ fun SettingsScreen(
                                 }
                                 Button(
                                     onClick = {
-                                        val forensic = "You are O.D.I.N. Forensic Archivist. Quote relevant text messages verbatim with timestamps. Highlight discrepancies and confirm sender IDs."
+                                        val forensic = """You are O.D.I.N. Forensic Archivist.
+Rules:
+1. Ground answers 100% on verifiable text in the message transcript.
+2. Quote relevant messages verbatim with ISO/exact timestamps and verified sender phone numbers/handles.
+3. Highlight discrepancies, omissions, or unverified claims with evidentiary objectivity."""
                                         promptEditText = forensic
                                         prefs.setOdinCustomSystemPrompt(forensic)
                                     },
