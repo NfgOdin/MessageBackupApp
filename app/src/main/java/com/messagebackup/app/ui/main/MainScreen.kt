@@ -879,75 +879,82 @@ fun MainScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 10.dp)
                             ) {
-                                // Top Line: Name on left, Date anchored to the right
+                                // 2-Column Balanced Header
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.Top
                                 ) {
-                                    Text(
-                                        text = uiState.selectedThreadForPreview!!.displayName,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f, fill = false)
-                                    )
-                                    if (messages.isNotEmpty()) {
-                                        Surface(
-                                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.padding(start = 8.dp)
-                                        ) {
+                                    // Left Column: Contact Name and Phone/Address
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(end = 12.dp)
+                                    ) {
+                                        Text(
+                                            text = uiState.selectedThreadForPreview!!.displayName,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        )
+                                        if (uiState.selectedThreadForPreview!!.contactName != null && uiState.selectedThreadForPreview!!.address.isNotBlank()) {
                                             Text(
-                                                text = "📅 $firstMsgDate - $lastMsgDate",
-                                                style = MaterialTheme.typography.labelSmall,
+                                                text = uiState.selectedThreadForPreview!!.address,
+                                                style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                modifier = Modifier.padding(top = 2.dp)
                                             )
                                         }
                                     }
-                                }
 
-                                // Second Line: Phone number / address under name
-                                if (uiState.selectedThreadForPreview!!.contactName != null && uiState.selectedThreadForPreview!!.address.isNotBlank()) {
-                                    Text(
-                                        text = uiState.selectedThreadForPreview!!.address,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(top = 1.dp)
-                                    )
-                                }
+                                    // Right Column: Date on top, Messages underneath, Media Items underneath that
+                                    Column(
+                                        horizontalAlignment = Alignment.End
+                                    ) {
+                                        if (messages.isNotEmpty()) {
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "📅 $firstMsgDate - $lastMsgDate",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                        }
 
-                                // Third Line: Message count + refreshing status
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.padding(top = 3.dp)
-                                ) {
-                                    Text(
-                                        text = "💬 ${messages.size} messages",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    if (uiState.isPreviewLoading) {
-                                        Text(
-                                            text = "• Refreshing...",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = "💬 ${messages.size} messages",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            if (uiState.isPreviewLoading) {
+                                                Text(
+                                                    text = "• Refreshing...",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+
+                                        if (totalMediaCount > 0) {
+                                            Text(
+                                                text = "📷 $totalMediaCount media items",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(top = 2.dp)
+                                            )
+                                        }
                                     }
-                                }
-
-                                // Fourth Line: Media amount neatly underneath the messages count
-                                if (totalMediaCount > 0) {
-                                    Text(
-                                        text = "📷 $totalMediaCount media items (photos, videos, audio)",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(top = 2.dp)
-                                    )
                                 }
                             }
                         }
