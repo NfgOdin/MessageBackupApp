@@ -18,7 +18,7 @@ When a release command is triggered, immediately update:
    - `versionCode = <calculated_code>`
    - `versionName = "<MAJOR.MINOR.PATCH>"`
 2. `app/src/main/java/com/messagebackup/app/ui/settings/SettingsScreen.kt`:
-   - Update the About section text: `Message Backup & Export v<MAJOR.MINOR.PATCH>`
+   - Update the About section text: `Muninn v<MAJOR.MINOR.PATCH>`
 
 ## 3. Verification & Verification Output
 1. Run `.\gradlew.bat testDebugUnitTest` to verify no regressions.

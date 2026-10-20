@@ -1,6 +1,6 @@
 # Google Play Store v1.0.0 Submission & SMS Permission Declaration Guide
 
-Because **Message Backup App** requests `android.permission.READ_SMS` and `android.permission.READ_CONTACTS`, Google Play requires a **Permissions Declaration Form** and a short **Video Walkthrough** during submission under the **SMS and Call Log Permissions Policy** ("Backup and restore for users" exception).
+Because **Muninn** requests `android.permission.READ_SMS` and `android.permission.READ_CONTACTS`, Google Play requires a **Permissions Declaration Form** and a short **Video Walkthrough** during submission under the **SMS and Call Log Permissions Policy** ("Backup and restore for users" exception).
 
 This guide provides copy-paste templates and a step-by-step checklist so your v1.0.0 submission passes review on the first try.
 
@@ -15,7 +15,7 @@ In **Google Play Console -> App content -> Sensitive app permissions -> SMS and 
 
 ### Copy-Paste Justification (Instructions for Reviewer)
 > **Core Purpose & Permission Justification:**
-> Message Backup App is a user-initiated SMS/MMS backup, archiving, and multi-format export tool (supporting PDF, HTML, TXT, CSV, JSON, DOCX, XLSX, and AES-256 encrypted ZIP archives).
+> Muninn is a user-initiated SMS/MMS backup, archiving, and multi-format export tool (supporting PDF, HTML, TXT, CSV, JSON, DOCX, XLSX, and AES-256 encrypted ZIP archives).
 >
 > - `android.permission.READ_SMS`: Strictly required to read the user's on-device SMS and MMS conversations from `Telephony.Sms` and `Telephony.Mms` providers so the user can preview, select, back up, and export their message history into portable local files.
 > - `android.permission.READ_CONTACTS`: Used exclusively on-device to resolve phone numbers to human-readable contact names and avatars in the conversation list and exported backup documents.
@@ -45,7 +45,7 @@ Record a quick 30–45 second screen recording showing:
 
 ## 3. Data Safety Form Answers (Play Console -> App content -> Data safety)
 
-Because Message Backup App operates locally on the user's device by default and does not transmit personal data to any developer-owned backend servers:
+Because Muninn operates locally on the user's device by default and does not transmit personal data to any developer-owned backend servers:
 
 - **Does your app collect or share any of the required user data types?**
   - Note: Under Google Play's Data Safety rules, data processed **only locally on the user's device** and not sent off-device to the developer does **not** count as "collected," EXCEPT for third-party SDKs like **Google AdMob** (for free-tier ads) and **Google Play Billing**.

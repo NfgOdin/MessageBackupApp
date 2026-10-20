@@ -1,6 +1,6 @@
 # Google Play Store Compliance & Submission Guide
 
-This document outlines the exact compliance requirements, video demonstration instructions, and declaration form details required to ensure **Message Backup & Export** passes Google Play review without rejection.
+This document outlines the exact compliance requirements, video demonstration instructions, and declaration form details required to ensure **Muninn** passes Google Play review without rejection.
 
 ---
 
@@ -22,7 +22,7 @@ When preparing your Play Console store release, navigate to:
 
 ### B. Core Functionality Justification Text
 Copy and paste the following into the declaration form text box:
-> *"Message Backup & Export is a local backup and utility application that allows users to export and archive their SMS and MMS conversation histories into cleanly formatted Markdown, HTML, and Plain Text files on their device. The app requires READ_SMS and RECEIVE_MMS strictly to query past conversation threads, format the message history (including MMS images), and package them into local documents. All data is processed entirely on-device and is never transmitted to external servers without explicit user-initiated sharing."*
+> *"Muninn is a local backup and utility application that allows users to export and archive their SMS and MMS conversation histories into cleanly formatted Markdown, HTML, and Plain Text files on their device. The app requires READ_SMS and RECEIVE_MMS strictly to query past conversation threads, format the message history (including MMS images), and package them into local documents. All data is processed entirely on-device and is never transmitted to external servers without explicit user-initiated sharing."*
 
 ### C. Prominent Disclosure Requirement
 Google Play requires a clear in-app disclosure **prior** to showing the Android OS permission prompt.

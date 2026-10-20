@@ -745,7 +745,7 @@ private fun StoryRecapCard(
                         ⏰ Most Active: %s
                         📸 %,d Photos & Media Exchanged
                         
-                        Exported & backed up with Message Backup App 📱
+                        Exported & backed up with Muninn 📱
                     """.trimIndent().format(
                         stats.totalMessages,
                         topName,

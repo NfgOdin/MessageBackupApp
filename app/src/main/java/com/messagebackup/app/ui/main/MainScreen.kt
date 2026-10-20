@@ -182,7 +182,7 @@ fun MainScreen(
     if (appLockEnabled && !isAppSessionUnlocked) {
         Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             com.messagebackup.app.ui.dialogs.PrivacyUnlockDialog(
-                title = "Unlock Message Backup",
+                title = "Unlock Muninn",
                 subtitle = "Enter your Privacy PIN or use Fingerprint / Device Lock to access your messages.",
                 prefs = prefs,
                 onUnlocked = { isAppSessionUnlocked = true },
@@ -1531,7 +1531,7 @@ fun MainScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Restoration requires a .json or .xml backup created by Message Backup or standard SMS Backup & Restore.",
+                                text = "Restoration requires a .json or .xml backup created by Muninn or standard SMS Backup & Restore.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )

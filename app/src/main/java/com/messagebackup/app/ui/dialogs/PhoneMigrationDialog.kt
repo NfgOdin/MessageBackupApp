@@ -258,7 +258,7 @@ fun PhoneMigrationDialog(
                         )
 
                         Text(
-                            text = "1. Connect both phones to the same Wi-Fi (or turn on Hotspot on this phone).\n2. Open Message Backup App on your new phone and switch to 'Receive'.\n3. Enter the IP shown below or scan the QR Code.",
+                            text = "1. Connect both phones to the same Wi-Fi (or turn on Hotspot on this phone).\n2. Open Muninn on your new phone and switch to 'Receive'.\n3. Enter the IP shown below or scan the QR Code.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Start,

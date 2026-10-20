@@ -28,7 +28,7 @@ fun SmsPermissionDisclosureDialog(
         },
         text = {
             Text(
-                text = "Message Backup & Export requires SMS and MMS access to read your existing message " +
+                text = "Muninn requires SMS and MMS access to read your existing message " +
                         "conversations and package them into documents (PDF, HTML, CSV, Markdown, and TXT) with images on your device.\n\n" +
                         "• 100% User Choice & Local Privacy: Your messages stay strictly on your device by default.\n" +
                         "• Zero Developer Servers: Nothing is ever uploaded to developer servers or shared with third parties.\n" +

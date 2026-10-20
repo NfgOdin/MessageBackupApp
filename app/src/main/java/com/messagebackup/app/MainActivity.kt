@@ -18,7 +18,7 @@ import com.messagebackup.app.ui.main.MainScreen
 import com.messagebackup.app.ui.main.MainViewModel
 
 /**
- * Single-Activity host for the Message Backup & Export application.
+ * Single-Activity host for the Muninn application.
  */
 class MainActivity : ComponentActivity() {
 

@@ -42,4 +42,4 @@ foreach ($item in $sampleMessages) {
 }
 
 Write-Host "`n[SUCCESS] All test messages injected into emulator telephony database!" -ForegroundColor Green
-Write-Host "You can now open Message Backup & Export, grant permission, and see these threads." -ForegroundColor Cyan
+Write-Host "You can now open Muninn, grant permission, and see these threads." -ForegroundColor Cyan

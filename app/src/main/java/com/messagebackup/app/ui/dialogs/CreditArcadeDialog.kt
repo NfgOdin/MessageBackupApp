@@ -370,7 +370,7 @@ fun CreditArcadeDialog(
                                 color = if (hasReviewedApp) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onTertiaryContainer
                             )
                             Text(
-                                text = if (hasReviewedApp) "Thank you for supporting Message Backup development!" else "Leave a quick 5-star review to claim +5 AI queries and +1 Auto-backup night instantly!",
+                                text = if (hasReviewedApp) "Thank you for supporting Muninn development!" else "Leave a quick 5-star review to claim +5 AI queries and +1 Auto-backup night instantly!",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (hasReviewedApp) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f)
                             )
