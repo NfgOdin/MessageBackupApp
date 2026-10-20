@@ -90,12 +90,21 @@ class AutoBackupWorker(
         }
 
         return try {
-            val threads = app.realTelephonyRepository.getConversationThreads(
+            val allThreads = app.realTelephonyRepository.getConversationThreads(
                 resolveContacts = app.appPreferences.resolveContacts.value
             ).first()
 
-            if (threads.isEmpty()) {
+            if (allThreads.isEmpty()) {
                 return Result.success()
+            }
+
+            // Filter threads based on user preference (All vs Selected)
+            val threads = if (app.appPreferences.autoBackupAllThreads.value) {
+                allThreads
+            } else {
+                val selectedIds = app.appPreferences.autoBackupSelectedThreadIds.value
+                val filtered = allThreads.filter { selectedIds.contains(it.threadId) }
+                if (filtered.isEmpty()) allThreads else filtered
             }
 
             val options = ExportOptions(

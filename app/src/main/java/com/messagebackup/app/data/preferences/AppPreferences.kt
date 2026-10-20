@@ -37,6 +37,8 @@ class AppPreferences(context: Context) {
         private const val KEY_AUTO_BACKUP_FREQUENCY_DAYS = "auto_backup_frequency_days"
         private const val KEY_AUTO_BACKUP_REQUIRES_WIFI = "auto_backup_requires_wifi"
         private const val KEY_LAST_AUTO_BACKUP_TIMESTAMP = "last_auto_backup_timestamp"
+        private const val KEY_AUTO_BACKUP_SELECTED_THREAD_IDS = "auto_backup_selected_thread_ids"
+        private const val KEY_AUTO_BACKUP_ALL_THREADS = "auto_backup_all_threads"
         private const val KEY_AI_PROVIDER = "ai_provider"
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
         private const val KEY_GEMINI_MODEL = "gemini_model"
@@ -92,6 +94,14 @@ class AppPreferences(context: Context) {
 
     private val _lastAutoBackupTimestamp = MutableStateFlow(prefs.getLong(KEY_LAST_AUTO_BACKUP_TIMESTAMP, 0L))
     val lastAutoBackupTimestamp: StateFlow<Long> = _lastAutoBackupTimestamp.asStateFlow()
+
+    private val _autoBackupAllThreads = MutableStateFlow(prefs.getBoolean(KEY_AUTO_BACKUP_ALL_THREADS, true))
+    val autoBackupAllThreads: StateFlow<Boolean> = _autoBackupAllThreads.asStateFlow()
+
+    private val _autoBackupSelectedThreadIds = MutableStateFlow(
+        prefs.getStringSet(KEY_AUTO_BACKUP_SELECTED_THREAD_IDS, emptySet())?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
+    )
+    val autoBackupSelectedThreadIds: StateFlow<Set<Long>> = _autoBackupSelectedThreadIds.asStateFlow()
 
     private val _appLockEnabled = MutableStateFlow(prefs.getBoolean(KEY_APP_LOCK_ENABLED, false))
     val appLockEnabled: StateFlow<Boolean> = _appLockEnabled.asStateFlow()
@@ -310,6 +320,17 @@ class AppPreferences(context: Context) {
     fun setAutoBackupRequiresWifi(requires: Boolean) {
         prefs.edit().putBoolean(KEY_AUTO_BACKUP_REQUIRES_WIFI, requires).apply()
         _autoBackupRequiresWifi.value = requires
+    }
+
+    fun setAutoBackupAllThreads(all: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_BACKUP_ALL_THREADS, all).apply()
+        _autoBackupAllThreads.value = all
+    }
+
+    fun setAutoBackupSelectedThreadIds(threadIds: Set<Long>) {
+        val stringSet = threadIds.map { it.toString() }.toSet()
+        prefs.edit().putStringSet(KEY_AUTO_BACKUP_SELECTED_THREAD_IDS, stringSet).apply()
+        _autoBackupSelectedThreadIds.value = threadIds
     }
 
     fun recordAutoBackupCompleted() {

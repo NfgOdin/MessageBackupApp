@@ -156,6 +156,10 @@ fun SettingsScreen(
     var devTapCount by remember { mutableStateOf(0) }
     var showDevKeyDialog by remember { mutableStateOf(false) }
     var devKeyInput by remember { mutableStateOf("") }
+    var showAutoBackupThreadPicker by remember { mutableStateOf(false) }
+    val allConversationThreads by remember(resolveContacts) {
+        app.realTelephonyRepository.getConversationThreads(resolveContacts = resolveContacts)
+    }.collectAsState(initial = emptyList())
 
     // Collapsible / Dropdown states for Settings sections
     var isProCardExpanded by remember { mutableStateOf(!isAdsRemoved) }
@@ -914,6 +918,7 @@ fun SettingsScreen(
                         notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                     }
                 },
+                onOpenThreadPicker = { showAutoBackupThreadPicker = true },
                 context = context
             )
 
@@ -1960,6 +1965,19 @@ fun SettingsScreen(
             prefs = prefs,
             adManager = app.adManager,
             onDismiss = { showRewardArcade = false }
+        )
+    }
+
+    if (showAutoBackupThreadPicker) {
+        val selectedIds by prefs.autoBackupSelectedThreadIds.collectAsState()
+        com.messagebackup.app.ui.dialogs.AutoBackupThreadPickerDialog(
+            allThreads = allConversationThreads,
+            initiallySelectedIds = selectedIds,
+            onConfirm = { newSelected ->
+                prefs.setAutoBackupSelectedThreadIds(newSelected)
+                showAutoBackupThreadPicker = false
+            },
+            onDismiss = { showAutoBackupThreadPicker = false }
         )
     }
 
