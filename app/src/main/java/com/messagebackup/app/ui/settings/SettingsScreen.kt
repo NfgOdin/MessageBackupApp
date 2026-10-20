@@ -2105,7 +2105,31 @@ Rules:
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 10. App Appearance Theme
+            // 10. Huginn Live Messaging & O.D.I.N. Thought
+            val huginnEnabled by prefs.huginnComposerEnabled.collectAsState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "🪶 Huginn Live Dispatch Bar", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Show the active message composer and O.D.I.N. Thought Counsel inside conversation threads.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = huginnEnabled,
+                    onCheckedChange = { prefs.setHuginnComposerEnabled(it) }
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 11. App Appearance Theme
             Text(
                 text = "App Appearance Theme",
                 style = MaterialTheme.typography.titleMedium,

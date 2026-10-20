@@ -323,6 +323,28 @@ fun HuginnMessageComposerBar(
             }
         }
 
+        // Huginn Brand & Mode Indicator above text enter box
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "🪶 HUGINN",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "• Live Dispatch & O.D.I.N. Thought",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        }
+
         // Main Composer Input Row
         Row(
             modifier = Modifier.fillMaxWidth(),

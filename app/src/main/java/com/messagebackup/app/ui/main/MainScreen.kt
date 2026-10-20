@@ -137,6 +137,7 @@ fun MainScreen(
     val autoBackupCredits by prefs.autoBackupCredits.collectAsState()
     val alwaysPromptExportOptions by prefs.alwaysPromptExportOptions.collectAsState()
     val isOnboardingCompleted by prefs.isOnboardingCompleted.collectAsState()
+    val huginnComposerEnabled by prefs.huginnComposerEnabled.collectAsState()
     val aiEngine = remember { com.messagebackup.app.domain.ai.AiClientEngine() }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -823,7 +824,7 @@ fun MainScreen(
                     .fillMaxWidth()
                     .navigationBarsPadding()
             ) {
-                if (uiState.selectedThreadForPreview != null) {
+                if (uiState.selectedThreadForPreview != null && huginnComposerEnabled) {
                     com.messagebackup.app.ui.components.HuginnMessageComposerBar(
                         thread = uiState.selectedThreadForPreview!!,
                         recentMessages = uiState.previewMessages,

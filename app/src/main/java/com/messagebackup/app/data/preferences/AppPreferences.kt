@@ -50,6 +50,7 @@ class AppPreferences(context: Context) {
         private const val KEY_ODIN_TOP_P = "odin_top_p"
         private const val KEY_ODIN_NUM_CTX = "odin_num_ctx"
         private const val KEY_ODIN_CUSTOM_SYSTEM_PROMPT = "odin_custom_system_prompt"
+        private const val KEY_HUGINN_COMPOSER_ENABLED = "huginn_composer_enabled"
 
         // Privacy PIN & Biometric Lock Preferences
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
@@ -146,6 +147,9 @@ class AppPreferences(context: Context) {
 
     private val _odinCustomSystemPrompt = MutableStateFlow(prefs.getString(KEY_ODIN_CUSTOM_SYSTEM_PROMPT, "") ?: "")
     val odinCustomSystemPrompt: StateFlow<String> = _odinCustomSystemPrompt.asStateFlow()
+
+    private val _huginnComposerEnabled = MutableStateFlow(prefs.getBoolean(KEY_HUGINN_COMPOSER_ENABLED, true))
+    val huginnComposerEnabled: StateFlow<Boolean> = _huginnComposerEnabled.asStateFlow()
 
     private val _resolveContacts = MutableStateFlow(prefs.getBoolean(KEY_RESOLVE_CONTACTS, true))
     val resolveContacts: StateFlow<Boolean> = _resolveContacts.asStateFlow()
@@ -411,6 +415,11 @@ class AppPreferences(context: Context) {
     fun resetOdinSystemPrompt() {
         prefs.edit().remove(KEY_ODIN_CUSTOM_SYSTEM_PROMPT).apply()
         _odinCustomSystemPrompt.value = ""
+    }
+
+    fun setHuginnComposerEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_HUGINN_COMPOSER_ENABLED, enabled).apply()
+        _huginnComposerEnabled.value = enabled
     }
 
     fun setResolveContacts(enabled: Boolean) {
