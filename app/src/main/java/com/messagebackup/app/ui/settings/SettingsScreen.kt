@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.Tune
@@ -156,6 +157,15 @@ fun SettingsScreen(
     var showDevKeyDialog by remember { mutableStateOf(false) }
     var devKeyInput by remember { mutableStateOf("") }
 
+    // Collapsible / Dropdown states for Settings sections
+    var isProCardExpanded by remember { mutableStateOf(!isAdsRemoved) }
+    var isSaveLocationExpanded by remember { mutableStateOf(false) }
+    var isPaginationExpanded by remember { mutableStateOf(false) }
+    var isFormatPickerExpanded by remember { mutableStateOf(false) }
+    var isPerformanceExpanded by remember { mutableStateOf(false) }
+    var isOdinExpanded by remember { mutableStateOf(false) }
+    var isSecurityExpanded by remember { mutableStateOf(false) }
+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ -> }
@@ -209,7 +219,7 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            // 1. Pro / Ad-Free Card
+            // 1. Pro / Ad-Free Card (Collapsible Dropdown Style)
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = if (isAdsRemoved) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
@@ -217,8 +227,8 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = !isAdsRemoved) {
-                        billingManager.launchBillingFlow(activity, BillingManager.PRODUCT_REMOVE_ADS)
+                    .clickable {
+                        isProCardExpanded = !isProCardExpanded
                     }
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -245,19 +255,27 @@ fun SettingsScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = if (isAdsRemoved) "All premium features and ad-free access permanently unlocked." else "One-time purchase • No subscriptions • Lifetime access",
+                                text = if (isAdsRemoved) (if (isProCardExpanded) "Tap to collapse unlocked perks" else "All features permanently unlocked (Tap to view)") else "One-time purchase • Tap to view perks",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        IconButton(onClick = { isProCardExpanded = !isProCardExpanded }) {
+                            Icon(
+                                imageVector = if (isProCardExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isProCardExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                    Spacer(modifier = Modifier.height(12.dp))
+                    if (isProCardExpanded) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                    Text(
-                        text = if (isAdsRemoved) "UNLOCKED FEATURES:" else "WHAT'S INCLUDED IN PRO:",
+                        Text(
+                            text = if (isAdsRemoved) "UNLOCKED FEATURES:" else "WHAT'S INCLUDED IN PRO:",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.primary
@@ -342,6 +360,7 @@ fun SettingsScreen(
                             }
                         }
                     }
+                    } // End if (isProCardExpanded)
                 }
             }
 
@@ -400,13 +419,66 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 3. Export Destination (SAF Folder vs Share Sheet)
-            Text(
-                text = "Default Save Location",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            // 3. Export Destination (Collapsible Dropdown Card)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isSaveLocationExpanded = !isSaveLocationExpanded }
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(
+                                imageVector = when (outputDestination) {
+                                    OutputDestination.SHARE_SHEET -> Icons.Default.Share
+                                    OutputDestination.PERSISTENT_DIRECTORY -> Icons.Default.Folder
+                                    else -> Icons.Default.CloudUpload
+                                },
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Default Save Location",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                val destinationLabel = when (outputDestination) {
+                                    OutputDestination.SHARE_SHEET -> "Android Share Sheet"
+                                    OutputDestination.PERSISTENT_DIRECTORY -> "Custom Folder: $safFolderDisplay"
+                                    OutputDestination.GOOGLE_DRIVE -> "Google Drive"
+                                    OutputDestination.ONEDRIVE -> "Microsoft OneDrive"
+                                    OutputDestination.DROPBOX -> "Dropbox"
+                                    OutputDestination.WEBDAV_NAS -> "WebDAV / Local NAS"
+                                }
+                                Text(
+                                    text = destinationLabel,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        IconButton(onClick = { isSaveLocationExpanded = !isSaveLocationExpanded }) {
+                            Icon(
+                                imageVector = if (isSaveLocationExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isSaveLocationExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (isSaveLocationExpanded) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier
@@ -656,64 +728,136 @@ fun SettingsScreen(
                 }
                 Icon(imageVector = Icons.Default.Lan, contentDescription = "WebDAV", tint = MaterialTheme.colorScheme.primary)
             }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-
-            // 4. Global Pagination Default
-            Text(
-                text = "Global Pagination Default",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "Default setting for splitting conversations into sequential files.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            val paginationOptions = listOf(0 to "No Split (Single File - Default)", 50 to "50 messages per file", 100 to "100 messages per file", 250 to "250 messages per file")
-            paginationOptions.forEach { (limit, label) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { prefs.setMaxMessagesPerFile(limit) }
-                        .padding(vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = (maxMessagesPerFile == limit),
-                        onClick = { prefs.setMaxMessagesPerFile(limit) }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = label, style = MaterialTheme.typography.bodyMedium)
+                    } // End if (isSaveLocationExpanded)
                 }
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 5. Default Format
-            Text(
-                text = "Default Export Format",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            // 4. Global Pagination Default (Collapsible Dropdown Card)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isPaginationExpanded = !isPaginationExpanded }
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Global Pagination Default",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            val currentLimitLabel = when (maxMessagesPerFile) {
+                                0 -> "No Split (Single File - Default)"
+                                else -> "$maxMessagesPerFile messages per file"
+                            }
+                            Text(
+                                text = currentLimitLabel,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = { isPaginationExpanded = !isPaginationExpanded }) {
+                            Icon(
+                                imageVector = if (isPaginationExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isPaginationExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
 
-            ExportFormat.values().forEach { format ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { prefs.setDefaultFormat(format) }
-                        .padding(vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = (defaultFormat == format),
-                        onClick = { prefs.setDefaultFormat(format) }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = format.displayName, style = MaterialTheme.typography.bodyMedium)
+                    if (isPaginationExpanded) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val paginationOptions = listOf(0 to "No Split (Single File - Default)", 50 to "50 messages per file", 100 to "100 messages per file", 250 to "250 messages per file")
+                        paginationOptions.forEach { (limit, label) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { prefs.setMaxMessagesPerFile(limit) }
+                                    .padding(vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (maxMessagesPerFile == limit),
+                                    onClick = { prefs.setMaxMessagesPerFile(limit) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = label, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 5. Default Format (Collapsible Dropdown Card)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isFormatPickerExpanded = !isFormatPickerExpanded }
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Default Export Format",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = defaultFormat.displayName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = { isFormatPickerExpanded = !isFormatPickerExpanded }) {
+                            Icon(
+                                imageVector = if (isFormatPickerExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isFormatPickerExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (isFormatPickerExpanded) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        ExportFormat.values().forEach { format ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { prefs.setDefaultFormat(format) }
+                                    .padding(vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (defaultFormat == format),
+                                    onClick = { prefs.setDefaultFormat(format) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = format.displayName, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -775,10 +919,12 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 8. O.D.I.N. (Omniscient Document & Insights Navigator) AI Configuration
+            // 8. O.D.I.N. AI Configuration (Collapsible Dropdown Card)
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isOdinExpanded = !isOdinExpanded }
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -786,39 +932,57 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(end = 8.dp)
                             )
-                            Text(
-                                text = "O.D.I.N. AI Intelligence",
-                                style = MaterialTheme.typography.titleMedium
-                            )
+                            Column {
+                                Text(
+                                    text = "O.D.I.N. AI Intelligence",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = if (aiProvider == "GEMINI") "Google Gemini ($geminiModel)" else "Local Ollama ($ollamaModel)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer
-                        ) {
-                            Text(
-                                text = if (isAdsRemoved) "PRO: UNLIMITED" else "$aiCredits CREDITS",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = if (isAdsRemoved) "PRO" else "$aiCredits CREDITS",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                            IconButton(onClick = { isOdinExpanded = !isOdinExpanded }) {
+                                Icon(
+                                    imageVector = if (isOdinExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (isOdinExpanded) "Collapse" else "Expand",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Choose your AI intelligence provider to ask natural questions about your archived messages.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (isOdinExpanded) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Choose your AI intelligence provider to ask natural questions about your archived messages.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
                     // Provider Radio Selection
                     Row(
@@ -1328,6 +1492,7 @@ fun SettingsScreen(
                             }
                         }
                     }
+                    } // End if (isOdinExpanded)
                 }
             }
 
@@ -1437,20 +1602,45 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // Performance & Message Loading Speed
-            Text(
-                text = "Performance & Message Loading Speed",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Choose between instant paginated loading or loading all messages at once.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            // Performance & Message Loading Speed (Collapsible Dropdown Card)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isPerformanceExpanded = !isPerformanceExpanded }
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "⚡ Performance & Message Loading Speed",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = if (fastPaginationEnabled) "Fast Paginated (<30ms, initial $initialMessageBatchSize msgs)" else "Full Load Mode (all at once)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = { isPerformanceExpanded = !isPerformanceExpanded }) {
+                            Icon(
+                                imageVector = if (isPerformanceExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isPerformanceExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
 
-            Spacer(modifier = Modifier.height(10.dp))
+                    if (isPerformanceExpanded) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        Spacer(modifier = Modifier.height(8.dp))
 
             // Mode Toggle: Fast Paginated Loading vs Load Everything at Once
             Row(
@@ -1613,6 +1803,9 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(12.dp)
                     )
+                }
+            }
+                    } // End if (isPerformanceExpanded)
                 }
             }
 
