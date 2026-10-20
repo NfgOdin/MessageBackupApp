@@ -197,11 +197,6 @@ fun MessageCopilotScreen(
             return
         }
 
-        // Consume credit for free users
-        if (!isAdsRemoved) {
-            prefs.consumeAiCredit()
-        }
-
         inputText = ""
         chatMessages.add(OdinChatMessage(sender = OdinChatMessage.MessageSender.USER, text = trimmed))
         isThinking = true
@@ -227,13 +222,18 @@ fun MessageCopilotScreen(
             isThinking = false
             when (result) {
                 is AiQueryResult.Success -> {
+                    // Only consume the credit when a successful answer is actually delivered!
+                    if (!isAdsRemoved) {
+                        prefs.consumeAiCredit()
+                    }
                     chatMessages.add(
                         OdinChatMessage(sender = OdinChatMessage.MessageSender.ODIN, text = result.responseText)
                     )
                 }
                 is AiQueryResult.Error -> {
+                    // Credit is preserved/never taken on error
                     chatMessages.add(
-                        OdinChatMessage(sender = OdinChatMessage.MessageSender.ODIN, text = "⚠️ ${result.errorMessage}", isError = true)
+                        OdinChatMessage(sender = OdinChatMessage.MessageSender.ODIN, text = "⚠️ ${result.errorMessage}\n\n(No credit was consumed)", isError = true)
                     )
                 }
             }
