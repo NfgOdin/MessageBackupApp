@@ -344,7 +344,26 @@ fun MessageCopilotScreen(
                     }
 
                     IconButton(
-                        onClick = { showRadarDialog = true },
+                        onClick = {
+                            if (!isAdsRemoved && aiCredits <= 0) {
+                                Toast.makeText(context, "Scanning promises requires 1 Raido Rune credit. Watch an ad to earn +2!", Toast.LENGTH_SHORT).show()
+                                adManager.showRewardedAd(
+                                    activity = activity,
+                                    isAdsRemoved = false,
+                                    onUserEarnedReward = {
+                                        prefs.recordRewardAdWatched()
+                                        prefs.addAiCredits(2)
+                                        prefs.consumeAiCredit()
+                                        showRadarDialog = true
+                                    }
+                                )
+                            } else {
+                                if (!isAdsRemoved) {
+                                    prefs.consumeAiCredit()
+                                }
+                                showRadarDialog = true
+                            }
+                        },
                         modifier = Modifier.size(38.dp)
                     ) {
                         Icon(imageVector = Icons.Default.Radar, contentDescription = "Commitment Radar", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
