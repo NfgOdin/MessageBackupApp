@@ -2383,12 +2383,19 @@ Rules:
 
                     Column(modifier = Modifier.padding(14.dp)) {
                         Text(
-                            text = "Muninn: Message Memory & Vault v1.0.0",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
+                            text = "MUNINN v1.0.0",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Memory & Understanding through Norse Intelligence & Neural Nexus",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Private on-device message memory vault, phone migration & AI intelligence. Certified forensic-grade integrity.",
                             style = MaterialTheme.typography.bodySmall,

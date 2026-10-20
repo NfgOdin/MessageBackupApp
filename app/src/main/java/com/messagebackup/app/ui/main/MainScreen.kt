@@ -30,6 +30,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -39,7 +40,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BugReport
@@ -129,6 +133,7 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val activity = context as Activity
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     val uiState by viewModel.uiState.collectAsState()
     val isAdsRemoved by viewModel.isAdsRemoved.collectAsState()
     val prefs = viewModel.prefs
@@ -1018,7 +1023,12 @@ fun MainScreen(
                     val totalMediaCount = messages.sumOf { it.attachments.size }
 
                     Column(modifier = Modifier.fillMaxSize()) {
-                        // Full-Width Conversation Header (Name, Phone/Address, Message Count) under action icons
+                        val thread = uiState.selectedThreadForPreview!!
+                        val hasRealContactName = !thread.contactName.isNullOrBlank() && thread.contactName != thread.address
+                        var showNumberDetails by remember(thread.threadId) { mutableStateOf(false) }
+                        var isStatsExpanded by remember(thread.threadId) { mutableStateOf(false) }
+
+                        // Compact Sleek Conversation Header with Interactive Stats Dropdown
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.fillMaxWidth()
@@ -1026,64 +1036,137 @@ fun MainScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
                             ) {
-                                // 2-Column Balanced Header
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Top
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Left Column: Contact Name and Phone/Address
+                                    // Contact Name / Number Area (Clickable to reveal number if name exists)
                                     Column(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .padding(end = 12.dp)
-                                    ) {
-                                        Text(
-                                            text = uiState.selectedThreadForPreview!!.displayName,
-                                            style = MaterialTheme.typography.titleLarge,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                        )
-                                        if (uiState.selectedThreadForPreview!!.contactName != null && uiState.selectedThreadForPreview!!.address.isNotBlank()) {
-                                            Text(
-                                                text = uiState.selectedThreadForPreview!!.address,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(top = 2.dp)
+                                            .padding(end = 8.dp)
+                                            .then(
+                                                if (hasRealContactName) {
+                                                    Modifier
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .clickable { showNumberDetails = !showNumberDetails }
+                                                } else Modifier
                                             )
-                                        }
-                                    }
-
-                                    // Right Column: Date on top, Messages underneath, Media Items underneath that
-                                    Column(
-                                        horizontalAlignment = Alignment.End
                                     ) {
-                                        if (messages.isNotEmpty()) {
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                                                shape = RoundedCornerShape(8.dp)
-                                            ) {
-                                                Text(
-                                                    text = "📅 $firstMsgDate - $lastMsgDate",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = if (hasRealContactName) thread.contactName!! else thread.displayName,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            if (hasRealContactName) {
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(
+                                                    imageVector = if (showNumberDetails) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                                                    contentDescription = "Toggle phone number",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(18.dp)
                                                 )
                                             }
                                         }
 
+                                        // Click-to-reveal phone number sub-line
+                                        AnimatedVisibility(visible = showNumberDetails && hasRealContactName) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier
+                                                    .padding(top = 2.dp)
+                                                    .clickable {
+                                                        clipboardManager.setText(AnnotatedString(thread.address))
+                                                        Toast.makeText(context, "Copied ${thread.address}", Toast.LENGTH_SHORT).show()
+                                                    }
+                                            ) {
+                                                Text(
+                                                    text = thread.address,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.ContentCopy,
+                                                    contentDescription = "Copy number",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Right: Stats Dropdown Toggle Button
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isStatsExpanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (isStatsExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                        ),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { isStatsExpanded = !isStatsExpanded }
+                                    ) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                            modifier = Modifier.padding(top = 4.dp)
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                         ) {
                                             Text(
-                                                text = "💬 ${messages.size} messages",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.SemiBold,
+                                                text = "📊 Stats",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isStatsExpanded) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Icon(
+                                                imageVector = if (isStatsExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                                                contentDescription = null,
+                                                tint = if (isStatsExpanded) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Expanded Stats Dropdown Content
+                                AnimatedVisibility(visible = isStatsExpanded) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 8.dp)
+                                    ) {
+                                        if (messages.isNotEmpty()) {
+                                            Text(
+                                                text = "📅 $firstMsgDate – $lastMsgDate",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                        }
+
+                                        val mediaCount = messages.sumOf { it.attachments.size }
+                                        val statsLabel = if (mediaCount > 0) {
+                                            "💬 ${messages.size} MSGS • $mediaCount MMS"
+                                        } else {
+                                            "💬 ${messages.size} MSGS"
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = statsLabel,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
                                             if (uiState.isPreviewLoading) {
@@ -1093,15 +1176,6 @@ fun MainScreen(
                                                     color = MaterialTheme.colorScheme.primary
                                                 )
                                             }
-                                        }
-
-                                        if (totalMediaCount > 0) {
-                                            Text(
-                                                text = "📷 $totalMediaCount media items",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(top = 2.dp)
-                                            )
                                         }
                                     }
                                 }
