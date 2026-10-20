@@ -571,33 +571,36 @@ fun MainScreen(
                 // Standard Top Bar
                 TopAppBar(
                     title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
                             Text(
                                 text = "Muninn",
-                                style = MaterialTheme.typography.titleLarge,
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(end = 10.dp)
+                                color = MaterialTheme.colorScheme.primary
                             )
                             // At-a-glance Dual Credits Badge (or PRO indicator)
                             Surface(
                                 color = if (isAdsRemoved) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier
+                                    .padding(top = 2.dp)
                                     .clickable { showRewardArcade = true }
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     if (isAdsRemoved) {
                                         Icon(
                                             imageVector = Icons.Default.Stars,
                                             contentDescription = "Pro",
-                                            modifier = Modifier.size(16.dp),
+                                            modifier = Modifier.size(13.dp),
                                             tint = MaterialTheme.colorScheme.onTertiaryContainer
                                         )
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
                                         Text(
                                             text = "PRO LIFETIME",
                                             style = MaterialTheme.typography.labelSmall,
@@ -609,7 +612,7 @@ fun MainScreen(
                                         Icon(
                                             imageVector = Icons.Default.Bolt,
                                             contentDescription = "AI Credits",
-                                            modifier = Modifier.size(15.dp),
+                                            modifier = Modifier.size(13.dp),
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                         Spacer(modifier = Modifier.width(3.dp))
@@ -620,19 +623,19 @@ fun MainScreen(
                                             color = MaterialTheme.colorScheme.onSecondaryContainer
                                         )
 
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(
                                             text = "•",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f)
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
 
                                         // Auto-Backup Credits
                                         Icon(
                                             imageVector = Icons.Default.Refresh,
                                             contentDescription = "Backup Credits",
-                                            modifier = Modifier.size(15.dp),
+                                            modifier = Modifier.size(13.dp),
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                         Spacer(modifier = Modifier.width(3.dp))
