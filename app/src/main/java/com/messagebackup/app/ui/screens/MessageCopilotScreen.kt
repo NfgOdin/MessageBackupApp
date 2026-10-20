@@ -28,10 +28,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -412,7 +417,11 @@ fun MessageCopilotScreen(
                     .padding(horizontal = 12.dp)
             ) {
                 items(chatMessages, key = { it.id }) { msg ->
-                    ChatBubble(message = msg)
+                    ChatBubble(
+                        message = msg,
+                        targetContactName = targetContactName,
+                        targetAddress = threads.firstOrNull { it.displayName == targetContactName || it.address == targetContactName }?.address
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
@@ -499,7 +508,12 @@ fun MessageCopilotScreen(
 }
 
 @Composable
-private fun ChatBubble(message: OdinChatMessage) {
+private fun ChatBubble(
+    message: OdinChatMessage,
+    targetContactName: String = "",
+    targetAddress: String? = null
+) {
+    val context = LocalContext.current
     val isUser = message.sender == OdinChatMessage.MessageSender.USER
     val alignment = if (isUser) Alignment.End else Alignment.Start
     val bgColor = if (isUser) {
@@ -518,6 +532,10 @@ private fun ChatBubble(message: OdinChatMessage) {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
 
+    // Determine if this ODIN response appears to suggest/draft a reply or contains actionable response text
+    val isOdinResponse = !isUser && !message.isError
+    val containsDraftOrReply = isOdinResponse && message.text.length > 5 && !message.text.startsWith("Greetings!")
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = alignment
@@ -530,7 +548,7 @@ private fun ChatBubble(message: OdinChatMessage) {
                 bottomEnd = if (isUser) 4.dp else 16.dp
             ),
             colors = CardDefaults.cardColors(containerColor = bgColor),
-            modifier = Modifier.fillMaxWidth(0.85f)
+            modifier = Modifier.fillMaxWidth(0.88f)
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 if (!isUser) {
@@ -558,6 +576,75 @@ private fun ChatBubble(message: OdinChatMessage) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor
                 )
+
+                if (containsDraftOrReply) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Copy to Clipboard chip
+                        AssistChip(
+                            onClick = {
+                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("ODIN Reply", message.text)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Copied to clipboard! 📋", Toast.LENGTH_SHORT).show()
+                            },
+                            label = { Text("Copy", style = MaterialTheme.typography.labelSmall) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy text",
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+                            )
+                        )
+
+                        // Open in Messages chip
+                        AssistChip(
+                            onClick = {
+                                try {
+                                    val sendIntent = if (!targetAddress.isNullOrBlank()) {
+                                        android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+                                            data = android.net.Uri.parse("smsto:$targetAddress")
+                                            putExtra("sms_body", message.text)
+                                        }
+                                    } else {
+                                        android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(android.content.Intent.EXTRA_TEXT, message.text)
+                                        }
+                                    }
+                                    context.startActivity(sendIntent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Could not open messaging app: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            label = {
+                                Text(
+                                    if (!targetAddress.isNullOrBlank()) "Send to $targetContactName" else "Open in Messages",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Sms,
+                                    contentDescription = "Open in Messages",
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+                            )
+                        )
+                    }
+                }
             }
         }
     }

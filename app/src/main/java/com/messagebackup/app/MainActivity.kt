@@ -11,6 +11,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
+import com.messagebackup.app.observer.TelephonyContentObserver
 import com.messagebackup.app.theme.MessageBackupAppTheme
 import com.messagebackup.app.ui.main.MainScreen
 import com.messagebackup.app.ui.main.MainViewModel
@@ -21,11 +23,13 @@ import com.messagebackup.app.ui.main.MainViewModel
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+    private var telephonyObserver: TelephonyContentObserver? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        registerTelephonyObserver()
         handleIntentAction(intent)
 
         setContent {
@@ -68,6 +72,37 @@ class MainActivity : ComponentActivity() {
                 // Open export history / directory picker
                 viewModel.setSettingsOpen(true)
             }
+        }
+    }
+
+    private fun registerTelephonyObserver() {
+        if (telephonyObserver == null) {
+            telephonyObserver = TelephonyContentObserver(lifecycleScope) {
+                viewModel.onTelephonyContentChanged()
+            }
+            try {
+                contentResolver.registerContentObserver(
+                    TelephonyContentObserver.SMS_URI,
+                    true,
+                    telephonyObserver!!
+                )
+                contentResolver.registerContentObserver(
+                    TelephonyContentObserver.MMS_URI,
+                    true,
+                    telephonyObserver!!
+                )
+            } catch (e: Exception) {
+                // Ignore permission or initialization errors until granted
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        telephonyObserver?.let {
+            try {
+                contentResolver.unregisterContentObserver(it)
+            } catch (_: Exception) {}
         }
     }
 }

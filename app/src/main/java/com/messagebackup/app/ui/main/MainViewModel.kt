@@ -220,12 +220,27 @@ class MainViewModel : ViewModel() {
         if (forceRefresh) {
             threadMessagesCache.clear()
         }
-        // If not a force refresh and we already have cached threads, avoid redundant loading
+        // If not a force refresh and we already have threads in memory, avoid redundant loading
         if (!forceRefresh && _uiState.value.threads.isNotEmpty()) {
             return
         }
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            // First check persistent local database cache for instant 0 ms cold-load
+            if (!forceRefresh && _uiState.value.threads.isEmpty()) {
+                val cached = app.localDatabase.getCachedThreads()
+                if (cached.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        threads = cached,
+                        isLoading = false
+                    )
+                    applySearchFilter(_uiState.value.searchQuery, cached)
+                }
+            }
+
+            if (_uiState.value.threads.isEmpty()) {
+                _uiState.value = _uiState.value.copy(isLoading = true)
+            }
+
             app.currentTelephonyRepository.getConversationThreads(
                 resolveContacts = prefs.resolveContacts.value && _uiState.value.hasContactsPermission
             ).collect { list ->
@@ -234,6 +249,9 @@ class MainViewModel : ViewModel() {
                     isLoading = false
                 )
                 applySearchFilter(_uiState.value.searchQuery, list)
+                // Persist fresh threads to local database cache
+                app.localDatabase.saveThreads(list)
+
                 if (_uiState.value.globalCopilotMessages.isEmpty()) {
                     loadGlobalCopilotContext()
                 }
@@ -278,6 +296,7 @@ class MainViewModel : ViewModel() {
         val usePagination = prefs.fastPaginationEnabled.value
         val initialBatchSize = if (usePagination) prefs.initialMessageBatchSize.value else null
 
+        // In-memory cache check
         val cachedMessages = if (!forceRefresh) threadMessagesCache[thread.threadId] else null
         if (cachedMessages != null) {
             _uiState.value = _uiState.value.copy(
@@ -294,25 +313,48 @@ class MainViewModel : ViewModel() {
             return
         }
 
-        _uiState.value = _uiState.value.copy(
-            selectedThreadForPreview = thread,
-            isPreviewLoading = true,
-            hasMoreOlderMessages = false,
-            isLoadingOlderMessages = false,
-            previewMessages = emptyList(),
-            filteredPreviewMessages = emptyList(),
-            threadSearchQuery = "",
-            isThreadSearchActive = false,
-            excludedMessageIds = emptySet()
-        )
-
         viewModelScope.launch {
+            // Check persistent local DB cache before hitting telephony provider
+            if (!forceRefresh) {
+                val dbCached = app.localDatabase.getCachedMessagesForThread(thread.threadId, initialBatchSize)
+                if (dbCached.isNotEmpty()) {
+                    threadMessagesCache[thread.threadId] = dbCached
+                    _uiState.value = _uiState.value.copy(
+                        selectedThreadForPreview = thread,
+                        previewMessages = dbCached,
+                        filteredPreviewMessages = dbCached,
+                        isPreviewLoading = false,
+                        hasMoreOlderMessages = if (usePagination) thread.messageCount > dbCached.size else false,
+                        isLoadingOlderMessages = false,
+                        threadSearchQuery = "",
+                        isThreadSearchActive = false,
+                        excludedMessageIds = emptySet()
+                    )
+                    return@launch
+                }
+            }
+
+            _uiState.value = _uiState.value.copy(
+                selectedThreadForPreview = thread,
+                isPreviewLoading = true,
+                hasMoreOlderMessages = false,
+                isLoadingOlderMessages = false,
+                previewMessages = emptyList(),
+                filteredPreviewMessages = emptyList(),
+                threadSearchQuery = "",
+                isThreadSearchActive = false,
+                excludedMessageIds = emptySet()
+            )
+
             val messages = app.currentTelephonyRepository.getMessagesForThread(
                 threadId = thread.threadId,
                 resolveContacts = prefs.resolveContacts.value && _uiState.value.hasContactsPermission,
                 limit = initialBatchSize
             )
             threadMessagesCache[thread.threadId] = messages
+            // Persist to local database
+            app.localDatabase.saveMessages(messages)
+
             _uiState.value = _uiState.value.copy(
                 previewMessages = messages,
                 filteredPreviewMessages = messages,
@@ -327,6 +369,19 @@ class MainViewModel : ViewModel() {
         openThreadPreview(thread, forceRefresh = true)
     }
 
+    /**
+     * Triggered by TelephonyContentObserver when an incoming or outgoing SMS/MMS event occurs.
+     * Silently and seamlessly syncs threads and refreshes the currently open thread preview (if any).
+     */
+    fun onTelephonyContentChanged() {
+        if (!_uiState.value.hasSmsPermission) return
+        loadThreads(forceRefresh = true)
+        val activeThread = _uiState.value.selectedThreadForPreview
+        if (activeThread != null) {
+            refreshCurrentThreadPreview()
+        }
+    }
+
     fun loadAllPreviewMessages() {
         val thread = _uiState.value.selectedThreadForPreview ?: return
         if (_uiState.value.isLoadingOlderMessages) return
@@ -339,6 +394,7 @@ class MainViewModel : ViewModel() {
                 limit = null
             )
             threadMessagesCache[thread.threadId] = allMessages
+            app.localDatabase.saveMessages(allMessages)
             _uiState.value = _uiState.value.copy(
                 previewMessages = allMessages,
                 filteredPreviewMessages = if (_uiState.value.threadSearchQuery.isBlank()) allMessages else _uiState.value.filteredPreviewMessages,
@@ -366,6 +422,7 @@ class MainViewModel : ViewModel() {
             )
             val combined = (olderMessages + currentMessages).distinctBy { it.messageId }.sortedBy { it.timestamp }
             threadMessagesCache[thread.threadId] = combined
+            app.localDatabase.saveMessages(olderMessages)
             _uiState.value = _uiState.value.copy(
                 previewMessages = combined,
                 filteredPreviewMessages = if (_uiState.value.threadSearchQuery.isBlank()) combined else _uiState.value.filteredPreviewMessages,
@@ -688,6 +745,20 @@ class MainViewModel : ViewModel() {
     fun loadMediaVault(forceRefresh: Boolean = false) {
         if (!forceRefresh && _uiState.value.vaultMediaItems.isNotEmpty()) return
         viewModelScope.launch {
+            // First check persistent local database cache for instantaneous Media Vault load
+            if (!forceRefresh) {
+                val cachedVault = app.localDatabase.getCachedVaultItems()
+                if (cachedVault.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        vaultMediaItems = cachedVault,
+                        isVaultLoading = false,
+                        vaultProgressPct = 100,
+                        vaultProgressMessage = "Vault loaded from cache"
+                    )
+                    return@launch
+                }
+            }
+
             _uiState.value = _uiState.value.copy(
                 isVaultLoading = true,
                 vaultProgressPct = 0,
@@ -701,6 +772,9 @@ class MainViewModel : ViewModel() {
                     vaultProgressMessage = "Scanning attachments: $processed of $total messages ($pct%)..."
                 )
             }
+            // Persist to local database cache so subsequent visits/restarts load at 0 ms
+            app.localDatabase.saveVaultItems(items)
+
             _uiState.value = _uiState.value.copy(
                 isVaultLoading = false,
                 vaultProgressPct = 100,
