@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Info
@@ -142,6 +143,7 @@ fun MainScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var isMessageSelectionMode by remember { mutableStateOf(false) }
     var showRewardArcade by remember { mutableStateOf(false) }
+    var showRavenMeshDialog by remember { mutableStateOf(false) }
     var showOnboarding by remember { mutableStateOf(!isOnboardingCompleted) }
     var isAppSessionUnlocked by remember { mutableStateOf(false) }
     var pendingProtectedAction by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -712,6 +714,24 @@ fun MainScreen(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
+
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text("Raven Mesh Identity")
+                                        Text(
+                                            "Decentralized E2EE Peer Network & Sigil",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                },
+                                leadingIcon = { Icon(Icons.Default.QrCode, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    showMenu = false
+                                    showRavenMeshDialog = true
+                                }
+                            )
 
                             DropdownMenuItem(
                                 text = {
@@ -1653,6 +1673,12 @@ fun MainScreen(
                 )
             },
             onDismiss = { viewModel.setShowMigrationDialog(false) }
+        )
+    }
+
+    if (showRavenMeshDialog) {
+        com.messagebackup.app.ui.dialogs.RavenIdentityDialog(
+            onDismiss = { showRavenMeshDialog = false }
         )
     }
 

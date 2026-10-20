@@ -88,6 +88,7 @@ dependencies {
   implementation(libs.play.services.ads)
   implementation(libs.user.messaging.platform)
   implementation(libs.play.billing)
+  implementation(libs.play.services.code.scanner)
   implementation(libs.zip4j)
   implementation(libs.zxing.core)
 
