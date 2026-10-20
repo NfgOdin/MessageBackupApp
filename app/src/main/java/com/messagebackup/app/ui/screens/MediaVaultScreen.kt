@@ -486,27 +486,35 @@ private fun MediaThumbnailCard(
                 }
             }
 
-            // Bottom metadata gradient strip
+            // Bottom metadata gradient strip with high-contrast protection
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.65f))
-                    .padding(horizontal = 6.dp, vertical = 4.dp)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(
+                                androidx.compose.ui.graphics.Color.Transparent,
+                                androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.75f),
+                                androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.92f)
+                            )
+                        )
+                    )
+                    .padding(horizontal = 7.dp, vertical = 6.dp)
             ) {
                 Column {
                     Text(
                         text = item.contactName,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.inverseOnSurface,
+                        color = androidx.compose.ui.graphics.Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = item.fileName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
