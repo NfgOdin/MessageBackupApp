@@ -18,7 +18,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.size
@@ -181,6 +187,14 @@ fun MainScreen(
                     viewModel.loadOlderPreviewMessages()
                 }
             }
+    }
+
+    // Scroll to latest message when keyboard pops up
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(imeBottom) {
+        if (imeBottom > 0 && uiState.selectedThreadForPreview != null && uiState.previewMessages.isNotEmpty()) {
+            previewLazyListState.animateScrollToItem(uiState.previewMessages.size - 1)
+        }
     }
 
     val runWithOdinLock: (() -> Unit) -> Unit = { action ->
@@ -853,7 +867,7 @@ fun MainScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
+                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
             ) {
                 if (uiState.selectedThreadForPreview != null && huginnComposerEnabled) {
                     com.messagebackup.app.ui.components.HuginnMessageComposerBar(
@@ -869,7 +883,7 @@ fun MainScreen(
             }
         },
         floatingActionButton = {
-            if (uiState.selectedThreadForPreview != null) {
+            if (uiState.selectedThreadForPreview != null && imeBottom == 0) {
                 val includedCount = (uiState.previewMessages.size - uiState.excludedMessageIds.size).coerceAtLeast(0)
                 val totalMessages = uiState.filteredPreviewMessages.size
                 Column(

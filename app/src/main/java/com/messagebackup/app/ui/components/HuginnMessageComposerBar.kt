@@ -86,6 +86,7 @@ fun HuginnMessageComposerBar(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val scope = rememberCoroutineScope()
 
     val ansuzCredits by prefs.ansuzCredits.collectAsState()
@@ -195,6 +196,7 @@ fun HuginnMessageComposerBar(
             textInput = ""
             thoughtSuggestion = null
             showThoughtSheet = false
+            focusManager.clearFocus()
         } catch (e: Exception) {
             Toast.makeText(context, "Could not open messaging app: ${e.message}", Toast.LENGTH_SHORT).show()
         }
@@ -434,6 +436,17 @@ fun HuginnMessageComposerBar(
                     )
                 },
                 maxLines = 4,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Send
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onSend = {
+                        if (isHuginnActive && textInput.isNotBlank()) {
+                            dispatchSms(textInput)
+                        }
+                    }
+                ),
                 shape = RoundedCornerShape(24.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
