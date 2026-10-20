@@ -12,6 +12,10 @@ import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAd
 import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAdLoadCallback
+import com.google.android.gms.ads.nativead.NativeAd
+import com.google.android.gms.ads.nativead.NativeAdOptions
+import com.google.android.gms.ads.VideoOptions
+import com.google.android.gms.ads.AdLoader
 import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
@@ -293,5 +297,40 @@ class AdManager(private val context: Context) {
             loadInterstitialAd(activity)
             onComplete()
         }
+    }
+
+    /**
+     * Loads a high-eCPM Native In-Feed Video Ad with muted autoplay.
+     */
+    fun loadNativeFeedAd(
+        context: Context,
+        onAdLoaded: (NativeAd) -> Unit,
+        onAdFailed: () -> Unit = {}
+    ) {
+        val adUnitId = context.getString(R.string.admob_native_id)
+        val videoOptions = VideoOptions.Builder()
+            .setStartMuted(true) // Always start video muted so user is never startled
+            .build()
+
+        val adOptions = NativeAdOptions.Builder()
+            .setVideoOptions(videoOptions)
+            .setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
+            .build()
+
+        val adLoader = AdLoader.Builder(context, adUnitId)
+            .forNativeAd { nativeAd ->
+                Log.d(TAG, "Native In-Feed Video Ad loaded successfully.")
+                onAdLoaded(nativeAd)
+            }
+            .withAdListener(object : com.google.android.gms.ads.AdListener() {
+                override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                    Log.w(TAG, "Native In-Feed Ad failed to load: ${loadAdError.message}")
+                    onAdFailed()
+                }
+            })
+            .withNativeAdOptions(adOptions)
+            .build()
+
+        adLoader.loadAd(AdRequest.Builder().build())
     }
 }

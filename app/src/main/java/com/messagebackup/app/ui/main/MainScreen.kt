@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -1321,7 +1322,7 @@ fun MainScreen(
                             }
                             else -> {
                                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                    items(uiState.filteredThreads, key = { it.threadId }) { thread ->
+                                    itemsIndexed(uiState.filteredThreads, key = { _, it -> it.threadId }) { index, thread ->
                                         val isSelected = uiState.selectedThreadIds.contains(thread.threadId)
                                         ConversationItem(
                                             thread = thread,
@@ -1330,6 +1331,13 @@ fun MainScreen(
                                             onToggleSelect = { viewModel.toggleThreadSelection(thread.threadId) },
                                             onClick = { viewModel.openThreadPreview(thread) }
                                         )
+
+                                        // Native In-Feed Video Ad inserted after conversation #3 for non-pro users
+                                        if (!isAdsRemoved && (index == 3 || (index > 3 && (index - 3) % 12 == 0))) {
+                                            com.messagebackup.app.ui.components.NativeFeedAdCard(
+                                                adManager = viewModel.adManager
+                                            )
+                                        }
                                     }
 
                                     item {

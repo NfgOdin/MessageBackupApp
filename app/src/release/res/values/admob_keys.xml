@@ -6,4 +6,6 @@
     <!-- Can be replaced with specific release interstitial unit ID once created in AdMob console -->
     <string name="admob_interstitial_id">ca-app-pub-1794260070743930/5813825146</string>
     <string name="admob_rewarded_interstitial_id">ca-app-pub-1794260070743930/7771944073</string>
+    <!-- Native In-Feed Ad Unit ID (Can be replaced with dedicated native unit once created in AdMob) -->
+    <string name="admob_native_id">ca-app-pub-1794260070743930/5078046713</string>
 </resources>
