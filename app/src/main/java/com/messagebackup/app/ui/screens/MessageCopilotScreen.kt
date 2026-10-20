@@ -113,6 +113,8 @@ fun MessageCopilotScreen(
     val aiProviderStr by prefs.aiProvider.collectAsState()
     val geminiKey by prefs.geminiApiKey.collectAsState()
     val geminiModel by prefs.geminiModel.collectAsState()
+    val openaiKey by prefs.openaiApiKey.collectAsState()
+    val openaiModel by prefs.openaiModel.collectAsState()
     val ollamaUrl by prefs.ollamaEndpoint.collectAsState()
     val ollamaModel by prefs.ollamaModel.collectAsState()
     val odinTemperature by prefs.odinTemperature.collectAsState()
@@ -121,7 +123,11 @@ fun MessageCopilotScreen(
     val customSystemPrompt by prefs.odinCustomSystemPrompt.collectAsState()
 
     val currentProvider = remember(aiProviderStr) {
-        if (aiProviderStr == AiProviderType.OLLAMA.name) AiProviderType.OLLAMA else AiProviderType.GEMINI
+        try {
+            AiProviderType.valueOf(aiProviderStr)
+        } catch (e: Exception) {
+            AiProviderType.GEMINI
+        }
     }
 
     var showGuideDialog by remember { mutableStateOf(false) }
@@ -208,6 +214,8 @@ fun MessageCopilotScreen(
                 providerType = currentProvider,
                 geminiApiKey = geminiKey,
                 geminiModel = geminiModel,
+                openaiApiKey = openaiKey,
+                openaiModel = openaiModel,
                 ollamaEndpoint = ollamaUrl,
                 ollamaModel = ollamaModel,
                 temperature = odinTemperature,
@@ -412,10 +420,11 @@ fun MessageCopilotScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = if (currentProvider == AiProviderType.OLLAMA)
-                        "🔒 Local Privacy Mode: Queries stay on your private network ($ollamaUrl)"
-                    else
-                        "☁️ Opt-In Gemini Mode (BYOK): Queries use your personal API key • Switch to Ollama in Settings for 100% local AI",
+                    text = when (currentProvider) {
+                        AiProviderType.OLLAMA -> "🔒 Local Privacy Mode: Queries stay on your private local network ($ollamaUrl)"
+                        AiProviderType.OPENAI -> "☁️ OpenAI ChatGPT Mode (BYOK): Queries use your personal API key ($openaiModel)"
+                        AiProviderType.GEMINI -> "☁️ Google Gemini Mode (BYOK): Queries use your personal API key ($geminiModel)"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)

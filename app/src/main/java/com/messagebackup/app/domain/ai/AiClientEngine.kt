@@ -16,7 +16,8 @@ import java.time.format.DateTimeFormatter
 
 enum class AiProviderType(val displayName: String) {
     GEMINI("Google Gemini (Cloud BYOK)"),
-    OLLAMA("Ollama (Tailscale / Local PC)")
+    OPENAI("OpenAI ChatGPT (Cloud BYOK)"),
+    OLLAMA("Local / Self-Hosted (Ollama / LocalAI / Kobold)")
 }
 
 data class OdinChatMessage(
@@ -178,6 +179,8 @@ class AiClientEngine {
         providerType: AiProviderType,
         geminiApiKey: String,
         geminiModel: String = "gemini-flash-lite-latest",
+        openaiApiKey: String = "",
+        openaiModel: String = "gpt-4o-mini",
         ollamaEndpoint: String,
         ollamaModel: String,
         temperature: Float = 0.2f,
@@ -223,9 +226,15 @@ class AiClientEngine {
                     }
                     queryGemini(systemInstruction, userPrompt, geminiApiKey, geminiModel, temperature, topP)
                 }
+                AiProviderType.OPENAI -> {
+                    if (openaiApiKey.isBlank()) {
+                        return@withContext AiQueryResult.Error("OpenAI API Key is missing. Add your API key in O.D.I.N. Settings.")
+                    }
+                    queryOpenAi(systemInstruction, userPrompt, openaiApiKey, openaiModel, temperature, topP)
+                }
                 AiProviderType.OLLAMA -> {
                     if (ollamaEndpoint.isBlank()) {
-                        return@withContext AiQueryResult.Error("Ollama host endpoint is missing. Add your Tailscale or local IP (e.g. http://100.x.y.z:11434).")
+                        return@withContext AiQueryResult.Error("Local AI host endpoint is missing. Add your local IP (e.g. http://100.x.y.z:11434).")
                     }
                     queryOllama(systemInstruction, userPrompt, ollamaEndpoint, ollamaModel, temperature, topP, numCtx)
                 }
@@ -338,6 +347,74 @@ class AiClientEngine {
         } catch (e: Exception) {
             val msg = e.localizedMessage ?: "Network connection error"
             return AiQueryResult.Error("Gemini connection error on '$cleanModel': $msg")
+        }
+    }
+
+    private fun queryOpenAi(
+        systemInstruction: String,
+        userPrompt: String,
+        apiKey: String,
+        modelName: String,
+        temperature: Float,
+        topP: Float
+    ): AiQueryResult {
+        val cleanModel = modelName.trim().ifBlank { "gpt-4o-mini" }
+
+        try {
+            val url = URL("https://api.openai.com/v1/chat/completions")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("Authorization", "Bearer ${apiKey.trim()}")
+                connectTimeout = 15000
+                readTimeout = 45000
+                doOutput = true
+            }
+
+            val requestJson = JSONObject().apply {
+                put("model", cleanModel)
+                val messagesArray = JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("role", "system")
+                        put("content", systemInstruction)
+                    })
+                    put(JSONObject().apply {
+                        put("role", "user")
+                        put("content", userPrompt)
+                    })
+                }
+                put("messages", messagesArray)
+                put("temperature", temperature)
+                put("top_p", topP)
+            }
+
+            OutputStreamWriter(conn.outputStream).use { it.write(requestJson.toString()) }
+
+            val code = conn.responseCode
+            if (code == 200) {
+                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                val root = JSONObject(responseText)
+                val choices = root.optJSONArray("choices")
+                if (choices != null && choices.length() > 0) {
+                    val firstChoice = choices.getJSONObject(0)
+                    val message = firstChoice.optJSONObject("message")
+                    val answer = message?.optString("content", "")?.trim()
+                    if (!answer.isNullOrBlank()) {
+                        return AiQueryResult.Success(answer)
+                    }
+                }
+                return AiQueryResult.Error("OpenAI returned an empty response.")
+            } else if (code == 401) {
+                return AiQueryResult.Error("Invalid OpenAI API Key (HTTP 401). Please verify your API key in Settings.")
+            } else if (code == 429) {
+                return AiQueryResult.Error("OpenAI Rate Limit or Quota Exceeded (HTTP 429). Check your billing / credits at platform.openai.com.")
+            } else {
+                val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP $code"
+                return AiQueryResult.Error("OpenAI API Error ($code): $errorText")
+            }
+        } catch (e: Exception) {
+            val msg = e.localizedMessage ?: "Network connection error"
+            return AiQueryResult.Error("OpenAI connection error: $msg")
         }
     }
 

@@ -48,6 +48,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -129,6 +130,8 @@ fun SettingsScreen(
     val aiProvider by prefs.aiProvider.collectAsState()
     val geminiApiKey by prefs.geminiApiKey.collectAsState()
     val geminiModel by prefs.geminiModel.collectAsState()
+    val openaiApiKey by prefs.openaiApiKey.collectAsState()
+    val openaiModel by prefs.openaiModel.collectAsState()
     val ollamaEndpoint by prefs.ollamaEndpoint.collectAsState()
     val ollamaModel by prefs.ollamaModel.collectAsState()
     val odinTemperature by prefs.odinTemperature.collectAsState()
@@ -140,6 +143,9 @@ fun SettingsScreen(
 
     val scope = rememberCoroutineScope()
     val aiEngine = remember { com.messagebackup.app.domain.ai.AiClientEngine() }
+
+    var showProviderDropdown by remember { mutableStateOf(false) }
+    var showOpenAiDropdown by remember { mutableStateOf(false) }
 
     var isFetchingGeminiModels by remember { mutableStateOf(false) }
     var detectedGeminiModels by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -1051,294 +1057,388 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                    // Provider Radio Selection
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { prefs.setAiProvider("GEMINI") },
-                            colors = if (aiProvider == "GEMINI") ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer) else ButtonDefaults.outlinedButtonColors(),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Google Gemini")
-                        }
-
-                        OutlinedButton(
-                            onClick = { prefs.setAiProvider("OLLAMA") },
-                            colors = if (aiProvider == "OLLAMA") ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer) else ButtonDefaults.outlinedButtonColors(),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Local Ollama")
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    if (aiProvider == "GEMINI") {
-                        OutlinedTextField(
-                            value = geminiApiKey,
-                            onValueChange = { prefs.setGeminiApiKey(it) },
-                            label = { Text("Gemini API Key (BYOK)") },
-                            placeholder = { Text("Paste free Google AI Studio key") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                        // Clean Unified Provider Dropdown
+                        Text(
+                            text = "Active AI Provider",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
-                        // Gemini Model Dropdown / Selector
+                        val providerDisplayName = when (aiProvider) {
+                            "OPENAI" -> "🧠 OpenAI ChatGPT (Cloud BYOK)"
+                            "OLLAMA" -> "🔒 Local / Self-Hosted (Ollama / Kobold / LocalAI)"
+                            else -> "☁️ Google Gemini (Cloud BYOK)"
+                        }
+
                         Box(modifier = Modifier.fillMaxWidth()) {
-                            OutlinedTextField(
-                                value = geminiModel,
-                                onValueChange = { prefs.setGeminiModel(it) },
-                                label = {
-                                    Text(
-                                        if (detectedGeminiModels.isNotEmpty()) {
-                                            "Gemini Model (${detectedGeminiModels.size} available — tap arrow)"
-                                        } else {
-                                            "Gemini Model Name (★ gemini-flash-lite-latest)"
-                                        }
-                                    )
-                                },
-                                placeholder = { Text("gemini-flash-lite-latest") },
-                                singleLine = true,
-                                trailingIcon = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (isFetchingGeminiModels) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier
-                                                    .size(20.dp)
-                                                    .padding(end = 4.dp),
-                                                strokeWidth = 2.dp
-                                            )
-                                        } else {
-                                            IconButton(
-                                                onClick = {
-                                                    if (geminiApiKey.isBlank()) {
-                                                        Toast.makeText(context, "Enter your Gemini API key first", Toast.LENGTH_SHORT).show()
-                                                    } else {
-                                                        isFetchingGeminiModels = true
-                                                        scope.launch {
-                                                            val res = aiEngine.fetchGeminiModels(geminiApiKey)
-                                                            isFetchingGeminiModels = false
-                                                            res.onSuccess { models ->
-                                                                detectedGeminiModels = models
-                                                                showGeminiDropdown = true
-                                                            }.onFailure { err ->
-                                                                Toast.makeText(context, err.message ?: "Failed to fetch models", Toast.LENGTH_LONG).show()
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            ) {
-                                                Icon(
-                                                    imageVector = if (detectedGeminiModels.isNotEmpty()) Icons.Default.ArrowDropDown else Icons.Default.Refresh,
-                                                    contentDescription = "Fetch or select Gemini model",
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        }
-                                    }
-                                },
+                            OutlinedCard(
+                                onClick = { showProviderDropdown = true },
                                 modifier = Modifier.fillMaxWidth()
-                            )
-
-                            DropdownMenu(
-                                expanded = showGeminiDropdown && detectedGeminiModels.isNotEmpty(),
-                                onDismissRequest = { showGeminiDropdown = false },
-                                modifier = Modifier.fillMaxWidth(0.85f)
                             ) {
-                                detectedGeminiModels.forEach { modelName ->
-                                    val isSelected = modelName.equals(geminiModel, ignoreCase = true)
-                                    DropdownMenuItem(
-                                        text = {
-                                            Column {
-                                                Text(
-                                                    text = modelName,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                                )
-                                                when (modelName) {
-                                                    "gemini-flash-lite-latest" -> {
-                                                        Text(
-                                                            text = "★ Recommended (Fastest & most responsive)",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    }
-                                                    "gemini-3.8-flash" -> {
-                                                        Text(
-                                                            text = "★ Flagship Flash (Advanced reasoning)",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = MaterialTheme.colorScheme.tertiary
-                                                        )
-                                                    }
-                                                    "gemini-3.5-flash-lite" -> {
-                                                        Text(
-                                                            text = "★ Fast & Efficient",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = MaterialTheme.colorScheme.secondary
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        leadingIcon = if (isSelected) {
-                                            {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        } else null,
-                                        onClick = {
-                                            prefs.setGeminiModel(modelName)
-                                            showGeminiDropdown = false
-                                        }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = providerDisplayName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = "Select AI Provider",
+                                        tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
                             }
-                        }
-
-                        Text(
-                            text = if (detectedGeminiModels.isNotEmpty()) "Tap arrow to switch models. Recommended: Gemini Flash-Lite Latest." else "Tap refresh icon to fetch all active models available on your Google account.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    } else {
-                        OutlinedTextField(
-                            value = ollamaEndpoint,
-                            onValueChange = { prefs.setOllamaEndpoint(it) },
-                            label = { Text("Ollama Host / Tailscale URL") },
-                            placeholder = { Text("http://100.x.y.z:11434") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        // Ollama Model Dropdown / Selector
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            OutlinedTextField(
-                                value = ollamaModel,
-                                onValueChange = { prefs.setOllamaModel(it) },
-                                label = {
-                                    Text(
-                                        if (detectedOllamaModels.isNotEmpty()) {
-                                            "Ollama Model (${detectedOllamaModels.size} available — tap arrow)"
-                                        } else {
-                                            "Model Name (★ qwen2.5:14b Recommended)"
-                                        }
-                                    )
-                                },
-                                placeholder = { Text("qwen2.5:14b") },
-                                singleLine = true,
-                                trailingIcon = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (isFetchingOllamaModels) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier
-                                                    .size(20.dp)
-                                                    .padding(end = 4.dp),
-                                                strokeWidth = 2.dp
-                                            )
-                                        } else {
-                                            IconButton(
-                                                onClick = {
-                                                    if (ollamaEndpoint.isBlank()) {
-                                                        Toast.makeText(context, "Enter your Ollama URL first", Toast.LENGTH_SHORT).show()
-                                                    } else {
-                                                        isFetchingOllamaModels = true
-                                                        scope.launch {
-                                                            val res = aiEngine.testOllamaConnection(ollamaEndpoint)
-                                                            isFetchingOllamaModels = false
-                                                            res.onSuccess { models ->
-                                                                detectedOllamaModels = models
-                                                                showOllamaDropdown = true
-                                                            }.onFailure { err ->
-                                                                Toast.makeText(context, err.message ?: "Failed to reach Ollama", Toast.LENGTH_LONG).show()
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            ) {
-                                                Icon(
-                                                    imageVector = if (detectedOllamaModels.isNotEmpty()) Icons.Default.ArrowDropDown else Icons.Default.Refresh,
-                                                    contentDescription = "Fetch or select Ollama model",
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            )
 
                             DropdownMenu(
-                                expanded = showOllamaDropdown && detectedOllamaModels.isNotEmpty(),
-                                onDismissRequest = { showOllamaDropdown = false },
+                                expanded = showProviderDropdown,
+                                onDismissRequest = { showProviderDropdown = false },
                                 modifier = Modifier.fillMaxWidth(0.85f)
                             ) {
-                                detectedOllamaModels.forEach { modelName ->
-                                    val isSelected = modelName.equals(ollamaModel, ignoreCase = true)
-                                    DropdownMenuItem(
-                                        text = {
-                                            Column {
-                                                Text(
-                                                    text = modelName,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                                )
-                                                if (modelName.contains("qwen2.5", ignoreCase = true)) {
-                                                    Text(
-                                                        text = "★ Recommended for accuracy & insights",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.primary
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text("☁️ Google Gemini", fontWeight = FontWeight.Bold)
+                                            Text("Fast, generous free tier • Cloud BYOK", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    },
+                                    onClick = {
+                                        prefs.setAiProvider("GEMINI")
+                                        showProviderDropdown = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text("🧠 OpenAI ChatGPT", fontWeight = FontWeight.Bold)
+                                            Text("GPT-4o & GPT-4o-mini • Cloud BYOK", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    },
+                                    onClick = {
+                                        prefs.setAiProvider("OPENAI")
+                                        showProviderDropdown = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text("🔒 Local / Self-Hosted", fontWeight = FontWeight.Bold)
+                                            Text("Ollama, Kobold, LocalAI over LAN/Tailscale • 100% Private", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    },
+                                    onClick = {
+                                        prefs.setAiProvider("OLLAMA")
+                                        showProviderDropdown = false
+                                    }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Dynamic Settings Based on Selected Provider
+                        when (aiProvider) {
+                            "GEMINI" -> {
+                                OutlinedTextField(
+                                    value = geminiApiKey,
+                                    onValueChange = { prefs.setGeminiApiKey(it) },
+                                    label = { Text("Google Gemini API Key (BYOK)") },
+                                    placeholder = { Text("Paste free Google AI Studio key") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                // Gemini Model Dropdown / Selector
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = geminiModel,
+                                        onValueChange = { prefs.setGeminiModel(it) },
+                                        label = {
+                                            Text(
+                                                if (detectedGeminiModels.isNotEmpty()) {
+                                                    "Gemini Model (${detectedGeminiModels.size} available — tap arrow)"
+                                                } else {
+                                                    "Gemini Model Name (★ gemini-flash-lite-latest)"
+                                                }
+                                            )
+                                        },
+                                        placeholder = { Text("gemini-flash-lite-latest") },
+                                        singleLine = true,
+                                        trailingIcon = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (isFetchingGeminiModels) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier
+                                                            .size(20.dp)
+                                                            .padding(end = 4.dp),
+                                                        strokeWidth = 2.dp
                                                     )
+                                                } else {
+                                                    IconButton(
+                                                        onClick = {
+                                                            if (geminiApiKey.isBlank()) {
+                                                                Toast.makeText(context, "Enter your Gemini API key first", Toast.LENGTH_SHORT).show()
+                                                            } else {
+                                                                isFetchingGeminiModels = true
+                                                                scope.launch {
+                                                                    val res = aiEngine.fetchGeminiModels(geminiApiKey)
+                                                                    isFetchingGeminiModels = false
+                                                                    res.onSuccess { models ->
+                                                                        detectedGeminiModels = models
+                                                                        showGeminiDropdown = true
+                                                                    }.onFailure { err ->
+                                                                        Toast.makeText(context, err.message ?: "Failed to fetch models", Toast.LENGTH_LONG).show()
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (detectedGeminiModels.isNotEmpty()) Icons.Default.ArrowDropDown else Icons.Default.Refresh,
+                                                            contentDescription = "Fetch or select Gemini model",
+                                                            tint = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
                                                 }
                                             }
                                         },
-                                        leadingIcon = if (isSelected) {
-                                            {
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    DropdownMenu(
+                                        expanded = showGeminiDropdown && detectedGeminiModels.isNotEmpty(),
+                                        onDismissRequest = { showGeminiDropdown = false },
+                                        modifier = Modifier.fillMaxWidth(0.85f)
+                                    ) {
+                                        detectedGeminiModels.forEach { modelName ->
+                                            val isSelected = modelName.equals(geminiModel, ignoreCase = true)
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Column {
+                                                        Text(
+                                                            text = modelName,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                                        )
+                                                    }
+                                                },
+                                                leadingIcon = if (isSelected) {
+                                                    { Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+                                                } else null,
+                                                onClick = {
+                                                    prefs.setGeminiModel(modelName)
+                                                    showGeminiDropdown = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Text(
+                                    text = if (detectedGeminiModels.isNotEmpty()) "Tap arrow to switch models. Recommended: Gemini Flash-Lite Latest." else "Tap refresh icon to fetch all active models available on your Google account.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+
+                            "OPENAI" -> {
+                                OutlinedTextField(
+                                    value = openaiApiKey,
+                                    onValueChange = { prefs.setOpenaiApiKey(it) },
+                                    label = { Text("OpenAI API Key (sk-...)") },
+                                    placeholder = { Text("Paste OpenAI platform API key") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                // OpenAI Model Selector Dropdown
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = openaiModel,
+                                        onValueChange = { prefs.setOpenaiModel(it) },
+                                        label = { Text("OpenAI Model Name (Tap arrow for presets)") },
+                                        placeholder = { Text("gpt-4o-mini") },
+                                        singleLine = true,
+                                        trailingIcon = {
+                                            IconButton(onClick = { showOpenAiDropdown = true }) {
                                                 Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = null,
+                                                    imageVector = Icons.Default.ArrowDropDown,
+                                                    contentDescription = "Select OpenAI Model",
                                                     tint = MaterialTheme.colorScheme.primary
                                                 )
                                             }
-                                        } else null,
-                                        onClick = {
-                                            prefs.setOllamaModel(modelName)
-                                            showOllamaDropdown = false
-                                        }
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
                                     )
+
+                                    DropdownMenu(
+                                        expanded = showOpenAiDropdown,
+                                        onDismissRequest = { showOpenAiDropdown = false },
+                                        modifier = Modifier.fillMaxWidth(0.85f)
+                                    ) {
+                                        listOf(
+                                            "gpt-4o-mini" to "★ Recommended (Ultra-fast, lowest cost)",
+                                            "gpt-4o" to "Flagship intelligence & deep analysis",
+                                            "o3-mini" to "Advanced reasoning & timeline logic",
+                                            "gpt-4-turbo" to "High-context previous generation"
+                                        ).forEach { (mName, mDesc) ->
+                                            val isSelected = mName.equals(openaiModel, ignoreCase = true)
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Column {
+                                                        Text(mName, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                                                        Text(mDesc, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                                    }
+                                                },
+                                                leadingIcon = if (isSelected) {
+                                                    { Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+                                                } else null,
+                                                onClick = {
+                                                    prefs.setOpenaiModel(mName)
+                                                    showOpenAiDropdown = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Text(
+                                    text = "★ Recommended: gpt-4o-mini for instant responses and minimal token cost.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+
+                            "OLLAMA" -> {
+                                OutlinedTextField(
+                                    value = ollamaEndpoint,
+                                    onValueChange = { prefs.setOllamaEndpoint(it) },
+                                    label = { Text("Host URL / IP (Ollama, Kobold, LocalAI)") },
+                                    placeholder = { Text("http://192.168.1.50:11434 or Tailscale URL") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                // Local Model Selector
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = ollamaModel,
+                                        onValueChange = { prefs.setOllamaModel(it) },
+                                        label = {
+                                            Text(
+                                                if (detectedOllamaModels.isNotEmpty()) {
+                                                    "Local Model (${detectedOllamaModels.size} found — tap arrow)"
+                                                } else {
+                                                    "Model Name (★ qwen2.5:14b or llama3.2)"
+                                                }
+                                            )
+                                        },
+                                        placeholder = { Text("qwen2.5:14b") },
+                                        singleLine = true,
+                                        trailingIcon = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (isFetchingOllamaModels) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier
+                                                            .size(20.dp)
+                                                            .padding(end = 4.dp),
+                                                        strokeWidth = 2.dp
+                                                    )
+                                                } else {
+                                                    IconButton(
+                                                        onClick = {
+                                                            if (ollamaEndpoint.isBlank()) {
+                                                                Toast.makeText(context, "Enter your Local host URL first", Toast.LENGTH_SHORT).show()
+                                                            } else {
+                                                                isFetchingOllamaModels = true
+                                                                scope.launch {
+                                                                    val res = aiEngine.testOllamaConnection(ollamaEndpoint)
+                                                                    isFetchingOllamaModels = false
+                                                                    res.onSuccess { models ->
+                                                                        detectedOllamaModels = models
+                                                                        showOllamaDropdown = true
+                                                                    }.onFailure { err ->
+                                                                        Toast.makeText(context, err.message ?: "Failed to reach host", Toast.LENGTH_LONG).show()
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (detectedOllamaModels.isNotEmpty()) Icons.Default.ArrowDropDown else Icons.Default.Refresh,
+                                                            contentDescription = "Fetch or select local model",
+                                                            tint = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    DropdownMenu(
+                                        expanded = showOllamaDropdown && detectedOllamaModels.isNotEmpty(),
+                                        onDismissRequest = { showOllamaDropdown = false },
+                                        modifier = Modifier.fillMaxWidth(0.85f)
+                                    ) {
+                                        detectedOllamaModels.forEach { modelName ->
+                                            val isSelected = modelName.equals(ollamaModel, ignoreCase = true)
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Column {
+                                                        Text(
+                                                            text = modelName,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                                        )
+                                                    }
+                                                },
+                                                leadingIcon = if (isSelected) {
+                                                    { Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+                                                } else null,
+                                                onClick = {
+                                                    prefs.setOllamaModel(modelName)
+                                                    showOllamaDropdown = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Text(
+                                    text = "Supports any local OpenAI/Ollama compatible server: Ollama, KoboldCPP, LM Studio, Oobabooga, LocalAI.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = { showOllamaGuide = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lan,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                    Text("Local Host & Tailscale Setup Guide")
                                 }
                             }
                         }
-
-                        Text(
-                            text = "★ Recommended: qwen2.5:14b for highest accuracy. Lightweight fallback: llama3.2 (3B).",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = { showOllamaGuide = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Lan,
-                                contentDescription = null,
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                            Text("Ollama & Tailscale Setup Guide")
-                        }
-                    }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
