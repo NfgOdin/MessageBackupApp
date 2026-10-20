@@ -217,7 +217,7 @@ class BillingManager(
 
     /**
      * Secret Developer License Activation.
-     * Compares the SHA-256 hash of the entered key so the actual secret key is NEVER stored in plaintext
+     * Compares the salted SHA-256 hash of the entered key so the actual secret key is NEVER stored in plaintext
      * and cannot be decompiled or extracted from the APK.
      */
     fun unlockDeveloperPro(enteredKey: String): Boolean {
@@ -225,14 +225,18 @@ class BillingManager(
         if (trimmed.isEmpty()) return false
 
         try {
+            // Salt prevents dictionary/rainbow table lookups against compiled strings
+            val salt = "Muninn-DevMasterSalt-2026#"
             val md = java.security.MessageDigest.getInstance("SHA-256")
-            val digest = md.digest(trimmed.toByteArray(Charsets.UTF_8))
+            val digest = md.digest((salt + trimmed).toByteArray(Charsets.UTF_8))
             val hashString = digest.joinToString("") { "%02x".format(it) }
 
-            // Target SHA-256 hash for developer bypass key: "NfgOdin-DevMaster-2026-Vault"
-            val targetHash = "31eeb6e605cdd8aef6251a1bae2662755103bf6ed339acae83b9255f2fae6628"
+            // Target salted SHA-256 hash for developer master key
+            // Pre-computed hash of ("Muninn-DevMasterSalt-2026#" + "NfgOdin-DevMaster-2026-Vault")
+            // Plaintext is NEVER stored anywhere in the bytecode
+            val targetSaltedHash = "49f3e718629b08d788402d99224762ec0aac2ea67b9b07b67ef6b75e68c1bec4"
 
-            if (hashString.equals(targetHash, ignoreCase = true) || trimmed == "NfgOdin-DevMaster-2026-Vault") {
+            if (hashString.equals(targetSaltedHash, ignoreCase = true)) {
                 prefs.edit()
                     .putBoolean(KEY_ADS_REMOVED, true)
                     .putBoolean(KEY_AUTO_BACKUP, true)
