@@ -110,6 +110,9 @@ fun MessageCopilotScreen(
     val aiEngine = remember { AiClientEngine() }
 
     val aiCredits by prefs.aiCredits.collectAsState()
+    val isOdinPermanentUnlocked by prefs.isOdinPermanentUnlocked.collectAsState()
+    val isOdinUnlockedByBilling by com.messagebackup.app.MessageBackupApp.instance.billingManager.isOdinUnlocked.collectAsState()
+    val isOdinUnlimited = isAdsRemoved || isOdinPermanentUnlocked || isOdinUnlockedByBilling
     val aiProviderStr by prefs.aiProvider.collectAsState()
     val geminiKey by prefs.geminiApiKey.collectAsState()
     val geminiModel by prefs.geminiModel.collectAsState()
@@ -182,15 +185,15 @@ fun MessageCopilotScreen(
         }
 
         // Credit check for free users
-        if (!isAdsRemoved && aiCredits <= 0) {
-            Toast.makeText(context, "Out of AI credits! Watch an ad to earn +2 credits.", Toast.LENGTH_SHORT).show()
+        if (!isOdinUnlimited && aiCredits <= 0) {
+            Toast.makeText(context, "Out of Othala AI credits! Watch an ad or sacrifice an eye for knowledge.", Toast.LENGTH_SHORT).show()
             adManager.showRewardedAd(
                 activity = activity,
                 isAdsRemoved = false,
                 onUserEarnedReward = {
                     prefs.recordRewardAdWatched()
                     prefs.addAiCredits(2)
-                    Toast.makeText(context, "Earned +2 AI Credits! Resending...", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Earned +2 ᛟ Othala Runes! Resending...", Toast.LENGTH_SHORT).show()
                     sendPrompt(trimmed)
                 }
             )
@@ -223,7 +226,7 @@ fun MessageCopilotScreen(
             when (result) {
                 is AiQueryResult.Success -> {
                     // Only consume the credit when a successful answer is actually delivered!
-                    if (!isAdsRemoved) {
+                    if (!isOdinUnlimited) {
                         prefs.consumeAiCredit()
                     }
                     chatMessages.add(
@@ -313,11 +316,11 @@ fun MessageCopilotScreen(
                 actions = {
                     // Credit Badge or PRO
                     Surface(
-                        color = if (isAdsRemoved) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                        color = if (isOdinUnlimited) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .clickable {
-                                if (!isAdsRemoved) {
+                                if (!isOdinUnlimited) {
                                     showArcadeDialog = true
                                 }
                             }
@@ -327,7 +330,7 @@ fun MessageCopilotScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                         ) {
-                            if (isAdsRemoved) {
+                            if (isOdinUnlimited) {
                                 Icon(
                                     imageVector = Icons.Default.AutoAwesome,
                                     contentDescription = null,
@@ -336,7 +339,7 @@ fun MessageCopilotScreen(
                                 )
                             } else {
                                 Icon(
-                                    painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_raido),
+                                    painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_othala),
                                     contentDescription = null,
                                     modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer
@@ -344,7 +347,7 @@ fun MessageCopilotScreen(
                             }
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = if (isAdsRemoved) "PRO" else "$aiCredits",
+                                text = if (isAdsRemoved) "PRO" else if (isOdinPermanentUnlocked || isOdinUnlockedByBilling) "ᛟ 👁️ ∞" else "$aiCredits",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -353,8 +356,8 @@ fun MessageCopilotScreen(
 
                     IconButton(
                         onClick = {
-                            if (!isAdsRemoved && aiCredits <= 0) {
-                                Toast.makeText(context, "Scanning promises requires 1 Raido Rune credit. Watch an ad to earn +2!", Toast.LENGTH_SHORT).show()
+                            if (!isOdinUnlimited && aiCredits <= 0) {
+                                Toast.makeText(context, "Scanning promises requires 1 Othala Rune credit. Watch an ad to earn +2!", Toast.LENGTH_SHORT).show()
                                 adManager.showRewardedAd(
                                     activity = activity,
                                     isAdsRemoved = false,
@@ -366,7 +369,7 @@ fun MessageCopilotScreen(
                                     }
                                 )
                             } else {
-                                if (!isAdsRemoved) {
+                                if (!isOdinUnlimited) {
                                     prefs.consumeAiCredit()
                                 }
                                 showRadarDialog = true

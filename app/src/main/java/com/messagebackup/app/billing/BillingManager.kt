@@ -33,6 +33,7 @@ class BillingManager(
         const val PRODUCT_REMOVE_ADS = "remove_ads_permanent"
         const val PRODUCT_AUTO_BACKUP = "auto_backup_standalone"
         const val PRODUCT_UNLOCK_HUGINN = "huginn_live_dispatch_standalone"
+        const val PRODUCT_UNLOCK_ODIN_EYE = "odin_eye_of_mimir_standalone"
         const val PRODUCT_PACK_ANSUZ_100 = "pack_ansuz_100"
         const val PRODUCT_PACK_OTHALA_100 = "pack_othala_100"
         const val PRODUCT_PACK_JERA_10 = "pack_jera_10"
@@ -44,6 +45,7 @@ class BillingManager(
         private const val KEY_ADS_REMOVED = "is_ads_removed"
         private const val KEY_AUTO_BACKUP = "is_auto_backup_unlocked"
         private const val KEY_HUGINN_UNLOCKED = "is_huginn_unlocked"
+        private const val KEY_ODIN_UNLOCKED = "is_odin_unlocked"
     }
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -61,6 +63,11 @@ class BillingManager(
     )
     val isHuginnUnlocked: StateFlow<Boolean> = _isHuginnUnlocked.asStateFlow()
 
+    private val _isOdinUnlocked = MutableStateFlow(
+        prefs.getBoolean(KEY_ODIN_UNLOCKED, false) || prefs.getBoolean(KEY_ADS_REMOVED, false)
+    )
+    val isOdinUnlocked: StateFlow<Boolean> = _isOdinUnlocked.asStateFlow()
+
     private val _proProductPrice = MutableStateFlow<String?>("$4.99")
     val proProductPrice: StateFlow<String?> = _proProductPrice.asStateFlow()
 
@@ -72,6 +79,9 @@ class BillingManager(
 
     private val _huginnPrice = MutableStateFlow<String?>("$0.99")
     val huginnPrice: StateFlow<String?> = _huginnPrice.asStateFlow()
+
+    private val _odinEyePrice = MutableStateFlow<String?>("$0.99")
+    val odinEyePrice: StateFlow<String?> = _odinEyePrice.asStateFlow()
 
     private val _productDetailsMap = MutableStateFlow<Map<String, ProductDetails>>(emptyMap())
     val productDetailsMap: StateFlow<Map<String, ProductDetails>> = _productDetailsMap.asStateFlow()
@@ -137,6 +147,7 @@ class BillingManager(
             PRODUCT_REMOVE_ADS,
             PRODUCT_AUTO_BACKUP,
             PRODUCT_UNLOCK_HUGINN,
+            PRODUCT_UNLOCK_ODIN_EYE,
             PRODUCT_PACK_ANSUZ_100,
             PRODUCT_PACK_OTHALA_100,
             PRODUCT_PACK_JERA_10,
@@ -170,6 +181,10 @@ class BillingManager(
                     } else if (details.productId == PRODUCT_UNLOCK_HUGINN) {
                         details.oneTimePurchaseOfferDetails?.formattedPrice?.let {
                             _huginnPrice.value = it
+                        }
+                    } else if (details.productId == PRODUCT_UNLOCK_ODIN_EYE) {
+                        details.oneTimePurchaseOfferDetails?.formattedPrice?.let {
+                            _odinEyePrice.value = it
                         }
                     }
                 }
@@ -214,19 +229,24 @@ class BillingManager(
                 if (purchase.products.contains(PRODUCT_REMOVE_ADS)) {
                     prefs.edit().putBoolean(KEY_ADS_REMOVED, true).apply()
                     _isAdsRemoved.value = true
-                    // Pro includes auto backup and Huginn forever as well
+                    // Pro includes auto backup, Huginn, and Odin Eye forever
                     prefs.edit()
                         .putBoolean(KEY_AUTO_BACKUP, true)
                         .putBoolean(KEY_HUGINN_UNLOCKED, true)
+                        .putBoolean(KEY_ODIN_UNLOCKED, true)
                         .apply()
                     _isAutoBackupUnlocked.value = true
                     _isHuginnUnlocked.value = true
+                    _isOdinUnlocked.value = true
                 } else if (purchase.products.contains(PRODUCT_AUTO_BACKUP)) {
                     prefs.edit().putBoolean(KEY_AUTO_BACKUP, true).apply()
                     _isAutoBackupUnlocked.value = true
                 } else if (purchase.products.contains(PRODUCT_UNLOCK_HUGINN)) {
                     prefs.edit().putBoolean(KEY_HUGINN_UNLOCKED, true).apply()
                     _isHuginnUnlocked.value = true
+                } else if (purchase.products.contains(PRODUCT_UNLOCK_ODIN_EYE)) {
+                    prefs.edit().putBoolean(KEY_ODIN_UNLOCKED, true).apply()
+                    _isOdinUnlocked.value = true
                 } else if (purchase.products.contains(PRODUCT_PACK_ANSUZ_100)) {
                     val appPrefs = com.messagebackup.app.MessageBackupApp.instance.appPreferences
                     appPrefs.addAnsuzCredits(100)
@@ -281,10 +301,12 @@ class BillingManager(
                     .putBoolean(KEY_ADS_REMOVED, true)
                     .putBoolean(KEY_AUTO_BACKUP, true)
                     .putBoolean(KEY_HUGINN_UNLOCKED, true)
+                    .putBoolean(KEY_ODIN_UNLOCKED, true)
                     .apply()
                 _isAdsRemoved.value = true
                 _isAutoBackupUnlocked.value = true
                 _isHuginnUnlocked.value = true
+                _isOdinUnlocked.value = true
                 return true
             }
         } catch (e: Exception) {
@@ -301,9 +323,11 @@ class BillingManager(
             .putBoolean(KEY_ADS_REMOVED, false)
             .putBoolean(KEY_AUTO_BACKUP, false)
             .putBoolean(KEY_HUGINN_UNLOCKED, false)
+            .putBoolean(KEY_ODIN_UNLOCKED, false)
             .apply()
         _isAdsRemoved.value = false
         _isAutoBackupUnlocked.value = false
         _isHuginnUnlocked.value = false
+        _isOdinUnlocked.value = false
     }
 }

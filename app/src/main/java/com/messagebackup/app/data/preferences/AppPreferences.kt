@@ -55,6 +55,7 @@ class AppPreferences(context: Context) {
         private const val KEY_HUGINN_LEASE_EXPIRY_MS = "huginn_lease_expiry_ms"
         private const val KEY_HUGINN_AD_PROGRESS = "huginn_ad_progress"
         private const val KEY_HUGINN_PERMANENT_UNLOCKED = "huginn_permanent_unlocked"
+        private const val KEY_ODIN_PERMANENT_UNLOCKED = "odin_permanent_unlocked"
 
         // Privacy PIN & Biometric Lock Preferences
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
@@ -105,6 +106,10 @@ class AppPreferences(context: Context) {
     // Standalone $0.99 permanent Huginn unlock
     private val _isHuginnPermanentUnlocked = MutableStateFlow(prefs.getBoolean(KEY_HUGINN_PERMANENT_UNLOCKED, false))
     val isHuginnPermanentUnlocked: StateFlow<Boolean> = _isHuginnPermanentUnlocked.asStateFlow()
+
+    // Standalone $0.99 permanent O.D.I.N. unlock (Eye of Mímir)
+    private val _isOdinPermanentUnlocked = MutableStateFlow(prefs.getBoolean(KEY_ODIN_PERMANENT_UNLOCKED, false))
+    val isOdinPermanentUnlocked: StateFlow<Boolean> = _isOdinPermanentUnlocked.asStateFlow()
 
     private val _autoBackupEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_BACKUP_ENABLED, false))
     val autoBackupEnabled: StateFlow<Boolean> = _autoBackupEnabled.asStateFlow()
@@ -377,6 +382,16 @@ class AppPreferences(context: Context) {
     fun setHuginnPermanentUnlocked(unlocked: Boolean) {
         prefs.edit().putBoolean(KEY_HUGINN_PERMANENT_UNLOCKED, unlocked).apply()
         _isHuginnPermanentUnlocked.value = unlocked
+    }
+
+    fun setOdinPermanentUnlocked(unlocked: Boolean) {
+        prefs.edit().putBoolean(KEY_ODIN_PERMANENT_UNLOCKED, unlocked).apply()
+        _isOdinPermanentUnlocked.value = unlocked
+    }
+
+    fun isOdinActive(isAdsRemoved: Boolean = false): Boolean {
+        if (isAdsRemoved || _isOdinPermanentUnlocked.value) return true
+        return _aiCredits.value > 0
     }
 
     /**

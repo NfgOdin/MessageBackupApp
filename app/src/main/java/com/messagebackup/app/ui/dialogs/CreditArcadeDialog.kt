@@ -775,12 +775,62 @@ fun CreditArcadeDialog(
 
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "Or unlock individual features forever for $0.99:",
+                        text = "Or unlock individual powers forever for $0.99:",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    // $0.99 THE EYE OF MÍMIR (O.D.I.N. Permanent AI Intelligence Unlock)
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                billing.launchBillingFlow(activity, BillingManager.PRODUCT_UNLOCK_ODIN_EYE)
+                            }
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_rune_othala),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text("👁️ The Eye of Mímir", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                        Text("Sacrifice an eye for infinite knowledge", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = { billing.launchBillingFlow(activity, BillingManager.PRODUCT_UNLOCK_ODIN_EYE) },
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(billing.odinEyePrice.value ?: "$0.99")
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "“Will you sacrifice an eye at the Well for the Allfather’s wisdom?”\nUnlocks O.D.I.N. Forensic AI Intelligence forever with unlimited queries and zero rune consumption.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     // $0.99 Huginn Forever
                     Card(
@@ -805,7 +855,7 @@ fun CreditArcadeDialog(
                                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
-                                    Text("Huginn Live Dispatch", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text("🪶 Raven's Wing (Huginn Dispatch)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                                     Text("Unlock composer bar forever (No ads needed)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
@@ -843,7 +893,7 @@ fun CreditArcadeDialog(
                                 Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
-                                    Text("Jera Nightly Auto-Backup", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text("🌾 Golden Harvest (Jera Auto-Backup)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                                     Text("Automated backups forever (No ads needed)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
