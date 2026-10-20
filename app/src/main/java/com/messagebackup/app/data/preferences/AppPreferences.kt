@@ -57,6 +57,7 @@ class AppPreferences(context: Context) {
         private const val KEY_HUGINN_PERMANENT_UNLOCKED = "huginn_permanent_unlocked"
         private const val KEY_ODIN_PERMANENT_UNLOCKED = "odin_permanent_unlocked"
         private const val KEY_ANIMATIONS_ENABLED = "animations_enabled"
+        private const val KEY_RAVEN_TRANSPORT_MODE = "raven_transport_mode"
 
         // Privacy PIN & Biometric Lock Preferences
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
@@ -179,6 +180,13 @@ class AppPreferences(context: Context) {
 
     private val _animationsEnabled = MutableStateFlow(prefs.getBoolean(KEY_ANIMATIONS_ENABLED, true))
     val animationsEnabled: StateFlow<Boolean> = _animationsEnabled.asStateFlow()
+
+    private val _ravenTransportMode = MutableStateFlow(
+        prefs.getString(KEY_RAVEN_TRANSPORT_MODE, com.messagebackup.app.domain.mesh.RavenTransportMode.AUTO.name)
+            ?.let { runCatching { com.messagebackup.app.domain.mesh.RavenTransportMode.valueOf(it) }.getOrNull() }
+            ?: com.messagebackup.app.domain.mesh.RavenTransportMode.AUTO
+    )
+    val ravenTransportMode: StateFlow<com.messagebackup.app.domain.mesh.RavenTransportMode> = _ravenTransportMode.asStateFlow()
 
     private val _resolveContacts = MutableStateFlow(prefs.getBoolean(KEY_RESOLVE_CONTACTS, true))
     val resolveContacts: StateFlow<Boolean> = _resolveContacts.asStateFlow()
@@ -521,6 +529,11 @@ class AppPreferences(context: Context) {
     fun setAnimationsEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_ANIMATIONS_ENABLED, enabled).apply()
         _animationsEnabled.value = enabled
+    }
+
+    fun setRavenTransportMode(mode: com.messagebackup.app.domain.mesh.RavenTransportMode) {
+        prefs.edit().putString(KEY_RAVEN_TRANSPORT_MODE, mode.name).apply()
+        _ravenTransportMode.value = mode
     }
 
     fun resetOdinSystemPrompt() {

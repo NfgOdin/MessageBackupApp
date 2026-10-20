@@ -37,12 +37,16 @@ class RavenSocketTransport(
 
     private val cryptoEngine = RavenCryptoEngine(context)
     private val dbHelper = RavenDatabaseHelper(context)
+    private val voicePttEngine = RavenVoicePttEngine(context)
 
     private var serverSocket: ServerSocket? = null
     private var serverJob: Job? = null
 
     private val _incomingMessages = MutableSharedFlow<RavenIncomingMessage>(extraBufferCapacity = 64)
     val incomingMessages: SharedFlow<RavenIncomingMessage> = _incomingMessages.asSharedFlow()
+
+    private val _incomingVoiceStreams = MutableSharedFlow<RavenIncomingVoice>(extraBufferCapacity = 32)
+    val incomingVoiceStreams: SharedFlow<RavenIncomingVoice> = _incomingVoiceStreams.asSharedFlow()
 
     /**
      * Starts listening for incoming Raven Mesh connections on the local network.
@@ -138,7 +142,7 @@ class RavenSocketTransport(
             }
 
             val innerMsg = JSONObject(decryptedJson)
-            val messageText = innerMsg.getString("text")
+            val packetType = innerMsg.optString("type", "TEXT")
 
             // Update peer's last seen IP
             val clientIp = socket.inetAddress.hostAddress
@@ -149,15 +153,38 @@ class RavenSocketTransport(
                 )
             )
 
-            // Emit incoming message
-            _incomingMessages.emit(
-                RavenIncomingMessage(
-                    senderCallsign = senderCallSign,
-                    senderDisplayName = senderPeer.displayName,
-                    messageText = messageText,
-                    timestamp = timestamp
+            if (packetType == "PTT_VOICE") {
+                val audioBase64 = innerMsg.getString("audio_base64")
+                val durationMs = innerMsg.optLong("duration_ms", 0L)
+
+                // Emit voice stream event
+                _incomingVoiceStreams.emit(
+                    RavenIncomingVoice(
+                        senderCallsign = senderCallSign,
+                        senderDisplayName = senderPeer.displayName,
+                        audioBase64 = audioBase64,
+                        durationMs = durationMs,
+                        timestamp = timestamp
+                    )
                 )
-            )
+
+                // Automatically trigger immediate tactical speaker playback via PTT Engine
+                scope.launch(Dispatchers.IO) {
+                    voicePttEngine.playInboundVoice(audioBase64)
+                }
+            } else {
+                val messageText = innerMsg.getString("text")
+
+                // Emit incoming message
+                _incomingMessages.emit(
+                    RavenIncomingMessage(
+                        senderCallsign = senderCallSign,
+                        senderDisplayName = senderPeer.displayName,
+                        messageText = messageText,
+                        timestamp = timestamp
+                    )
+                )
+            }
 
             // Acknowledge receipt
             writer.println(JSONObject().apply {
@@ -181,6 +208,38 @@ class RavenSocketTransport(
         targetIp: String? = peer.lastKnownIp,
         port: Int = DEFAULT_MESH_PORT
     ): RavenSendResult = withContext(Dispatchers.IO) {
+        val payload = JSONObject().apply {
+            put("type", "TEXT")
+            put("text", text)
+            put("ts", System.currentTimeMillis())
+        }.toString()
+        sendRawPayloadToPeer(peer, payload, targetIp, port)
+    }
+
+    /**
+     * Sends an encrypted "Mind-to-Mind" PTT voice snippet directly to a peer.
+     */
+    suspend fun sendVoiceSnippetToPeer(
+        peer: RavenPeer,
+        voiceSnippet: VoiceSnippet,
+        targetIp: String? = peer.lastKnownIp,
+        port: Int = DEFAULT_MESH_PORT
+    ): RavenSendResult = withContext(Dispatchers.IO) {
+        val payload = JSONObject().apply {
+            put("type", "PTT_VOICE")
+            put("audio_base64", voiceSnippet.audioBase64)
+            put("duration_ms", voiceSnippet.durationMs)
+            put("ts", System.currentTimeMillis())
+        }.toString()
+        sendRawPayloadToPeer(peer, payload, targetIp, port)
+    }
+
+    private suspend fun sendRawPayloadToPeer(
+        peer: RavenPeer,
+        innerPayload: String,
+        targetIp: String?,
+        port: Int
+    ): RavenSendResult = withContext(Dispatchers.IO) {
         if (targetIp.isNullOrBlank()) {
             return@withContext RavenSendResult.Error("Peer IP address is unknown. Link via QR or connect to the same Wi-Fi.")
         }
@@ -188,12 +247,6 @@ class RavenSocketTransport(
         try {
             val peerPubKey = cryptoEngine.decodePublicKey(peer.publicKey)
             val sharedSecret = cryptoEngine.deriveSharedSecret(peerPubKey)
-
-            // Encrypt inner message
-            val innerPayload = JSONObject().apply {
-                put("text", text)
-                put("ts", System.currentTimeMillis())
-            }.toString()
 
             val envelope = RavenPacketCipher.encryptPayload(innerPayload, sharedSecret)
             val timestamp = System.currentTimeMillis()
@@ -245,6 +298,14 @@ data class RavenIncomingMessage(
     val senderCallsign: String,
     val senderDisplayName: String,
     val messageText: String,
+    val timestamp: Long
+)
+
+data class RavenIncomingVoice(
+    val senderCallsign: String,
+    val senderDisplayName: String,
+    val audioBase64: String,
+    val durationMs: Long,
     val timestamp: Long
 )
 
