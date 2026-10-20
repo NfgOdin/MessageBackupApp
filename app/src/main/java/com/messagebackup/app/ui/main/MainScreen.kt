@@ -48,6 +48,9 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.ButtonDefaults
+import com.messagebackup.app.model.ExportFormat
 import androidx.compose.material.icons.filled.PermMedia
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
@@ -1457,20 +1460,37 @@ fun MainScreen(
             },
             confirmButton = {
                 if (!uiState.isRestoring) {
-                    Button(
-                        onClick = {
-                            restorePickerLauncher.launch(
-                                arrayOf(
-                                    "application/json",
-                                    "text/xml",
-                                    "application/xml",
-                                    "text/plain",
-                                    "*/*"
-                                )
-                            )
-                        }
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Select Backup File (.json / .xml)")
+                        Button(
+                            onClick = {
+                                viewModel.setShowRestoreDialog(false)
+                                viewModel.setShowMigrationDialog(true)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("QR Direct Phone-to-Phone")
+                        }
+
+                        Button(
+                            onClick = {
+                                restorePickerLauncher.launch(
+                                    arrayOf(
+                                        "application/json",
+                                        "text/xml",
+                                        "application/xml",
+                                        "text/plain",
+                                        "*/*"
+                                    )
+                                )
+                            }
+                        ) {
+                            Text("Select Backup File (.json / .xml)")
+                        }
                     }
                 }
             },
@@ -1481,6 +1501,35 @@ fun MainScreen(
                     }
                 }
             }
+        )
+    }
+
+    if (uiState.showMigrationDialog) {
+        com.messagebackup.app.ui.dialogs.PhoneMigrationDialog(
+            latestExportFile = uiState.lastExportResult?.outputFile,
+            onPrepareExport = { onReady ->
+                // Ensure a backup package exists to send
+                val currentThreads = uiState.threads
+                if (currentThreads.isNotEmpty()) {
+                    executeExportWithOptions(
+                        ExportOptions(
+                            format = ExportFormat.JSON,
+                            includeMedia = false
+                        )
+                    )
+                }
+                uiState.lastExportResult?.outputFile?.let { onReady(it) }
+            },
+            onBackupReceivedForRestore = { receivedFile ->
+                viewModel.setShowMigrationDialog(false)
+                viewModel.startRestoreFromFile(
+                    file = receivedFile,
+                    onResult = { success: Boolean, count: Int, message: String ->
+                        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                    }
+                )
+            },
+            onDismiss = { viewModel.setShowMigrationDialog(false) }
         )
     }
 

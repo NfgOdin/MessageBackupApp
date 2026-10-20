@@ -89,6 +89,7 @@ dependencies {
   implementation(libs.user.messaging.platform)
   implementation(libs.play.billing)
   implementation(libs.zip4j)
+  implementation(libs.zxing.core)
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)

@@ -74,7 +74,8 @@ data class MainUiState(
     val vaultProgressPct: Int = 0,
     val vaultProgressMessage: String = "",
     val vaultMediaItems: List<com.messagebackup.app.model.VaultMediaItem> = emptyList(),
-    val showCommitmentRadar: Boolean = false
+    val showCommitmentRadar: Boolean = false,
+    val showMigrationDialog: Boolean = false
 )
 
 /**
@@ -736,6 +737,15 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    fun startRestoreFromFile(file: java.io.File, onResult: (Boolean, Int, String) -> Unit) {
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            app,
+            "${app.packageName}.fileprovider",
+            file
+        )
+        startRestoreFromUri(uri, onResult)
+    }
+
     fun setVaultOpen(open: Boolean) {
         _uiState.value = _uiState.value.copy(isVaultOpen = open)
         if (open && _uiState.value.vaultMediaItems.isEmpty()) {
@@ -748,6 +758,10 @@ class MainViewModel : ViewModel() {
         if (show && _uiState.value.selectedThreadForPreview == null && _uiState.value.globalCopilotMessages.isEmpty()) {
             loadGlobalCopilotContext()
         }
+    }
+
+    fun setShowMigrationDialog(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showMigrationDialog = show)
     }
 
     fun loadMediaVault(forceRefresh: Boolean = false) {
