@@ -2,6 +2,7 @@ package com.messagebackup.app.ui.dialogs
 
 import android.app.Activity
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -305,19 +306,34 @@ fun CreditArcadeDialog(
                     // ==========================================
                     // TAB 0: 100% FREE AD-REWARD PUNCH CARDS
                     // ==========================================
+
+                    val isCoolingDown = cooldownSeconds > 0L
+
+                    // SECTION 1: SACRED RUNES (Instant & Banked Runes)
                     Text(
-                        text = "Select an option below to punch your card or earn credits without spending a cent:",
+                        text = "ᚱ Sacred Runes",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Tap a Rune to inspect and earn without spending a cent:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    RewardOption.values().forEach { option ->
+                    val runeOptions = listOf(RewardOption.HUGINN_VOICE, RewardOption.ODIN_AI, RewardOption.AUTO_BACKUP)
+                    runeOptions.forEach { option ->
                         val isSelected = selectedOption == option
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
                             ),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
@@ -358,7 +374,12 @@ fun CreditArcadeDialog(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = option.name.replace("_", " "),
+                                                text = when (option) {
+                                                    RewardOption.HUGINN_VOICE -> "Ansuz Rune"
+                                                    RewardOption.ODIN_AI -> "Othala Rune"
+                                                    RewardOption.AUTO_BACKUP -> "Jera Rune"
+                                                    else -> option.name
+                                                },
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -384,8 +405,8 @@ fun CreditArcadeDialog(
                                     }
                                 }
 
-                                // 5-Punch Huginn Lease Visual Card
-                                if (option == RewardOption.HUGINN_LEASE) {
+                                // If this option is JERA and selected, reveal the 3-punch card!
+                                if (isSelected && option == RewardOption.AUTO_BACKUP) {
                                     Spacer(modifier = Modifier.height(10.dp))
                                     Surface(
                                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
@@ -396,6 +417,246 @@ fun CreditArcadeDialog(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(horizontal = 10.dp, vertical = 8.dp)
+                                        ) {
+                                            Text(
+                                                text = "Jera Punch Card: $backupAdProgress of 3 Ads Watched",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = if (backupAdProgress >= 2) "🔥 Next ad unlocks +1 Jera Auto-Backup Night!" else "Watch ${3 - backupAdProgress} more ads to bank 1 Jera Nightly Backup credit",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                for (step in 1..3) {
+                                                    val isStamped = backupAdProgress >= step
+                                                    Surface(
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        color = if (isStamped) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .height(34.dp)
+                                                    ) {
+                                                        Row(
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            horizontalArrangement = Arrangement.Center,
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = if (isStamped) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                                contentDescription = null,
+                                                                tint = if (isStamped) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                            Text(
+                                                                text = "Ad $step",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                fontWeight = if (isStamped) FontWeight.Bold else FontWeight.Normal,
+                                                                color = if (isStamped) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Contextual Watch Ad button immediately underneath selected item!
+                                if (isSelected) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    val adBtnLabel = if (isCoolingDown) {
+                                        "⏳ Cooldown (${cooldownSeconds}s left)"
+                                    } else {
+                                        when (option) {
+                                            RewardOption.HUGINN_VOICE -> "Watch Ad (+5 ᚫ Ansuz)"
+                                            RewardOption.ODIN_AI -> "Watch Ad (+2 ᛟ Othala)"
+                                            RewardOption.AUTO_BACKUP -> {
+                                                when (backupAdProgress) {
+                                                    0 -> "Watch Ad (Ad 1 of 3)"
+                                                    1 -> "Watch Ad (Ad 2 of 3)"
+                                                    else -> "Watch Ad (Ad 3 of 3 — Unlock ᛃ Night!)"
+                                                }
+                                            }
+                                            else -> "Watch Ad"
+                                        }
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            if (isCoolingDown) {
+                                                Toast.makeText(context, "⏳ Please wait ${cooldownSeconds}s before watching another ad.", Toast.LENGTH_SHORT).show()
+                                                return@Button
+                                            }
+                                            adManager.showRewardedAd(
+                                                activity = activity,
+                                                isAdsRemoved = false,
+                                                onUserEarnedReward = {
+                                                    prefs.recordRewardAdWatched()
+                                                    when (option) {
+                                                        RewardOption.ODIN_AI -> {
+                                                            prefs.addAiCredits(2)
+                                                            Toast.makeText(context, "🌟 Claimed +2 ᛟ Othala Runes!", Toast.LENGTH_SHORT).show()
+                                                            onDismiss()
+                                                        }
+                                                        RewardOption.HUGINN_VOICE -> {
+                                                            prefs.addAnsuzCredits(5)
+                                                            Toast.makeText(context, "🪶 Claimed +5 ᚫ Ansuz Runes!", Toast.LENGTH_SHORT).show()
+                                                            onDismiss()
+                                                        }
+                                                        RewardOption.AUTO_BACKUP -> {
+                                                            val unlockedNight = prefs.recordBackupAdWatched()
+                                                            if (unlockedNight) {
+                                                                if (prefs.autoBackupEnabled.value) {
+                                                                    com.messagebackup.app.worker.AutoBackupWorker.scheduleAutoBackup(context)
+                                                                }
+                                                                celebrationTitle = "+1 Auto-Backup Night Unlocked!"
+                                                                celebrationDescription = "All 3 ads watched! Your automated overnight backup credit is safely banked."
+                                                                celebrationSteps = 3
+                                                                showCelebrationDialog = true
+                                                            } else {
+                                                                val current = prefs.backupAdProgress.value
+                                                                Toast.makeText(context, "🎟️ Stamp recorded! ($current/3 ads watched)", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        }
+                                                        else -> {}
+                                                    }
+                                                }
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isCoolingDown) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary
+                                        ),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isCoolingDown) Icons.Default.HourglassTop else Icons.Default.VideoLibrary,
+                                            contentDescription = null,
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
+                                        Text(adBtnLabel)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // SECTION 2: DIVINE LEASES
+                    Text(
+                        text = "⏳ Divine Leases",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Stackable timed access passes for continuous powers:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Huginn Lease Card
+                    val isLeaseSelected = selectedOption == RewardOption.HUGINN_LEASE
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isLeaseSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isLeaseSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable { selectedOption = RewardOption.HUGINN_LEASE }
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isLeaseSelected,
+                                    onClick = { selectedOption = RewardOption.HUGINN_LEASE },
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.size(34.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            painter = painterResource(id = RewardOption.HUGINN_LEASE.iconResId),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Huginn Live Dispatch",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "3-Day Lease",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = RewardOption.HUGINN_LEASE.subtitle,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            // 5-Punch Huginn Lease Visual Card (Visible when selected)
+                            if (isLeaseSelected) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 10.dp, vertical = 8.dp)
                                         ) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
@@ -434,7 +695,7 @@ fun CreditArcadeDialog(
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
 
-                                            Spacer(modifier = Modifier.height(10.dp))
+                                            Spacer(modifier = Modifier.height(8.dp))
 
                                             // 5 Clear Punch Stamps
                                             Row(
@@ -475,87 +736,85 @@ fun CreditArcadeDialog(
                                             }
                                         }
                                     }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                val leaseAdLabel = if (isCoolingDown) {
+                                    "⏳ Cooldown (${cooldownSeconds}s left)"
+                                } else {
+                                    when (huginnAdProgress) {
+                                        0 -> "Watch Ad (Ad 1 of 5)"
+                                        1 -> "Watch Ad (Ad 2 of 5)"
+                                        2 -> "Watch Ad (Ad 3 of 5)"
+                                        3 -> "Watch Ad (Ad 4 of 5)"
+                                        else -> "Watch Ad (Ad 5 of 5 — Stack +3 Days!)"
+                                    }
                                 }
 
-                                // 3-Punch Auto Backup Visual Card
-                                if (option == RewardOption.AUTO_BACKUP) {
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                        shape = RoundedCornerShape(10.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 10.dp, vertical = 8.dp)
-                                        ) {
-                                            Text(
-                                                text = "Punch Card: $backupAdProgress of 3 Ads Watched",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                text = if (backupAdProgress >= 2) "🎯 Next ad unlocks 1 backup night!" else "⏳ ${3 - backupAdProgress} more ads to unlock 1 night",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-
-                                            Spacer(modifier = Modifier.height(10.dp))
-
-                                            // 3 Clear Punch Stamps
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                for (step in 1..3) {
-                                                    val isStamped = backupAdProgress >= step
-                                                    Surface(
-                                                        shape = RoundedCornerShape(8.dp),
-                                                        color = if (isStamped) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                                        modifier = Modifier
-                                                            .weight(1f)
-                                                            .height(34.dp)
-                                                    ) {
-                                                        Row(
-                                                            modifier = Modifier.fillMaxSize(),
-                                                            horizontalArrangement = Arrangement.Center,
-                                                            verticalAlignment = Alignment.CenterVertically
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = if (isStamped) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                                                                contentDescription = null,
-                                                                tint = if (isStamped) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                                                modifier = Modifier.size(16.dp)
-                                                            )
-                                                            Spacer(modifier = Modifier.width(4.dp))
-                                                            Text(
-                                                                text = "Ad $step",
-                                                                style = MaterialTheme.typography.labelSmall,
-                                                                fontWeight = if (isStamped) FontWeight.Bold else FontWeight.Normal,
-                                                                color = if (isStamped) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                                            )
-                                                        }
-                                                    }
+                                Button(
+                                    onClick = {
+                                        if (isCoolingDown) {
+                                            Toast.makeText(context, "⏳ Please wait ${cooldownSeconds}s before watching another ad.", Toast.LENGTH_SHORT).show()
+                                            return@Button
+                                        }
+                                        adManager.showRewardedAd(
+                                            activity = activity,
+                                            isAdsRemoved = false,
+                                            onUserEarnedReward = {
+                                                prefs.recordRewardAdWatched()
+                                                val completed = prefs.recordHuginnAdWatched()
+                                                if (completed) {
+                                                    HuginnLeaseExpiryWorker.scheduleExpiryAlerts(context, prefs.huginnLeaseExpiryMs.value)
+                                                    celebrationTitle = "🪶 +3 Days Huginn Stacked!"
+                                                    celebrationDescription = "5/5 punch card complete! Huginn Live Dispatch is now active for another 72 hours (or stacked on your balance)."
+                                                    celebrationSteps = 5
+                                                    showCelebrationDialog = true
+                                                } else {
+                                                    val curr = prefs.huginnAdProgress.value
+                                                    Toast.makeText(context, "🎟️ Huginn stamp recorded! ($curr/5 ads watched)", Toast.LENGTH_SHORT).show()
                                                 }
                                             }
-                                        }
-                                    }
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isCoolingDown) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary
+                                    ),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isCoolingDown) Icons.Default.HourglassTop else Icons.Default.VideoLibrary,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                    Text(leaseAdLabel)
                                 }
                             }
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // SECTION 3: COUNCIL OF THE GODS (Google Play Review)
+                    Text(
+                        text = "⭐ Council of the Gods",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Honour the app with your feedback for an instant permanent blessing:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
                     val hasReviewedApp by prefs.hasReviewedApp.collectAsState()
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Rate & Review Bonus Card (+5 AI & +1 Backup Night)
                     Surface(
                         color = if (hasReviewedApp) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.tertiaryContainer,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable(enabled = !hasReviewedApp) {
@@ -575,14 +834,14 @@ fun CreditArcadeDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Stars,
                                 contentDescription = null,
                                 tint = if (hasReviewedApp) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(26.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
@@ -602,107 +861,6 @@ fun CreditArcadeDialog(
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
-
-                    val isCoolingDown = cooldownSeconds > 0L
-                    val buttonLabel = if (isCoolingDown) {
-                        "⏳ Cooldown (${cooldownSeconds}s left)"
-                    } else {
-                        when (selectedOption) {
-                            RewardOption.ODIN_AI -> "Watch Ad (+2 ᛟ Othala)"
-                            RewardOption.HUGINN_VOICE -> "Watch Ad (+5 ᚫ Ansuz)"
-                            RewardOption.HUGINN_LEASE -> {
-                                when (huginnAdProgress) {
-                                    0 -> "Watch Ad (Ad 1 of 5)"
-                                    1 -> "Watch Ad (Ad 2 of 5)"
-                                    2 -> "Watch Ad (Ad 3 of 5)"
-                                    3 -> "Watch Ad (Ad 4 of 5)"
-                                    else -> "Watch Ad (Ad 5 of 5 — Stack +3 Days!)"
-                                }
-                            }
-                            RewardOption.AUTO_BACKUP -> {
-                                when (backupAdProgress) {
-                                    0 -> "Watch Ad (Ad 1 of 3)"
-                                    1 -> "Watch Ad (Ad 2 of 3)"
-                                    else -> "Watch Ad (Ad 3 of 3 — Unlock ᛃ Night!)"
-                                }
-                            }
-                        }
-                    }
-
-                    Button(
-                        onClick = {
-                            if (isCoolingDown) {
-                                Toast.makeText(context, "⏳ Please wait ${cooldownSeconds}s before watching another ad.", Toast.LENGTH_SHORT).show()
-                                return@Button
-                            }
-                            adManager.showRewardedAd(
-                                activity = activity,
-                                isAdsRemoved = false,
-                                onUserEarnedReward = {
-                                    prefs.recordRewardAdWatched()
-                                    when (selectedOption) {
-                                        RewardOption.ODIN_AI -> {
-                                            prefs.addAiCredits(2)
-                                            Toast.makeText(context, "🌟 Claimed +2 ᛟ Othala Runes!", Toast.LENGTH_SHORT).show()
-                                            onDismiss()
-                                        }
-                                        RewardOption.HUGINN_VOICE -> {
-                                            prefs.addAnsuzCredits(5)
-                                            Toast.makeText(context, "🪶 Claimed +5 ᚫ Ansuz Runes!", Toast.LENGTH_SHORT).show()
-                                            onDismiss()
-                                        }
-                                        RewardOption.HUGINN_LEASE -> {
-                                            val completed = prefs.recordHuginnAdWatched()
-                                            if (completed) {
-                                                HuginnLeaseExpiryWorker.scheduleExpiryAlerts(context, prefs.huginnLeaseExpiryMs.value)
-                                                celebrationTitle = "🪶 +3 Days Huginn Stacked!"
-                                                celebrationDescription = "5/5 punch card complete! Huginn Live Dispatch is now active for another 72 hours (or stacked on your balance)."
-                                                celebrationSteps = 5
-                                                showCelebrationDialog = true
-                                            } else {
-                                                val curr = prefs.huginnAdProgress.value
-                                                Toast.makeText(context, "🎟️ Huginn stamp recorded! ($curr/5 ads watched)", Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                        RewardOption.AUTO_BACKUP -> {
-                                            val unlockedNight = prefs.recordBackupAdWatched()
-                                            if (unlockedNight) {
-                                                if (prefs.autoBackupEnabled.value) {
-                                                    com.messagebackup.app.worker.AutoBackupWorker.scheduleAutoBackup(context)
-                                                }
-                                                celebrationTitle = "+1 Auto-Backup Night Unlocked!"
-                                                celebrationDescription = "All 3 ads watched! Your automated overnight backup credit is safely banked."
-                                                celebrationSteps = 3
-                                                showCelebrationDialog = true
-                                            } else {
-                                                val current = prefs.backupAdProgress.value
-                                                Toast.makeText(context, "🎟️ Stamp recorded! ($current/3 ads watched)", Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                    }
-                                }
-                            )
-                        },
-                        enabled = !isCoolingDown,
-                        colors = if (isCoolingDown) {
-                            ButtonDefaults.buttonColors(
-                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                        } else {
-                            ButtonDefaults.buttonColors()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isCoolingDown) Icons.Default.HourglassTop else Icons.Default.VideoLibrary,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(buttonLabel)
-                    }
-
                 } else {
                     // ==========================================
                     // TAB 1: THE RUNIC BAZAAR (IN-APP STORE)
@@ -736,13 +894,13 @@ fun CreditArcadeDialog(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column {
                                         Text(
-                                            text = "Muninn Lifetime Pro",
+                                            text = "Throne of Hliðskjálf",
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = MaterialTheme.colorScheme.onPrimaryContainer
                                         )
                                         Text(
-                                            text = "★ Best Value • Everything Unlocked Forever",
+                                            text = "👑 Muninn Lifetime Pro • Everything Unlocked Forever",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.primary
@@ -939,42 +1097,164 @@ fun CreditArcadeDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Consumable packs: 100 Ansuz, 100 Othala, 10 Jera
+                    // Consumable packs with graphical shield badges and x100 indicators:
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // 100 Ansuz
-                        OutlinedButton(
-                            onClick = { billing.launchBillingFlow(activity, BillingManager.PRODUCT_PACK_ANSUZ_100) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
+                        // 100 Ansuz Pack ($0.99)
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { billing.launchBillingFlow(activity, BillingManager.PRODUCT_PACK_ANSUZ_100) }
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("100 ᚫ", fontWeight = FontWeight.Bold)
-                                Text("$0.99", style = MaterialTheme.typography.labelSmall)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_rune_ansuz),
+                                            contentDescription = "Ansuz",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "x100 ᚫ",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "$0.99",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
                             }
                         }
-                        // 100 Othala
-                        OutlinedButton(
-                            onClick = { billing.launchBillingFlow(activity, BillingManager.PRODUCT_PACK_OTHALA_100) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
+
+                        // 100 Othala Pack ($0.99)
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { billing.launchBillingFlow(activity, BillingManager.PRODUCT_PACK_OTHALA_100) }
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("100 ᛟ", fontWeight = FontWeight.Bold)
-                                Text("$0.99", style = MaterialTheme.typography.labelSmall)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_rune_othala),
+                                            contentDescription = "Othala",
+                                            tint = MaterialTheme.colorScheme.tertiary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "x100 ᛟ",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.tertiary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "$0.99",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
                             }
                         }
-                        // 10 Jera
-                        OutlinedButton(
-                            onClick = { billing.launchBillingFlow(activity, BillingManager.PRODUCT_PACK_JERA_10) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
+
+                        // 10 Jera Pack ($0.99)
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { billing.launchBillingFlow(activity, BillingManager.PRODUCT_PACK_JERA_10) }
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("10 ᛃ", fontWeight = FontWeight.Bold)
-                                Text("$0.99", style = MaterialTheme.typography.labelSmall)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_rune_jera),
+                                            contentDescription = "Jera",
+                                            tint = MaterialTheme.colorScheme.secondary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "x10 ᛃ",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "$0.99",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
                             }
                         }
                     }

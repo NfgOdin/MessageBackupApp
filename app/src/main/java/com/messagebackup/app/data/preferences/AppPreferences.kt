@@ -57,6 +57,7 @@ class AppPreferences(context: Context) {
         private const val KEY_HUGINN_PERMANENT_UNLOCKED = "huginn_permanent_unlocked"
         private const val KEY_ODIN_PERMANENT_UNLOCKED = "odin_permanent_unlocked"
         private const val KEY_ANIMATIONS_ENABLED = "animations_enabled"
+        private const val KEY_CONFIRM_RUNE_SPEND = "confirm_rune_spend"
         private const val KEY_RAVEN_TRANSPORT_MODE = "raven_transport_mode"
 
         // Privacy PIN & Biometric Lock Preferences
@@ -180,6 +181,9 @@ class AppPreferences(context: Context) {
 
     private val _animationsEnabled = MutableStateFlow(prefs.getBoolean(KEY_ANIMATIONS_ENABLED, true))
     val animationsEnabled: StateFlow<Boolean> = _animationsEnabled.asStateFlow()
+
+    private val _confirmRuneSpend = MutableStateFlow(prefs.getBoolean(KEY_CONFIRM_RUNE_SPEND, true))
+    val confirmRuneSpend: StateFlow<Boolean> = _confirmRuneSpend.asStateFlow()
 
     private val _ravenTransportMode = MutableStateFlow(
         prefs.getString(KEY_RAVEN_TRANSPORT_MODE, com.messagebackup.app.domain.mesh.RavenTransportMode.AUTO.name)
@@ -529,6 +533,11 @@ class AppPreferences(context: Context) {
     fun setAnimationsEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_ANIMATIONS_ENABLED, enabled).apply()
         _animationsEnabled.value = enabled
+    }
+
+    fun setConfirmRuneSpend(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CONFIRM_RUNE_SPEND, enabled).apply()
+        _confirmRuneSpend.value = enabled
     }
 
     fun setRavenTransportMode(mode: com.messagebackup.app.domain.mesh.RavenTransportMode) {

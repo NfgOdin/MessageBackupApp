@@ -2108,6 +2108,14 @@ Rules:
 
             // 10. Huginn Live Messaging & O.D.I.N. Thought
             val huginnEnabled by prefs.huginnComposerEnabled.collectAsState()
+            val isHuginnPermanent by prefs.isHuginnPermanentUnlocked.collectAsState()
+            val huginnLeaseExpiry by prefs.huginnLeaseExpiryMs.collectAsState()
+            val huginnAdProgress by prefs.huginnAdProgress.collectAsState()
+            val isProUnlocked = isAdsRemoved
+
+            val isHuginnLeaseActive = huginnLeaseExpiry > System.currentTimeMillis()
+            val isHuginnAvailable = isProUnlocked || isHuginnPermanent || isHuginnLeaseActive
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2125,6 +2133,130 @@ Rules:
                 Switch(
                     checked = huginnEnabled,
                     onCheckedChange = { prefs.setHuginnComposerEnabled(it) }
+                )
+            }
+
+            // 3-Day Lease Activation & Status Section
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (isHuginnAvailable) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isHuginnAvailable) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Huginn Dispatch Access",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (isProUnlocked || isHuginnPermanent) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            ) {
+                                Text(
+                                    text = "👑 Permanent Unlock",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        } else if (isHuginnLeaseActive) {
+                            val remainingMs = huginnLeaseExpiry - System.currentTimeMillis()
+                            val remainingHours = remainingMs / (1000 * 60 * 60)
+                            val days = remainingHours / 24
+                            val hrs = remainingHours % 24
+                            val timeStr = if (days > 0) "${days}d ${hrs}h" else "${hrs}h"
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = "⏱️ $timeStr Active",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.errorContainer
+                            ) {
+                                Text(
+                                    text = "🔒 Inactive",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (isProUnlocked || isHuginnPermanent) {
+                            "You have unrestricted lifetime access to Huginn Live Dispatch without advertisements or countdowns."
+                        } else if (isHuginnLeaseActive) {
+                            "Your 3-day lease is active! Watch 5 ads in the Arcade anytime to stack an additional +72 hours infinitely."
+                        } else {
+                            "Activate a free 3-Day (72h) lease by watching 5 short ads in the Arcade, or unlock permanently in the Runic Bazaar."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    if (!isProUnlocked && !isHuginnPermanent) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { showRewardArcade = true },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(if (isHuginnLeaseActive) "Stack +3 Days (Arcade)" else "Activate 3-Day Lease")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Universal Rune Spend Confirmation Switch
+            val confirmRuneSpend by prefs.confirmRuneSpend.collectAsState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "🛡️ Confirm Before Spending Runes", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Show a confirmation dialogue whenever an action consumes an Ansuz, Othala, or Jera credit.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = confirmRuneSpend,
+                    onCheckedChange = { prefs.setConfirmRuneSpend(it) }
                 )
             }
 

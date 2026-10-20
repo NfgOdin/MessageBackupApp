@@ -69,10 +69,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.messagebackup.app.R
 import com.messagebackup.app.ads.AdManager
 import com.messagebackup.app.data.preferences.AppPreferences
 import com.messagebackup.app.domain.ai.AiClientEngine
 import com.messagebackup.app.domain.ai.AiProviderType
+import com.messagebackup.app.ui.dialogs.RuneSpendConfirmationDialog
 import com.messagebackup.app.domain.ai.AiQueryResult
 import com.messagebackup.app.domain.ai.OdinChatMessage
 import com.messagebackup.app.model.ConversationThread
@@ -133,6 +135,11 @@ fun MessageCopilotScreen(
         }
     }
 
+    val confirmRuneSpend by prefs.confirmRuneSpend.collectAsState()
+    var pendingPromptText by remember { mutableStateOf<String?>(null) }
+    var showPromptSpendConfirm by remember { mutableStateOf(false) }
+    var showRadarSpendConfirm by remember { mutableStateOf(false) }
+
     var showGuideDialog by remember { mutableStateOf(false) }
     var showArcadeDialog by remember { mutableStateOf(false) }
     var showRadarDialog by remember { mutableStateOf(false) }
@@ -170,36 +177,7 @@ fun MessageCopilotScreen(
         "✍️ Draft a polite follow-up reply"
     )
 
-    fun sendPrompt(promptText: String) {
-        val trimmed = promptText.trim()
-        if (trimmed.isBlank() || isThinking) return
-
-        if (isLoadingMessages) {
-            Toast.makeText(context, "Indexing conversations, please wait a moment...", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (currentMessages.isEmpty()) {
-            Toast.makeText(context, "No messages available to analyze in this conversation archive.", Toast.LENGTH_LONG).show()
-            return
-        }
-
-        // Credit check for free users
-        if (!isOdinUnlimited && aiCredits <= 0) {
-            Toast.makeText(context, "Out of Othala AI credits! Watch an ad or sacrifice an eye for knowledge.", Toast.LENGTH_SHORT).show()
-            adManager.showRewardedAd(
-                activity = activity,
-                isAdsRemoved = false,
-                onUserEarnedReward = {
-                    prefs.recordRewardAdWatched()
-                    prefs.addAiCredits(2)
-                    Toast.makeText(context, "Earned +2 ᛟ Othala Runes! Resending...", Toast.LENGTH_SHORT).show()
-                    sendPrompt(trimmed)
-                }
-            )
-            return
-        }
-
+    fun executeSendPrompt(trimmed: String) {
         inputText = ""
         chatMessages.add(OdinChatMessage(sender = OdinChatMessage.MessageSender.USER, text = trimmed))
         isThinking = true
@@ -240,6 +218,44 @@ fun MessageCopilotScreen(
                     )
                 }
             }
+        }
+    }
+
+    fun sendPrompt(promptText: String) {
+        val trimmed = promptText.trim()
+        if (trimmed.isBlank() || isThinking) return
+
+        if (isLoadingMessages) {
+            Toast.makeText(context, "Indexing conversations, please wait a moment...", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (currentMessages.isEmpty()) {
+            Toast.makeText(context, "No messages available to analyze in this conversation archive.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        // Credit check for free users
+        if (!isOdinUnlimited && aiCredits <= 0) {
+            Toast.makeText(context, "Out of Othala AI credits! Watch an ad or sacrifice an eye for knowledge.", Toast.LENGTH_SHORT).show()
+            adManager.showRewardedAd(
+                activity = activity,
+                isAdsRemoved = false,
+                onUserEarnedReward = {
+                    prefs.recordRewardAdWatched()
+                    prefs.addAiCredits(2)
+                    Toast.makeText(context, "Earned +2 ᛟ Othala Runes! Resending...", Toast.LENGTH_SHORT).show()
+                    sendPrompt(trimmed)
+                }
+            )
+            return
+        }
+
+        if (!isOdinUnlimited && confirmRuneSpend) {
+            pendingPromptText = trimmed
+            showPromptSpendConfirm = true
+        } else {
+            executeSendPrompt(trimmed)
         }
     }
 
@@ -370,9 +386,15 @@ fun MessageCopilotScreen(
                                 )
                             } else {
                                 if (!isOdinUnlimited) {
-                                    prefs.consumeAiCredit()
+                                    if (confirmRuneSpend) {
+                                        showRadarSpendConfirm = true
+                                    } else {
+                                        prefs.consumeAiCredit()
+                                        showRadarDialog = true
+                                    }
+                                } else {
+                                    showRadarDialog = true
                                 }
-                                showRadarDialog = true
                             }
                         },
                         modifier = Modifier.size(38.dp)
@@ -560,6 +582,49 @@ fun MessageCopilotScreen(
             messages = currentMessages,
             contactName = targetContactName,
             onDismiss = { showRadarDialog = false }
+        )
+    }
+
+    // 100% Transparency Rune Spend Confirmation Dialogs
+    if (showPromptSpendConfirm && pendingPromptText != null) {
+        RuneSpendConfirmationDialog(
+            runeName = "Othala (Forensic Intelligence)",
+            runeDrawableId = R.drawable.ic_rune_othala,
+            runeSymbol = "ᛟ",
+            costAmount = 1,
+            currentBalance = aiCredits,
+            actionDescription = "Consult O.D.I.N. to search and synthesize your conversation archive for forgotten details.",
+            prefs = prefs,
+            onConfirm = {
+                val promptToExecute = pendingPromptText ?: ""
+                showPromptSpendConfirm = false
+                pendingPromptText = null
+                executeSendPrompt(promptToExecute)
+            },
+            onDismiss = {
+                showPromptSpendConfirm = false
+                pendingPromptText = null
+            }
+        )
+    }
+
+    if (showRadarSpendConfirm) {
+        RuneSpendConfirmationDialog(
+            runeName = "Othala (Commitment Radar)",
+            runeDrawableId = R.drawable.ic_rune_othala,
+            runeSymbol = "ᛟ",
+            costAmount = 1,
+            currentBalance = aiCredits,
+            actionDescription = "Scan conversation archive for unfulfilled commitments, promised dates, and obligations.",
+            prefs = prefs,
+            onConfirm = {
+                showRadarSpendConfirm = false
+                prefs.consumeAiCredit()
+                showRadarDialog = true
+            },
+            onDismiss = {
+                showRadarSpendConfirm = false
+            }
         )
     }
 }

@@ -58,6 +58,7 @@ import com.messagebackup.app.R
 import com.messagebackup.app.data.preferences.AppPreferences
 import com.messagebackup.app.domain.ai.AiClientEngine
 import com.messagebackup.app.domain.ai.AiQueryResult
+import com.messagebackup.app.ui.dialogs.RuneSpendConfirmationDialog
 import com.messagebackup.app.model.ConversationThread
 import com.messagebackup.app.model.MessageItem
 import kotlinx.coroutines.Dispatchers
@@ -96,22 +97,16 @@ fun HuginnMessageComposerBar(
         (huginnLeaseExpiryMs - System.currentTimeMillis()) / (1000L * 60L * 60L)
     } else 0L
 
+    val confirmRuneSpend by prefs.confirmRuneSpend.collectAsState()
+    var pendingThoughtAction by remember { mutableStateOf<String?>(null) }
+    var showConfirmRuneSpend by remember { mutableStateOf(false) }
+
     var textInput by remember { mutableStateOf("") }
     var isThinking by remember { mutableStateOf(false) }
     var thoughtSuggestion by remember { mutableStateOf<String?>(null) }
     var showThoughtSheet by remember { mutableStateOf(false) }
 
-    fun triggerOdinThought(actionType: String) {
-        if (!isHuginnActive) {
-            onRequireCredits()
-            return
-        }
-        val currentCredits = prefs.ansuzCredits.value
-        if (!isAdsRemoved && currentCredits <= 0) {
-            onRequireCredits()
-            return
-        }
-
+    fun executeOdinThought(actionType: String) {
         isThinking = true
         showThoughtSheet = true
 
@@ -162,6 +157,25 @@ fun HuginnMessageComposerBar(
                     }
                 }
             }
+        }
+    }
+
+    fun triggerOdinThought(actionType: String) {
+        if (!isHuginnActive) {
+            onRequireCredits()
+            return
+        }
+        val currentCredits = prefs.ansuzCredits.value
+        if (!isAdsRemoved && currentCredits <= 0) {
+            onRequireCredits()
+            return
+        }
+
+        if (!isAdsRemoved && confirmRuneSpend) {
+            pendingThoughtAction = actionType
+            showConfirmRuneSpend = true
+        } else {
+            executeOdinThought(actionType)
         }
     }
 
@@ -472,5 +486,35 @@ fun HuginnMessageComposerBar(
             isFlying = isHuginnFlying,
             onFlightCompleted = { isHuginnFlying = false }
         )
+
+        // 100% Transparency Rune Spend Confirmation Dialog
+        if (showConfirmRuneSpend && pendingThoughtAction != null) {
+            val actionDesc = when (pendingThoughtAction) {
+                "POLISH" -> "Consult O.D.I.N. to polish and articulate your draft reply."
+                "DIPLOMATIC" -> "Consult O.D.I.N. to rewrite your draft with diplomatic tact."
+                "ODIN_STYLE" -> "Consult O.D.I.N. to infuse your draft with ancient Norse wisdom."
+                "CONTEXT_SUGGEST" -> "Consult O.D.I.N. to analyze recent chat history and synthesize a thoughtful reply."
+                else -> "Consult O.D.I.N. to counsel your message draft."
+            }
+            RuneSpendConfirmationDialog(
+                runeName = "Ansuz (Thought & Voice)",
+                runeDrawableId = R.drawable.ic_rune_ansuz,
+                runeSymbol = "ᚫ",
+                costAmount = 1,
+                currentBalance = ansuzCredits,
+                actionDescription = actionDesc,
+                prefs = prefs,
+                onConfirm = {
+                    val act = pendingThoughtAction ?: "CONTEXT_SUGGEST"
+                    showConfirmRuneSpend = false
+                    pendingThoughtAction = null
+                    executeOdinThought(act)
+                },
+                onDismiss = {
+                    showConfirmRuneSpend = false
+                    pendingThoughtAction = null
+                }
+            )
+        }
     }
 }

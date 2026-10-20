@@ -888,8 +888,29 @@ fun RavenIdentityDialog(
     if (showEditNameDialog) {
         val currentPrefix = myCallSign.removePrefix("raven://").substringBeforeLast("-")
         var customNameInput by remember { mutableStateOf(currentPrefix) }
+        var showRenameConfirmDialog by remember { mutableStateOf(false) }
         val hasUsedFree = remember { cryptoEngine.hasUsedFreeRename() }
         val aiCredits = prefs.aiCredits.value
+
+        val executeRename: () -> Unit = {
+            val trimmed = customNameInput.trim()
+            if (trimmed.isNotBlank()) {
+                cryptoEngine.setRavenCallSignAlias(trimmed)
+                myCallSign = cryptoEngine.getRavenCallSign()
+                showEditNameDialog = false
+                // Regenerate QR with updated name
+                scope.launch(Dispatchers.IO) {
+                    val bmp = qrManager.generateHandshakeQrBitmap(
+                        displayName = trimmed,
+                        localIp = com.messagebackup.app.domain.migration.DirectLocalMigrationManager.getLocalIpAddress()
+                    )
+                    withContext(Dispatchers.Main) {
+                        qrBitmap = bmp
+                        Toast.makeText(context, "🪶 Identity updated to $myCallSign", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
 
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showEditNameDialog = false },
@@ -942,26 +963,6 @@ fun RavenIdentityDialog(
                 }
             },
             confirmButton = {
-                val executeRename: () -> Unit = {
-                    val trimmed = customNameInput.trim()
-                    if (trimmed.isNotBlank()) {
-                        cryptoEngine.setRavenCallSignAlias(trimmed)
-                        myCallSign = cryptoEngine.getRavenCallSign()
-                        showEditNameDialog = false
-                        // Regenerate QR with updated name
-                        scope.launch(Dispatchers.IO) {
-                            val bmp = qrManager.generateHandshakeQrBitmap(
-                                displayName = trimmed,
-                                localIp = com.messagebackup.app.domain.migration.DirectLocalMigrationManager.getLocalIpAddress()
-                            )
-                            withContext(Dispatchers.Main) {
-                                qrBitmap = bmp
-                                Toast.makeText(context, "🪶 Identity updated to $myCallSign", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-                }
-
                 if (!hasUsedFree || isAdsRemoved) {
                     Button(
                         onClick = executeRename,
@@ -975,8 +976,12 @@ fun RavenIdentityDialog(
                         Button(
                             onClick = {
                                 if (aiCredits > 0) {
-                                    prefs.consumeAiCredit()
-                                    executeRename()
+                                    if (prefs.confirmRuneSpend.value) {
+                                        showRenameConfirmDialog = true
+                                    } else {
+                                        prefs.consumeAiCredit()
+                                        executeRename()
+                                    }
                                 } else {
                                     Toast.makeText(context, "No Runes left! Watch an ad to rename.", Toast.LENGTH_SHORT).show()
                                 }
@@ -1012,6 +1017,26 @@ fun RavenIdentityDialog(
                 }
             }
         )
+
+        if (showRenameConfirmDialog) {
+            RuneSpendConfirmationDialog(
+                runeName = "Othala (Identity Engraving)",
+                runeDrawableId = com.messagebackup.app.R.drawable.ic_rune_othala,
+                runeSymbol = "ᛟ",
+                costAmount = 1,
+                currentBalance = aiCredits,
+                actionDescription = "Spend 1 Othala Rune to engrave and propagate your custom Call-Sign moniker into the Raven mesh.",
+                prefs = prefs,
+                onConfirm = {
+                    showRenameConfirmDialog = false
+                    prefs.consumeAiCredit()
+                    executeRename()
+                },
+                onDismiss = {
+                    showRenameConfirmDialog = false
+                }
+            )
+        }
     }
 
     // Overlay animation: Soaring raven flight upon transmission
