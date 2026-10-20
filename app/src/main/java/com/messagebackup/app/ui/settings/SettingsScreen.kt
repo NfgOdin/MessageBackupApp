@@ -2041,32 +2041,56 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 12. About & Legal
+            // 12. About & Legal Hero Card with Raven 'M' Banner
             Text(
                 text = "About & Legal",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Muninn: Message Memory & Vault v1.0.0",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable {
-                    devTapCount++
-                    if (devTapCount >= 7) {
-                        devTapCount = 0
-                        showDevKeyDialog = true
-                    } else if (devTapCount >= 4) {
-                        Toast.makeText(context, "${7 - devTapCount} taps away from Developer Mode", Toast.LENGTH_SHORT).show()
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        devTapCount++
+                        if (devTapCount >= 7) {
+                            devTapCount = 0
+                            showDevKeyDialog = true
+                        } else if (devTapCount >= 4) {
+                            Toast.makeText(context, "${7 - devTapCount} taps away from Developer Mode", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+            ) {
+                Column {
+                    // Muninn Brand Banner
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.muninn_brand_banner),
+                        contentDescription = "Muninn Brand Banner",
+                        contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp)
+                    )
+
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "Muninn: Message Memory & Vault v1.0.0",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Private on-device message memory vault, phone migration & AI intelligence. Certified forensic-grade integrity.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
-            )
-            Text(
-                text = "Private on-device message memory vault, phone migration & AI intelligence.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            }
             Spacer(modifier = Modifier.height(12.dp))
 
             OutlinedButton(

@@ -154,7 +154,21 @@ class DesktopHtmlViewerFormatter {
             align-items: center;
             gap: 10px;
             color: var(--primary);
-            margin-bottom: 12px;
+            margin-bottom: 6px;
+        }
+
+        .brand-raven-icon {
+            width: 30px;
+            height: 30px;
+            flex-shrink: 0;
+            filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.5));
+        }
+
+        .brand-text-m {
+            color: #38bdf8;
+            font-weight: 900;
+            font-size: 1.35rem;
+            letter-spacing: -0.5px;
         }
 
         .brand-subtitle {
@@ -539,8 +553,20 @@ class DesktopHtmlViewerFormatter {
     <div id="sidebar">
         <div class="sidebar-header">
             <div class="brand-title">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                <span>Muninn: Message Memory &amp; Vault</span>
+                <svg class="brand-raven-icon" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Stylized Raven-Wing 'M' Sigil -->
+                    <path d="M15,85 L35,15 L50,55 L65,15 L85,85 L70,85 L58,40 L50,62 L42,40 L30,85 Z" fill="url(#ravenGradient)" stroke="#38bdf8" stroke-width="2.5" stroke-linejoin="round"/>
+                    <circle cx="50" cy="50" r="4.5" fill="#f59e0b" filter="drop-shadow(0 0 3px #f59e0b)"/>
+                    <path d="M50,47 L50,53 M48,51 L52,51" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="ravenGradient" x1="15" y1="15" x2="85" y2="85" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#38bdf8"/>
+                            <stop offset="0.5" stop-color="#0284c7"/>
+                            <stop offset="1" stop-color="#0f172a"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span><span class="brand-text-m">M</span>uninn: Message Memory &amp; Vault</span>
             </div>
             <div class="brand-subtitle" id="archive-stats-text">Standalone Offline Desktop Viewer &bull; 0 KB Cloud</div>
             <div class="search-box">
