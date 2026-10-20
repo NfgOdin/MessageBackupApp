@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
@@ -125,6 +126,7 @@ fun MessageCopilotScreen(
 
     var showGuideDialog by remember { mutableStateOf(false) }
     var showArcadeDialog by remember { mutableStateOf(false) }
+    var showRadarDialog by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
     var isThinking by remember { mutableStateOf(false) }
 
@@ -332,6 +334,13 @@ fun MessageCopilotScreen(
                         }
                     }
 
+                    IconButton(
+                        onClick = { showRadarDialog = true },
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Radar, contentDescription = "Commitment Radar", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+
                     if (!isAdsRemoved) {
                         IconButton(
                             onClick = { showArcadeDialog = true },
@@ -503,6 +512,14 @@ fun MessageCopilotScreen(
             prefs = prefs,
             adManager = adManager,
             onDismiss = { showArcadeDialog = false }
+        )
+    }
+
+    if (showRadarDialog) {
+        com.messagebackup.app.ui.dialogs.CommitmentRadarDialog(
+            messages = currentMessages,
+            contactName = targetContactName,
+            onDismiss = { showRadarDialog = false }
         )
     }
 }

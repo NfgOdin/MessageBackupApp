@@ -73,7 +73,8 @@ data class MainUiState(
     val isVaultLoading: Boolean = false,
     val vaultProgressPct: Int = 0,
     val vaultProgressMessage: String = "",
-    val vaultMediaItems: List<com.messagebackup.app.model.VaultMediaItem> = emptyList()
+    val vaultMediaItems: List<com.messagebackup.app.model.VaultMediaItem> = emptyList(),
+    val showCommitmentRadar: Boolean = false
 )
 
 /**
@@ -739,6 +740,13 @@ class MainViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(isVaultOpen = open)
         if (open && _uiState.value.vaultMediaItems.isEmpty()) {
             loadMediaVault()
+        }
+    }
+
+    fun setShowCommitmentRadar(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showCommitmentRadar = show)
+        if (show && _uiState.value.selectedThreadForPreview == null && _uiState.value.globalCopilotMessages.isEmpty()) {
+            loadGlobalCopilotContext()
         }
     }
 
