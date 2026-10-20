@@ -300,29 +300,43 @@ class MainViewModel : ViewModel() {
         val usePagination = prefs.fastPaginationEnabled.value
         val initialBatchSize = if (usePagination) prefs.initialMessageBatchSize.value else null
 
-        // In-memory cache check
-        val cachedMessages = if (!forceRefresh) threadMessagesCache[thread.threadId] else null
-        if (cachedMessages != null) {
-            _uiState.value = _uiState.value.copy(
-                selectedThreadForPreview = thread,
-                isPreviewLoading = false,
-                hasMoreOlderMessages = if (usePagination) thread.messageCount > cachedMessages.size else false,
-                isLoadingOlderMessages = false,
-                previewMessages = cachedMessages,
-                filteredPreviewMessages = cachedMessages,
-                threadSearchQuery = "",
-                isThreadSearchActive = false,
-                excludedMessageIds = emptySet()
-            )
-            return
-        }
-
         viewModelScope.launch {
+            // Check in-memory cache first
+            val cachedInMemory = if (!forceRefresh) threadMessagesCache[thread.threadId] else null
+            if (cachedInMemory != null && cachedInMemory.isNotEmpty()) {
+                val latestCachedTime = cachedInMemory.maxOfOrNull { it.timestamp } ?: 0L
+                val isStale = (thread.timestamp > latestCachedTime) || (thread.messageCount > cachedInMemory.size)
+
+                // Show cached messages immediately for instantaneous 0ms UI transition
+                _uiState.value = _uiState.value.copy(
+                    selectedThreadForPreview = thread,
+                    isPreviewLoading = false,
+                    hasMoreOlderMessages = if (usePagination) thread.messageCount > cachedInMemory.size else false,
+                    isLoadingOlderMessages = false,
+                    previewMessages = cachedInMemory,
+                    filteredPreviewMessages = cachedInMemory,
+                    threadSearchQuery = "",
+                    isThreadSearchActive = false,
+                    excludedMessageIds = emptySet()
+                )
+
+                // If no new messages exist in this thread, we are completely done!
+                if (!isStale) return@launch
+
+                // Otherwise, automatically fetch new messages in background and append without user having to press refresh!
+                fetchAndSyncFreshMessages(thread, initialBatchSize, usePagination)
+                return@launch
+            }
+
             // Check persistent local DB cache before hitting telephony provider
             if (!forceRefresh) {
                 val dbCached = app.localDatabase.getCachedMessagesForThread(thread.threadId, initialBatchSize)
                 if (dbCached.isNotEmpty()) {
                     threadMessagesCache[thread.threadId] = dbCached
+                    val latestCachedTime = dbCached.maxOfOrNull { it.timestamp } ?: 0L
+                    val isStale = (thread.timestamp > latestCachedTime) || (thread.messageCount > dbCached.size)
+
+                    // Render instantly from local database
                     _uiState.value = _uiState.value.copy(
                         selectedThreadForPreview = thread,
                         previewMessages = dbCached,
@@ -334,10 +348,17 @@ class MainViewModel : ViewModel() {
                         isThreadSearchActive = false,
                         excludedMessageIds = emptySet()
                     )
+
+                    // If up-to-date, finish immediately
+                    if (!isStale) return@launch
+
+                    // Automatically fetch and sync fresh messages in background
+                    fetchAndSyncFreshMessages(thread, initialBatchSize, usePagination)
                     return@launch
                 }
             }
 
+            // Fresh cold load (not in memory, not in local database)
             _uiState.value = _uiState.value.copy(
                 selectedThreadForPreview = thread,
                 isPreviewLoading = true,
@@ -350,18 +371,32 @@ class MainViewModel : ViewModel() {
                 excludedMessageIds = emptySet()
             )
 
-            val messages = app.currentTelephonyRepository.getMessagesForThread(
-                threadId = thread.threadId,
-                resolveContacts = prefs.resolveContacts.value && _uiState.value.hasContactsPermission,
-                limit = initialBatchSize
-            )
-            threadMessagesCache[thread.threadId] = messages
-            // Persist to local database
-            app.localDatabase.saveMessages(messages)
+            fetchAndSyncFreshMessages(thread, initialBatchSize, usePagination)
+        }
+    }
 
+    private suspend fun fetchAndSyncFreshMessages(
+        thread: ConversationThread,
+        initialBatchSize: Int?,
+        usePagination: Boolean
+    ) {
+        val messages = app.currentTelephonyRepository.getMessagesForThread(
+            threadId = thread.threadId,
+            resolveContacts = prefs.resolveContacts.value && _uiState.value.hasContactsPermission,
+            limit = initialBatchSize
+        )
+        threadMessagesCache[thread.threadId] = messages
+        // Persist to local database
+        app.localDatabase.saveMessages(messages)
+
+        // Only update UI state if user is still viewing this thread
+        if (_uiState.value.selectedThreadForPreview?.threadId == thread.threadId) {
             _uiState.value = _uiState.value.copy(
                 previewMessages = messages,
-                filteredPreviewMessages = messages,
+                filteredPreviewMessages = if (_uiState.value.isThreadSearchActive && _uiState.value.threadSearchQuery.isNotBlank()) {
+                    val query = _uiState.value.threadSearchQuery.trim().lowercase()
+                    messages.filter { it.body.lowercase().contains(query) }
+                } else messages,
                 isPreviewLoading = false,
                 hasMoreOlderMessages = if (usePagination) thread.messageCount > messages.size else false
             )

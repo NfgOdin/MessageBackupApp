@@ -271,6 +271,23 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
         messages
     }
 
+    /**
+     * Quickly returns the highest message timestamp and total cached message count for a thread,
+     * allowing instant zero-lag verification of whether new messages have arrived on the device.
+     */
+    suspend fun getThreadCachedStats(threadId: Long): Pair<Long, Int> = withContext(Dispatchers.IO) {
+        val db = readableDatabase
+        var maxTime = 0L
+        var count = 0
+        db.rawQuery("SELECT MAX(timestamp), COUNT(message_id) FROM messages WHERE thread_id = ?", arrayOf(threadId.toString()))?.use { c ->
+            if (c.moveToFirst()) {
+                maxTime = c.getLong(0)
+                count = c.getInt(1)
+            }
+        }
+        Pair(maxTime, count)
+    }
+
     suspend fun saveMessages(messages: List<MessageItem>) = withContext(Dispatchers.IO) {
         if (messages.isEmpty()) return@withContext
         val db = writableDatabase
