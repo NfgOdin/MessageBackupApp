@@ -65,6 +65,7 @@ fun ConversationStatsDialog(
     modifier: Modifier = Modifier
 ) {
     var showConfirmCloseDialog by remember { mutableStateOf(false) }
+    var showWrappedStories by remember { mutableStateOf(false) }
 
     fun handleRequestClose() {
         showConfirmCloseDialog = true
@@ -341,7 +342,24 @@ fun ConversationStatsDialog(
 
                     Spacer(modifier = Modifier.height(20.dp))
 
+                    // Relationship "Wrapped" Story Button
                     Button(
+                        onClick = { showWrappedStories = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Insights,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text("✨ View Your Message Wrapped Stories")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedButton(
                         onClick = onExportReport,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -354,6 +372,14 @@ fun ConversationStatsDialog(
                         Text("Export Insights Report (.html)")
                     }
                 }
+            }
+
+            // Relationship "Wrapped" Fullscreen Stories Modal
+            if (showWrappedStories && stats != null) {
+                com.messagebackup.app.ui.dialogs.RelationshipWrappedDialog(
+                    stats = stats,
+                    onDismiss = { showWrappedStories = false }
+                )
             }
 
             // In-dialog confirmation overlay
