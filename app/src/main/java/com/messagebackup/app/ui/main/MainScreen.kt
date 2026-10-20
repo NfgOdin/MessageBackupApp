@@ -1449,6 +1449,9 @@ fun MainScreen(
                     Toast.makeText(context, "Insights still loading, please wait...", Toast.LENGTH_SHORT).show()
                 }
             },
+            onSearchPhrase = { query, onResult ->
+                viewModel.searchPhraseFrequency(query, onResult)
+            },
             onDismiss = {
                 viewModel.setShowStatsDialog(false)
                 viewModel.adManager.showInterstitialAd(

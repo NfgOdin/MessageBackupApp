@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -19,6 +20,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.WbTwilight
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -61,11 +69,16 @@ fun ConversationStatsDialog(
     progressMessage: String = "",
     onRecalculate: () -> Unit,
     onExportReport: () -> Unit,
+    onSearchPhrase: ((String, (com.messagebackup.app.model.PhraseFrequencyResult) -> Unit) -> Unit)? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showConfirmCloseDialog by remember { mutableStateOf(false) }
     var showWrappedStories by remember { mutableStateOf(false) }
+
+    var phraseQuery by remember { mutableStateOf("") }
+    var phraseResult by remember { mutableStateOf<com.messagebackup.app.model.PhraseFrequencyResult?>(null) }
+    var isSearchingPhrase by remember { mutableStateOf(false) }
 
     fun handleRequestClose() {
         showConfirmCloseDialog = true
@@ -311,6 +324,62 @@ fun ConversationStatsDialog(
                     val initPct = (stats.initiationRatio * 100).toInt()
                     PatternRow(label = "Conversation Starter", value = "$initPct% You • ${100 - initPct}% Them")
 
+                    // Streaks & Rhythm
+                    if (stats.longestStreakDays > 0 || stats.longestGapDays > 0) {
+                        val currentStreakStr = if (stats.currentStreakDays > 0) "${stats.currentStreakDays} days (Active 🔥)" else "None"
+                        PatternRow(label = "Longest Messaging Streak", value = "${stats.longestStreakDays} days")
+                        PatternRow(label = "Current Streak", value = currentStreakStr)
+                        if (stats.longestGapDays > 0) {
+                            PatternRow(label = "Longest Silence", value = "${stats.longestGapDays} days")
+                        }
+                    }
+
+                    // Night Owl vs Early Bird Day/Night Distribution
+                    val totalTimeMsgs = stats.morningCount + stats.afternoonCount + stats.eveningCount + stats.nightCount
+                    if (totalTimeMsgs > 0) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "Daily Rhythm (When you talk)",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            TimeHabitCard(
+                                label = "Morning",
+                                sub = "6am-12pm",
+                                count = stats.morningCount,
+                                total = totalTimeMsgs,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TimeHabitCard(
+                                label = "Afternoon",
+                                sub = "12pm-6pm",
+                                count = stats.afternoonCount,
+                                total = totalTimeMsgs,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TimeHabitCard(
+                                label = "Evening",
+                                sub = "6pm-12am",
+                                count = stats.eveningCount,
+                                total = totalTimeMsgs,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TimeHabitCard(
+                                label = "Night",
+                                sub = "12am-6am",
+                                count = stats.nightCount,
+                                total = totalTimeMsgs,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
                     HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp))
 
                     // Most Used Emojis (Organized into 2 rows for spacious padding)
@@ -424,6 +493,144 @@ fun ConversationStatsDialog(
                                 }
                             }
                         }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp))
+                    }
+
+                    // Interactive Phrase Frequency Tracker
+                    if (onSearchPhrase != null) {
+                        Text(
+                            text = "Phrase & Word Tracker",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Search how many times a word or phrase was spoken and who said it more.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = phraseQuery,
+                                onValueChange = { phraseQuery = it },
+                                placeholder = { Text("e.g. love you, dinner, miss you", style = MaterialTheme.typography.bodyMedium) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = {
+                                    if (phraseQuery.isNotBlank()) {
+                                        isSearchingPhrase = true
+                                        onSearchPhrase(phraseQuery) { res ->
+                                            phraseResult = res
+                                            isSearchingPhrase = false
+                                        }
+                                    }
+                                },
+                                enabled = phraseQuery.isNotBlank() && !isSearchingPhrase,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                if (isSearchingPhrase) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                } else {
+                                    Icon(imageVector = Icons.Default.Search, contentDescription = "Search phrase")
+                                }
+                            }
+                        }
+
+                        // Display Phrase Results Card
+                        phraseResult?.let { res ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "\"${res.query}\"",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = "${res.totalCount} times",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    if (res.totalCount > 0) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        val pSentPct = res.sentCount.toFloat() / res.totalCount.toFloat()
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "You: ${res.sentCount} (${(pSentPct * 100).toInt()}%)",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = "Them: ${res.receivedCount} (${((1f - pSentPct) * 100).toInt()}%)",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.secondary
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        LinearProgressIndicator(
+                                            progress = { pSentPct },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(6.dp)
+                                                .clip(RoundedCornerShape(3.dp)),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            trackColor = MaterialTheme.colorScheme.secondaryContainer
+                                        )
+
+                                        if (res.firstTimestamp != null && res.lastTimestamp != null) {
+                                            val firstDate = Instant.ofEpochMilli(res.firstTimestamp)
+                                                .atZone(ZoneId.systemDefault())
+                                                .format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
+                                            val lastDate = Instant.ofEpochMilli(res.lastTimestamp)
+                                                .atZone(ZoneId.systemDefault())
+                                                .format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = "First used $firstDate • Last used $lastDate",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    } else {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Never spoken in this conversation.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp))
                     }
 
@@ -579,5 +786,51 @@ private fun PatternRow(label: String, value: String) {
     ) {
         Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(text = value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+private fun TimeHabitCard(
+    label: String,
+    sub: String,
+    count: Int,
+    total: Int,
+    modifier: Modifier = Modifier
+) {
+    val pct = if (total > 0) (count.toFloat() / total.toFloat() * 100f).toInt() else 0
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(10.dp),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(8.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = sub,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "$pct%",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "$count msgs",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }

@@ -9,6 +9,7 @@ import com.messagebackup.app.model.ExportOptions
 import com.messagebackup.app.model.ExportResult
 import com.messagebackup.app.model.MessageItem
 import com.messagebackup.app.model.OutputDestination
+import com.messagebackup.app.model.PhraseFrequencyResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -627,6 +628,14 @@ class MainViewModel : ViewModel() {
             var threadInitiatedByYou = 0
             var threadInitiatedByOther = 0
 
+            var morningCount = 0
+            var afternoonCount = 0
+            var eveningCount = 0
+            var nightCount = 0
+
+            // Track active communication calendar days across sampled messages
+            val activeEpochDays = java.util.TreeSet<Long>()
+
             for ((index, thread) in sampleThreads.withIndex()) {
                 val pct = 15 + ((index.toFloat() / sampleThreads.size.toFloat()) * 80f).toInt()
                 _uiState.value = _uiState.value.copy(
@@ -657,6 +666,14 @@ class MainViewModel : ViewModel() {
                     val zdt = java.time.Instant.ofEpochMilli(msg.timestamp).atZone(java.time.ZoneId.systemDefault())
                     hourCounts[zdt.hour]++
                     dayOfWeekCounts[zdt.dayOfWeek] = (dayOfWeekCounts[zdt.dayOfWeek] ?: 0) + 1
+                    activeEpochDays.add(zdt.toLocalDate().toEpochDay())
+
+                    when (zdt.hour) {
+                        in 6..11 -> morningCount++
+                        in 12..17 -> afternoonCount++
+                        in 18..23 -> eveningCount++
+                        else -> nightCount++
+                    }
 
                     if (oldestTime == null || msg.timestamp < oldestTime) oldestTime = msg.timestamp
                     if (newestTime == null || msg.timestamp > newestTime) newestTime = msg.timestamp
@@ -718,6 +735,52 @@ class MainViewModel : ViewModel() {
             val totalInits = (threadInitiatedByYou + threadInitiatedByOther).coerceAtLeast(1)
             val initiationRatio = threadInitiatedByYou.toFloat() / totalInits.toFloat()
 
+            // Calculate streaks & gaps from sorted epoch days
+            var longestStreak = 0
+            var tempStreak = 0
+            var prevEpochDay: Long? = null
+            var longestGapDays = 0
+
+            val dayList = activeEpochDays.toList()
+            for (i in dayList.indices) {
+                val day = dayList[i]
+                if (prevEpochDay == null) {
+                    tempStreak = 1
+                } else {
+                    val diff = day - prevEpochDay
+                    if (diff == 1L) {
+                        tempStreak++
+                    } else {
+                        if (diff > 1L) {
+                            val gap = (diff - 1).toInt()
+                            if (gap > longestGapDays) longestGapDays = gap
+                        }
+                        tempStreak = 1
+                    }
+                }
+                if (tempStreak > longestStreak) longestStreak = tempStreak
+                prevEpochDay = day
+            }
+
+            // Current streak (up to today/yesterday)
+            val todayEpoch = java.time.LocalDate.now().toEpochDay()
+            val currentStreak = if (dayList.isNotEmpty()) {
+                val lastDay = dayList.last()
+                if (lastDay == todayEpoch || lastDay == todayEpoch - 1) {
+                    var cStreak = 0
+                    var checkDay = lastDay
+                    for (i in dayList.indices.reversed()) {
+                        if (dayList[i] == checkDay) {
+                            cStreak++
+                            checkDay--
+                        } else {
+                            break
+                        }
+                    }
+                    cStreak
+                } else 0
+            } else 0
+
             val stats = com.messagebackup.app.model.ConversationStats(
                 totalThreads = totalThreads,
                 totalMessages = totalMessages,
@@ -736,7 +799,14 @@ class MainViewModel : ViewModel() {
                 topEmojis = topEmojisList,
                 avgSentResponseMins = avgSentMins,
                 avgReceivedResponseMins = avgReceivedMins,
-                initiationRatio = initiationRatio
+                initiationRatio = initiationRatio,
+                longestStreakDays = longestStreak,
+                currentStreakDays = currentStreak,
+                longestGapDays = longestGapDays,
+                morningCount = morningCount,
+                afternoonCount = afternoonCount,
+                eveningCount = eveningCount,
+                nightCount = nightCount
             )
 
             if (targetThreadId == null) {
@@ -750,6 +820,61 @@ class MainViewModel : ViewModel() {
                 isStatsLoading = false,
                 statsProgressPct = 100,
                 statsProgressMessage = "Complete!"
+            )
+        }
+    }
+
+    /**
+     * Search frequency and speaker breakdown for a user-specified phrase or word.
+     */
+    fun searchPhraseFrequency(query: String, onResult: (PhraseFrequencyResult) -> Unit) {
+        val trimmed = query.trim().lowercase()
+        if (trimmed.isBlank()) return
+
+        val targetThread = _uiState.value.selectedThreadForPreview
+        val threads = if (targetThread != null) listOf(targetThread) else _uiState.value.threads.take(15)
+
+        viewModelScope.launch {
+            var sentCount = 0
+            var receivedCount = 0
+            var firstTimestamp: Long? = null
+            var lastTimestamp: Long? = null
+
+            for (t in threads) {
+                val messages = app.currentTelephonyRepository.getMessagesForThread(
+                    threadId = t.threadId,
+                    resolveContacts = false
+                ).sortedBy { it.timestamp }
+
+                for (msg in messages) {
+                    val body = msg.body?.lowercase() ?: continue
+                    if (body.contains(trimmed)) {
+                        // Count occurrences within the body
+                        val count = (body.length - body.replace(trimmed, "").length) / trimmed.length
+                        if (msg.direction == com.messagebackup.app.model.MessageDirection.OUTGOING) {
+                            sentCount += count
+                        } else {
+                            receivedCount += count
+                        }
+                        if (firstTimestamp == null || msg.timestamp < firstTimestamp) {
+                            firstTimestamp = msg.timestamp
+                        }
+                        if (lastTimestamp == null || msg.timestamp > lastTimestamp) {
+                            lastTimestamp = msg.timestamp
+                        }
+                    }
+                }
+            }
+
+            onResult(
+                PhraseFrequencyResult(
+                    query = query.trim(),
+                    sentCount = sentCount,
+                    receivedCount = receivedCount,
+                    totalCount = sentCount + receivedCount,
+                    firstTimestamp = firstTimestamp,
+                    lastTimestamp = lastTimestamp
+                )
             )
         }
     }
