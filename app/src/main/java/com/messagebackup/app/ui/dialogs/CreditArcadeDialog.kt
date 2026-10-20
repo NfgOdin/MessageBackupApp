@@ -57,8 +57,9 @@ import com.messagebackup.app.ads.AdManager
 import com.messagebackup.app.data.preferences.AppPreferences
 
 enum class RewardOption(val amountLabel: String, val subtitle: String, val iconResId: Int) {
-    ODIN_AI("+2", "Watch 1 short ad to receive 2 Runes for O.D.I.N. AI message queries", com.messagebackup.app.R.drawable.ic_rune_raido),
-    AUTO_BACKUP("+1", "Watch 3 short ads to receive 1 Draupnir Ring for scheduled cloud backup", com.messagebackup.app.R.drawable.ic_draupnir_ring)
+    ODIN_AI("+2 ᛟ", "Watch 1 short ad to receive 2 Othala Runes for O.D.I.N. AI queries", com.messagebackup.app.R.drawable.ic_rune_othala),
+    HUGINN_VOICE("+5 ᚫ", "Watch 1 short ad to receive 5 Ansuz Runes for Huginn Live Dispatch & Thought", com.messagebackup.app.R.drawable.ic_rune_ansuz),
+    AUTO_BACKUP("+1 ᛃ", "Watch 3 short ads to receive 1 Jera Rune for automated nightly backup", com.messagebackup.app.R.drawable.ic_rune_jera)
 }
 
 /**
@@ -76,6 +77,7 @@ fun CreditArcadeDialog(
     val activity = context as Activity
 
     val aiCredits by prefs.aiCredits.collectAsState()
+    val ansuzCredits by prefs.ansuzCredits.collectAsState()
     val autoBackupCredits by prefs.autoBackupCredits.collectAsState()
     val backupAdProgress by prefs.backupAdProgress.collectAsState()
 
@@ -149,16 +151,18 @@ fun CreditArcadeDialog(
                     modifier = Modifier.padding(vertical = 2.dp)
                 ) {
                     Text(
-                        text = "Current Balance:",
+                        text = "Balances:",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.width(6.dp))
+
+                    // ᛟ Othala (ODIN)
                     Icon(
-                        painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_raido),
-                        contentDescription = "Runes",
-                        modifier = Modifier.size(14.dp),
+                        painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_othala),
+                        contentDescription = "Othala",
+                        modifier = Modifier.size(13.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.width(3.dp))
@@ -169,18 +173,42 @@ fun CreditArcadeDialog(
                         color = MaterialTheme.colorScheme.primary
                     )
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "•",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
+                    // ᚫ Ansuz (Huginn)
                     Icon(
-                        painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_draupnir_ring),
-                        contentDescription = "Draupnir",
-                        modifier = Modifier.size(14.dp),
+                        painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_ansuz),
+                        contentDescription = "Ansuz",
+                        modifier = Modifier.size(13.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = "$ansuzCredits",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // ᛃ Jera (Auto-Backup)
+                    Icon(
+                        painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_jera),
+                        contentDescription = "Jera",
+                        modifier = Modifier.size(13.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.width(3.dp))
@@ -385,12 +413,13 @@ fun CreditArcadeDialog(
                     "⏳ Cooldown (${cooldownSeconds}s left)"
                 } else {
                     when (selectedOption) {
-                        RewardOption.ODIN_AI -> "Watch Ad (+2 AI Queries)"
+                        RewardOption.ODIN_AI -> "Watch Ad (+2 ᛟ Othala)"
+                        RewardOption.HUGINN_VOICE -> "Watch Ad (+5 ᚫ Ansuz)"
                         RewardOption.AUTO_BACKUP -> {
                             when (backupAdProgress) {
                                 0 -> "Watch Ad (Ad 1 of 3)"
                                 1 -> "Watch Ad (Ad 2 of 3)"
-                                else -> "Watch Ad (Ad 3 of 3 — Unlock Night!)"
+                                else -> "Watch Ad (Ad 3 of 3 — Unlock ᛃ Night!)"
                             }
                         }
                     }
@@ -410,7 +439,12 @@ fun CreditArcadeDialog(
                                 when (selectedOption) {
                                     RewardOption.ODIN_AI -> {
                                         prefs.addAiCredits(2)
-                                        Toast.makeText(context, "🌟 Claimed +2 O.D.I.N. AI Credits!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "🌟 Claimed +2 ᛟ Othala Runes!", Toast.LENGTH_SHORT).show()
+                                        onDismiss()
+                                    }
+                                    RewardOption.HUGINN_VOICE -> {
+                                        prefs.addAnsuzCredits(5)
+                                        Toast.makeText(context, "🪶 Claimed +5 ᚫ Ansuz Runes!", Toast.LENGTH_SHORT).show()
                                         onDismiss()
                                     }
                                     RewardOption.AUTO_BACKUP -> {
@@ -419,7 +453,7 @@ fun CreditArcadeDialog(
                                             if (prefs.autoBackupEnabled.value) {
                                                 com.messagebackup.app.worker.AutoBackupWorker.scheduleAutoBackup(context)
                                             }
-                                            Toast.makeText(context, "🎉 3/3 Ads Watched! Claimed +1 Auto-Backup Night!", Toast.LENGTH_LONG).show()
+                                            Toast.makeText(context, "🎉 3/3 Ads Watched! Claimed +1 ᛃ Jera Night!", Toast.LENGTH_LONG).show()
                                             showCelebrationDialog = true
                                         } else {
                                             val current = prefs.backupAdProgress.value

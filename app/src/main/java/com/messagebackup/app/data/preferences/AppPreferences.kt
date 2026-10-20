@@ -51,6 +51,7 @@ class AppPreferences(context: Context) {
         private const val KEY_ODIN_NUM_CTX = "odin_num_ctx"
         private const val KEY_ODIN_CUSTOM_SYSTEM_PROMPT = "odin_custom_system_prompt"
         private const val KEY_HUGINN_COMPOSER_ENABLED = "huginn_composer_enabled"
+        private const val KEY_ANSUZ_CREDITS = "ansuz_credits"
 
         // Privacy PIN & Biometric Lock Preferences
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
@@ -77,6 +78,10 @@ class AppPreferences(context: Context) {
     // Default 3 welcome AI credits for new users
     private val _aiCredits = MutableStateFlow(prefs.getInt(KEY_AI_CREDITS, 3))
     val aiCredits: StateFlow<Int> = _aiCredits.asStateFlow()
+
+    // Default 5 welcome Ansuz Runes for Huginn voice & thought
+    private val _ansuzCredits = MutableStateFlow(prefs.getInt(KEY_ANSUZ_CREDITS, 5))
+    val ansuzCredits: StateFlow<Int> = _ansuzCredits.asStateFlow()
 
     // Default 3 welcome Auto-Backup credits for new users
     private val _autoBackupCredits = MutableStateFlow(prefs.getInt(KEY_AUTO_BACKUP_CREDITS, 3))
@@ -257,6 +262,24 @@ class AppPreferences(context: Context) {
     fun consumeAiCredit(): Boolean {
         if (_aiCredits.value > 0) {
             setAiCredits(_aiCredits.value - 1)
+            return true
+        }
+        return false
+    }
+
+    fun setAnsuzCredits(credits: Int) {
+        val safe = credits.coerceAtLeast(0)
+        prefs.edit().putInt(KEY_ANSUZ_CREDITS, safe).apply()
+        _ansuzCredits.value = safe
+    }
+
+    fun addAnsuzCredits(amount: Int) {
+        setAnsuzCredits(_ansuzCredits.value + amount)
+    }
+
+    fun consumeAnsuzCredit(): Boolean {
+        if (_ansuzCredits.value > 0) {
+            setAnsuzCredits(_ansuzCredits.value - 1)
             return true
         }
         return false

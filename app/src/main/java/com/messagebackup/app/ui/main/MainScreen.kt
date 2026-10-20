@@ -134,6 +134,7 @@ fun MainScreen(
     val appLockEnabled by prefs.appLockEnabled.collectAsState()
     val odinLockEnabled by prefs.odinLockEnabled.collectAsState()
     val aiCredits by prefs.aiCredits.collectAsState()
+    val ansuzCredits by prefs.ansuzCredits.collectAsState()
     val autoBackupCredits by prefs.autoBackupCredits.collectAsState()
     val alwaysPromptExportOptions by prefs.alwaysPromptExportOptions.collectAsState()
     val isOnboardingCompleted by prefs.isOnboardingCompleted.collectAsState()
@@ -632,14 +633,14 @@ fun MainScreen(
                                             color = MaterialTheme.colorScheme.onTertiaryContainer
                                         )
                                     } else {
-                                        // O.D.I.N. AI Query Runes
+                                        // ᛟ Othala Runes (ODIN AI)
                                         Icon(
-                                            painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_raido),
-                                            contentDescription = "Odin's Runes",
-                                            modifier = Modifier.size(13.dp),
+                                            painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_othala),
+                                            contentDescription = "Othala Runes",
+                                            modifier = Modifier.size(12.dp),
                                             tint = MaterialTheme.colorScheme.primary
                                         )
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
                                         Text(
                                             text = "$aiCredits",
                                             style = MaterialTheme.typography.labelSmall,
@@ -647,22 +648,45 @@ fun MainScreen(
                                             color = MaterialTheme.colorScheme.onSecondaryContainer
                                         )
 
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Spacer(modifier = Modifier.width(5.dp))
                                         Text(
                                             text = "•",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f)
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Spacer(modifier = Modifier.width(5.dp))
 
-                                        // Auto-Backup Draupnir Rings
+                                        // ᚫ Ansuz Runes (Huginn Thought & Dispatch)
                                         Icon(
-                                            painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_draupnir_ring),
-                                            contentDescription = "Draupnir Rings",
-                                            modifier = Modifier.size(13.dp),
+                                            painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_ansuz),
+                                            contentDescription = "Ansuz Runes",
+                                            modifier = Modifier.size(12.dp),
                                             tint = MaterialTheme.colorScheme.primary
                                         )
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "$ansuzCredits",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            text = "•",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f)
+                                        )
+                                        Spacer(modifier = Modifier.width(5.dp))
+
+                                        // ᛃ Jera Runes (Nightly Auto-Backups) - ONLY WHOLE CREDITS!
+                                        Icon(
+                                            painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_jera),
+                                            contentDescription = "Jera Runes",
+                                            modifier = Modifier.size(12.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
                                         Text(
                                             text = "$autoBackupCredits",
                                             style = MaterialTheme.typography.labelSmall,
@@ -792,7 +816,7 @@ fun MainScreen(
                                     Column {
                                         Text("Reward Arcade")
                                         Text(
-                                            if (isAdsRemoved) "PRO License Active" else "ᚱ $aiCredits Runes • 💍 $autoBackupCredits Draupnir",
+                                            if (isAdsRemoved) "PRO License Active" else "ᛟ $aiCredits • ᚫ $ansuzCredits • ᛃ $autoBackupCredits Runes",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )

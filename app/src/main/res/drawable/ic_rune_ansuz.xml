@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Ansuz 'ᚫ' Elder Futhark Norse Rune (Divine Breath, Speech, Voice of the Gods, Thought) -->
+    <!-- Vertical Spine -->
+    <path
+        android:pathData="M7,3 L7,21"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="miter"/>
+    <!-- Upper Diagonal Slanted Downward Branch -->
+    <path
+        android:pathData="M7,6 L17,11"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="miter"/>
+    <!-- Lower Diagonal Slanted Downward Branch -->
+    <path
+        android:pathData="M7,12 L16,16"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="miter"/>
+</vector>

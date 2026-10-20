@@ -37,6 +37,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -86,13 +87,14 @@ fun HuginnMessageComposerBar(
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
 
+    val ansuzCredits by prefs.ansuzCredits.collectAsState()
     var textInput by remember { mutableStateOf("") }
     var isThinking by remember { mutableStateOf(false) }
     var thoughtSuggestion by remember { mutableStateOf<String?>(null) }
     var showThoughtSheet by remember { mutableStateOf(false) }
 
     fun triggerOdinThought(actionType: String) {
-        val currentCredits = prefs.aiCredits.value
+        val currentCredits = prefs.ansuzCredits.value
         if (!isAdsRemoved && currentCredits <= 0) {
             onRequireCredits()
             return
@@ -138,7 +140,7 @@ fun HuginnMessageComposerBar(
                 when (result) {
                     is AiQueryResult.Success -> {
                         if (!isAdsRemoved) {
-                            prefs.consumeAiCredit()
+                            prefs.consumeAnsuzCredit()
                         }
                         thoughtSuggestion = result.responseText.trim().removeSurrounding("\"")
                     }
@@ -339,7 +341,14 @@ fun HuginnMessageComposerBar(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = "• Live Dispatch & O.D.I.N. Thought",
+                text = if (isAdsRemoved) "• PRO Unlimited" else "• $ansuzCredits ᚫ Ansuz",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "• Live Dispatch",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
@@ -351,7 +360,7 @@ fun HuginnMessageComposerBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // ᚱ O.D.I.N. Thought Rune Launcher Button
+            // ᚫ Ansuz Thought Rune Launcher Button
             Surface(
                 shape = CircleShape,
                 color = if (showThoughtSheet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
@@ -366,7 +375,7 @@ fun HuginnMessageComposerBar(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_rune_raido),
+                        painter = painterResource(id = R.drawable.ic_rune_ansuz),
                         contentDescription = "O.D.I.N. Thought",
                         tint = if (showThoughtSheet) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)

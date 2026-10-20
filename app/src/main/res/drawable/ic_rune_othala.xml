@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Othala 'ᛟ' Elder Futhark Norse Rune (Ancestral Heritage, Legacy, Sacred Vault) -->
+    <!-- Diamond upper loop with crossing diagonal lower legs -->
+    <path
+        android:pathData="M12,3 L19,10 L12,17 L5,10 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="miter"/>
+    <path
+        android:pathData="M12,17 L6,22"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="miter"/>
+    <path
+        android:pathData="M12,17 L18,22"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="miter"/>
+</vector>
