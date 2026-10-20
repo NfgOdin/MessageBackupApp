@@ -114,7 +114,7 @@ fun MediaVaultScreen(
 
     var selectedCategory by remember { mutableStateOf(MediaCategory.ALL) }
     var selectedContactFilter by remember { mutableStateOf<String?>(null) }
-    var previewItem by remember { mutableStateOf<VaultMediaItem?>(null) }
+    var lightboxIndex by remember { mutableStateOf<Int?>(null) }
     var isBulkExporting by remember { mutableStateOf(false) }
     var bulkExportPct by remember { mutableStateOf(0) }
     var bulkExportMessage by remember { mutableStateOf("") }
@@ -148,7 +148,7 @@ fun MediaVaultScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "${filteredItems.size} items • ${mediaItems.size} total attachments",
+                            text = "${filteredItems.size} items â€¢ ${mediaItems.size} total attachments",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -401,9 +401,10 @@ fun MediaVaultScreen(
                         .weight(1f)
                 ) {
                     items(filteredItems, key = { it.partId }) { item ->
+                        val index = filteredItems.indexOf(item)
                         MediaThumbnailCard(
                             item = item,
-                            onClick = { previewItem = item }
+                            onClick = { lightboxIndex = if (index >= 0) index else 0 }
                         )
                     }
                 }
@@ -411,15 +412,17 @@ fun MediaVaultScreen(
         }
     }
 
-    // Full Preview & Action Dialog
-    previewItem?.let { item ->
-        MediaPreviewDialog(
-            item = item,
-            onDismiss = { previewItem = null },
-            onShare = {
-                shareMediaFile(context, item)
-            }
-        )
+    // Fullscreen Interactive Lightbox & Media Viewer
+    lightboxIndex?.let { initialIndex ->
+        if (initialIndex in filteredItems.indices) {
+            com.messagebackup.app.ui.dialogs.MediaLightboxDialog(
+                items = filteredItems,
+                initialIndex = initialIndex,
+                onDismiss = { lightboxIndex = null }
+            )
+        } else {
+            lightboxIndex = null
+        }
     }
 }
 
@@ -522,7 +525,7 @@ private fun MediaPreviewDialog(
     val context = LocalContext.current
     var fullBitmap by remember(item.uriString) { mutableStateOf<android.graphics.Bitmap?>(null) }
     val dateStr = remember(item.timestamp) {
-        SimpleDateFormat("MMM dd, yyyy • h:mm a", Locale.getDefault()).format(Date(item.timestamp))
+        SimpleDateFormat("MMM dd, yyyy â€¢ h:mm a", Locale.getDefault()).format(Date(item.timestamp))
     }
 
     LaunchedEffect(item.uriString) {
