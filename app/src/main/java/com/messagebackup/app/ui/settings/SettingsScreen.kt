@@ -1066,9 +1066,9 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(4.dp))
 
                         val providerDisplayName = when (aiProvider) {
-                            "OPENAI" -> "🧠 OpenAI ChatGPT (Cloud BYOK)"
-                            "OLLAMA" -> "🔒 Local / Self-Hosted (Ollama / Kobold / LocalAI)"
-                            else -> "☁️ Google Gemini (Cloud BYOK)"
+                            "OPENAI" -> "🧠 OpenAI ChatGPT"
+                            "OLLAMA" -> "🔒 Local / Self-Hosted (Ollama / LAN)"
+                            else -> "☁️ Google Gemini"
                         }
 
                         Box(modifier = Modifier.fillMaxWidth()) {
@@ -1086,8 +1086,11 @@ fun SettingsScreen(
                                     Text(
                                         text = providerDisplayName,
                                         style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                        maxLines = 1
                                     )
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Icon(
                                         imageVector = Icons.Default.ArrowDropDown,
                                         contentDescription = "Select AI Provider",
