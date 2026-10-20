@@ -10,6 +10,8 @@ import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAd
+import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAdLoadCallback
 import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
@@ -26,6 +28,8 @@ class AdManager(private val context: Context) {
 
     private var rewardedAd: RewardedAd? = null
     private var isAdLoading = false
+    private var rewardedInterstitialAd: RewardedInterstitialAd? = null
+    private var isRewardedInterstitialLoading = false
     private var interstitialAd: com.google.android.gms.ads.interstitial.InterstitialAd? = null
     private var isInterstitialLoading = false
     private var lastInterstitialShownTime = 0L
@@ -68,7 +72,77 @@ class AdManager(private val context: Context) {
     private fun initializeMobileAds(context: Context) {
         MobileAds.initialize(context) {
             loadRewardedAd(context)
+            loadRewardedInterstitialAd(context)
             loadInterstitialAd(context)
+        }
+    }
+
+    /**
+     * Preloads a high-eCPM Rewarded Interstitial Ad for high-value actions (Legal PDF export, Desktop viewer).
+     */
+    fun loadRewardedInterstitialAd(context: Context) {
+        if (rewardedInterstitialAd != null || isRewardedInterstitialLoading) return
+
+        isRewardedInterstitialLoading = true
+        val adUnitId = context.getString(R.string.admob_rewarded_interstitial_id)
+        val adRequest = AdRequest.Builder().build()
+
+        RewardedInterstitialAd.load(
+            context,
+            adUnitId,
+            adRequest,
+            object : RewardedInterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: RewardedInterstitialAd) {
+                    rewardedInterstitialAd = ad
+                    isRewardedInterstitialLoading = false
+                    Log.d(TAG, "Rewarded Interstitial Ad successfully loaded.")
+                }
+
+                override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                    rewardedInterstitialAd = null
+                    isRewardedInterstitialLoading = false
+                    Log.w(TAG, "Rewarded Interstitial Ad failed to load: ${loadAdError.message}")
+                }
+            }
+        )
+    }
+
+    /**
+     * Shows the premium Rewarded Interstitial Ad.
+     * Falls back seamlessly to the standard Rewarded Ad if not yet loaded.
+     */
+    fun showRewardedInterstitialOrFallback(
+        activity: Activity,
+        isAdsRemoved: Boolean,
+        onUserEarnedReward: () -> Unit
+    ) {
+        if (isAdsRemoved) {
+            onUserEarnedReward()
+            return
+        }
+
+        val ad = rewardedInterstitialAd
+        if (ad != null) {
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    rewardedInterstitialAd = null
+                    loadRewardedInterstitialAd(activity)
+                }
+
+                override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                    rewardedInterstitialAd = null
+                    loadRewardedInterstitialAd(activity)
+                    onUserEarnedReward()
+                }
+            }
+
+            ad.show(activity) {
+                onUserEarnedReward()
+            }
+        } else {
+            // Fallback to standard rewarded ad
+            loadRewardedInterstitialAd(activity)
+            showRewardedAd(activity, isAdsRemoved, onUserEarnedReward)
         }
     }
 

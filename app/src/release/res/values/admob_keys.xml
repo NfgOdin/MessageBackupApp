@@ -5,4 +5,5 @@
     <string name="admob_rewarded_id">ca-app-pub-1794260070743930/5813825146</string>
     <!-- Can be replaced with specific release interstitial unit ID once created in AdMob console -->
     <string name="admob_interstitial_id">ca-app-pub-1794260070743930/5813825146</string>
+    <string name="admob_rewarded_interstitial_id">ca-app-pub-1794260070743930/7771944073</string>
 </resources>

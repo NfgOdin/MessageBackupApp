@@ -391,69 +391,80 @@ fun MainScreen(
     }
 
     val executeExportWithOptions: (ExportOptions) -> Unit = { options ->
-        viewModel.adManager.showRewardedAd(
-            activity = activity,
-            isAdsRemoved = isAdsRemoved,
-            onUserEarnedReward = {
-                viewModel.startExport(options) { result ->
-                    if (result.success && result.outputFile != null) {
-                        if (options.outputType == OutputDestination.GOOGLE_DRIVE ||
-                            options.outputType == OutputDestination.ONEDRIVE ||
-                            options.outputType == OutputDestination.DROPBOX ||
-                            options.outputType == OutputDestination.WEBDAV_NAS) {
-                            viewModel.app.cloudStorageDispatcher.dispatchBackupToCloud(result.outputFile, options.outputType)
-                            val destName = when (options.outputType) {
-                                OutputDestination.GOOGLE_DRIVE -> "Google Drive"
-                                OutputDestination.ONEDRIVE -> "Microsoft OneDrive"
-                                OutputDestination.DROPBOX -> "Dropbox"
-                                else -> "WebDAV / Local NAS"
-                            }
-                            scope.launch {
-                                val snackResult = snackbarHostState.showSnackbar(
-                                    message = "Syncing to $destName: ${result.outputFile.name}",
-                                    actionLabel = "View File",
-                                    duration = SnackbarDuration.Long
-                                )
-                                if (snackResult == SnackbarResult.ActionPerformed) {
-                                    triggerOpenFile(result.outputFile)
-                                }
-                            }
-                        } else if (options.outputType == OutputDestination.PERSISTENT_DIRECTORY) {
-                            scope.launch {
-                                val snackResult = snackbarHostState.showSnackbar(
-                                    message = "Saved to $safFolderDisplay",
-                                    actionLabel = "Open",
-                                    duration = SnackbarDuration.Long
-                                )
-                                if (snackResult == SnackbarResult.ActionPerformed) {
-                                    triggerOpenFile(result.outputFile)
-                                }
-                            }
-                        } else {
-                            triggerShareSheet(result.outputFile)
-                            scope.launch {
-                                val snackResult = snackbarHostState.showSnackbar(
-                                    message = "Export ready: ${result.outputFile.name}",
-                                    actionLabel = "Open File",
-                                    duration = SnackbarDuration.Long
-                                )
-                                if (snackResult == SnackbarResult.ActionPerformed) {
-                                    triggerOpenFile(result.outputFile)
-                                }
+        val onExportAction = {
+            viewModel.startExport(options) { result ->
+                if (result.success && result.outputFile != null) {
+                    if (options.outputType == OutputDestination.GOOGLE_DRIVE ||
+                        options.outputType == OutputDestination.ONEDRIVE ||
+                        options.outputType == OutputDestination.DROPBOX ||
+                        options.outputType == OutputDestination.WEBDAV_NAS) {
+                        viewModel.app.cloudStorageDispatcher.dispatchBackupToCloud(result.outputFile, options.outputType)
+                        val destName = when (options.outputType) {
+                            OutputDestination.GOOGLE_DRIVE -> "Google Drive"
+                            OutputDestination.ONEDRIVE -> "Microsoft OneDrive"
+                            OutputDestination.DROPBOX -> "Dropbox"
+                            else -> "WebDAV / Local NAS"
+                        }
+                        scope.launch {
+                            val snackResult = snackbarHostState.showSnackbar(
+                                message = "Syncing to $destName: ${result.outputFile.name}",
+                                actionLabel = "View File",
+                                duration = SnackbarDuration.Long
+                            )
+                            if (snackResult == SnackbarResult.ActionPerformed) {
+                                triggerOpenFile(result.outputFile)
                             }
                         }
-                        com.messagebackup.app.ui.util.HapticHelper.performSuccess(context)
-                        prefs.incrementExportSuccessCount()
-                        if (prefs.getExportSuccessCount() == 2 && !prefs.hasReviewedApp.value) {
-                            showRewardArcade = true
+                    } else if (options.outputType == OutputDestination.PERSISTENT_DIRECTORY) {
+                        scope.launch {
+                            val snackResult = snackbarHostState.showSnackbar(
+                                message = "Saved to $safFolderDisplay",
+                                actionLabel = "Open",
+                                duration = SnackbarDuration.Long
+                            )
+                            if (snackResult == SnackbarResult.ActionPerformed) {
+                                triggerOpenFile(result.outputFile)
+                            }
                         }
                     } else {
-                        com.messagebackup.app.ui.util.HapticHelper.performHeavy(context)
-                        Toast.makeText(context, result.errorMessage ?: "Export error occurred", Toast.LENGTH_LONG).show()
+                        triggerShareSheet(result.outputFile)
+                        scope.launch {
+                            val snackResult = snackbarHostState.showSnackbar(
+                                message = "Export ready: ${result.outputFile.name}",
+                                actionLabel = "Open File",
+                                duration = SnackbarDuration.Long
+                            )
+                            if (snackResult == SnackbarResult.ActionPerformed) {
+                                triggerOpenFile(result.outputFile)
+                            }
+                        }
                     }
+                    com.messagebackup.app.ui.util.HapticHelper.performSuccess(context)
+                    prefs.incrementExportSuccessCount()
+                    if (prefs.getExportSuccessCount() == 2 && !prefs.hasReviewedApp.value) {
+                        showRewardArcade = true
+                    }
+                } else {
+                    com.messagebackup.app.ui.util.HapticHelper.performHeavy(context)
+                    Toast.makeText(context, result.errorMessage ?: "Export error occurred", Toast.LENGTH_LONG).show()
                 }
             }
-        )
+        }
+
+        // High-eCPM Rewarded Interstitial for premium Legal Forensic Mode & Desktop HTML Viewer
+        if (options.legalEvidenceMode || options.format == ExportFormat.DESKTOP_VIEWER) {
+            viewModel.adManager.showRewardedInterstitialOrFallback(
+                activity = activity,
+                isAdsRemoved = isAdsRemoved,
+                onUserEarnedReward = onExportAction
+            )
+        } else {
+            viewModel.adManager.showRewardedAd(
+                activity = activity,
+                isAdsRemoved = isAdsRemoved,
+                onUserEarnedReward = onExportAction
+            )
+        }
     }
 
     val initiateExport: () -> Unit = {

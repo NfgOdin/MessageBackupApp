@@ -4,4 +4,6 @@
     <string name="admob_banner_id">ca-app-pub-3940256099942544/6300978111</string>
     <string name="admob_rewarded_id">ca-app-pub-3940256099942544/5224354917</string>
     <string name="admob_interstitial_id">ca-app-pub-3940256099942544/1033173712</string>
+    <!-- Official Google Test ID for Rewarded Interstitial -->
+    <string name="admob_rewarded_interstitial_id">ca-app-pub-3940256099942544/5354046379</string>
 </resources>
