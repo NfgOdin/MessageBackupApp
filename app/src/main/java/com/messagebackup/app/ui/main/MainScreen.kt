@@ -471,29 +471,9 @@ fun MainScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (uiState.selectedThreadForPreview != null) {
-                // Thread Preview Top Bar
+                // Thread Preview Top Bar - Buttons & Actions on top row
                 TopAppBar(
-                    title = {
-                        Column {
-                            Text(
-                                text = uiState.selectedThreadForPreview!!.displayName,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(
-                                    text = "${uiState.previewMessages.size} messages",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                                if (uiState.isPreviewLoading) {
-                                    Text(
-                                        text = "• Refreshing...",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                        }
-                    },
+                    title = { },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.closeThreadPreview() }) {
                             Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -889,25 +869,78 @@ fun MainScreen(
                     val totalMediaCount = messages.sumOf { it.attachments.size }
 
                     Column(modifier = Modifier.fillMaxSize()) {
-                        // Conversation Metadata Stats Banner
+                        // Full-Width Conversation Header (Name, Phone/Address, Message Count) under action icons
                         Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                    .padding(horizontal = 16.dp, vertical = 10.dp)
                             ) {
-                                Text(
-                                    text = "📅 $firstMsgDate - $lastMsgDate",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                                Text(
-                                    text = "💬 ${messages.size} msgs • 📷 $totalMediaCount media",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = uiState.selectedThreadForPreview!!.displayName,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        )
+                                        if (uiState.selectedThreadForPreview!!.contactName != null && uiState.selectedThreadForPreview!!.address.isNotBlank()) {
+                                            Text(
+                                                text = uiState.selectedThreadForPreview!!.address,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "💬 ${messages.size} messages",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            if (totalMediaCount > 0) {
+                                                Text(
+                                                    text = "• 📷 $totalMediaCount media",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            if (uiState.isPreviewLoading) {
+                                                Text(
+                                                    text = "• Refreshing...",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (messages.isNotEmpty()) {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text(
+                                                text = "📅 $firstMsgDate - $lastMsgDate",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
 
