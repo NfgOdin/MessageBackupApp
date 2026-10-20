@@ -27,6 +27,7 @@ class RavenCryptoEngine(private val context: Context) {
         private const val KEY_ALIAS_IDENTITY = "muninn_raven_mesh_identity_v1"
         private const val PREFS_NAME = "raven_mesh_prefs"
         private const val PREF_CALLSIGN_MONIKER = "pref_callsign_moniker"
+        private const val PREF_HAS_CUSTOMIZED_CALLSIGN = "pref_has_customized_callsign"
         private const val SIGNATURE_ALGORITHM = "SHA256withECDSA"
 
         private val NORSE_PREFIXES = listOf(
@@ -94,6 +95,13 @@ class RavenCryptoEngine(private val context: Context) {
     }
 
     /**
+     * True if the user has already used their free first rename.
+     */
+    fun hasUsedFreeRename(): Boolean {
+        return sharedPrefs.getBoolean(PREF_HAS_CUSTOMIZED_CALLSIGN, false)
+    }
+
+    /**
      * Updates the user's custom Call-Sign name/alias while preserving cryptographic uniqueness.
      */
     fun setRavenCallSignAlias(customAlias: String) {
@@ -103,7 +111,10 @@ class RavenCryptoEngine(private val context: Context) {
         val hash = java.security.MessageDigest.getInstance("SHA-256").digest(pubBytes)
         val suffix = String.format("%02X%02X", hash[0], hash[1])
         val newMoniker = if (clean.endsWith("-$suffix", ignoreCase = true)) clean else "$clean-$suffix"
-        sharedPrefs.edit().putString(PREF_CALLSIGN_MONIKER, newMoniker).apply()
+        sharedPrefs.edit()
+            .putString(PREF_CALLSIGN_MONIKER, newMoniker)
+            .putBoolean(PREF_HAS_CUSTOMIZED_CALLSIGN, true)
+            .apply()
     }
 
     /**

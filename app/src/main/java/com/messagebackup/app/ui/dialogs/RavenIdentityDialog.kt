@@ -81,6 +81,9 @@ import kotlinx.coroutines.withContext
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RavenIdentityDialog(
+    prefs: com.messagebackup.app.data.preferences.AppPreferences,
+    adManager: com.messagebackup.app.ads.AdManager,
+    isAdsRemoved: Boolean,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -595,6 +598,8 @@ fun RavenIdentityDialog(
     if (showEditNameDialog) {
         val currentPrefix = myCallSign.removePrefix("raven://").substringBeforeLast("-")
         var customNameInput by remember { mutableStateOf(currentPrefix) }
+        val hasUsedFree = remember { cryptoEngine.hasUsedFreeRename() }
+        val aiCredits = prefs.aiCredits.value
 
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showEditNameDialog = false },
@@ -607,6 +612,36 @@ fun RavenIdentityDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
+                    if (!hasUsedFree) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "🎁 First identity customization is 100% FREE!",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    } else if (!isAdsRemoved) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "ᚱ Subsequent renames require 1 Rune credit or watching a short video.",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+
                     androidx.compose.material3.OutlinedTextField(
                         value = customNameInput,
                         onValueChange = { customNameInput = it.take(20) },
@@ -617,28 +652,68 @@ fun RavenIdentityDialog(
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        val trimmed = customNameInput.trim()
-                        if (trimmed.isNotBlank()) {
-                            cryptoEngine.setRavenCallSignAlias(trimmed)
-                            myCallSign = cryptoEngine.getRavenCallSign()
-                            showEditNameDialog = false
-                            // Regenerate QR with updated name
-                            scope.launch(Dispatchers.IO) {
-                                val bmp = qrManager.generateHandshakeQrBitmap(
-                                    displayName = trimmed,
-                                    localIp = com.messagebackup.app.domain.migration.DirectLocalMigrationManager.getLocalIpAddress()
-                                )
-                                withContext(Dispatchers.Main) {
-                                    qrBitmap = bmp
-                                }
+                val executeRename: () -> Unit = {
+                    val trimmed = customNameInput.trim()
+                    if (trimmed.isNotBlank()) {
+                        cryptoEngine.setRavenCallSignAlias(trimmed)
+                        myCallSign = cryptoEngine.getRavenCallSign()
+                        showEditNameDialog = false
+                        // Regenerate QR with updated name
+                        scope.launch(Dispatchers.IO) {
+                            val bmp = qrManager.generateHandshakeQrBitmap(
+                                displayName = trimmed,
+                                localIp = com.messagebackup.app.domain.migration.DirectLocalMigrationManager.getLocalIpAddress()
+                            )
+                            withContext(Dispatchers.Main) {
+                                qrBitmap = bmp
+                                Toast.makeText(context, "🪶 Identity updated to $myCallSign", Toast.LENGTH_SHORT).show()
                             }
                         }
-                    },
-                    enabled = customNameInput.isNotBlank()
-                ) {
-                    Text("Save Identity")
+                    }
+                }
+
+                if (!hasUsedFree || isAdsRemoved) {
+                    Button(
+                        onClick = executeRename,
+                        enabled = customNameInput.isNotBlank()
+                    ) {
+                        Text(if (!hasUsedFree) "Claim Free Rename" else "Save Identity (PRO)")
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        // Option 1: Use 1 credit
+                        Button(
+                            onClick = {
+                                if (aiCredits > 0) {
+                                    prefs.consumeAiCredit()
+                                    executeRename()
+                                } else {
+                                    Toast.makeText(context, "No Runes left! Watch an ad to rename.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            enabled = customNameInput.isNotBlank() && aiCredits > 0
+                        ) {
+                            Text("Use 1 ᚱ ($aiCredits)")
+                        }
+
+                        // Option 2: Watch an ad
+                        OutlinedButton(
+                            onClick = {
+                                if (activity != null) {
+                                    adManager.showRewardedAd(
+                                        activity = activity,
+                                        isAdsRemoved = false,
+                                        onUserEarnedReward = {
+                                            executeRename()
+                                        }
+                                    )
+                                }
+                            },
+                            enabled = customNameInput.isNotBlank()
+                        ) {
+                            Text("Watch Ad 🎬")
+                        }
+                    }
                 }
             },
             dismissButton = {

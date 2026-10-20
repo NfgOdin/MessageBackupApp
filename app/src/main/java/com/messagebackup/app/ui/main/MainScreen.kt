@@ -1696,6 +1696,9 @@ fun MainScreen(
 
     if (showRavenMeshDialog) {
         com.messagebackup.app.ui.dialogs.RavenIdentityDialog(
+            prefs = prefs,
+            adManager = viewModel.adManager,
+            isAdsRemoved = isAdsRemoved,
             onDismiss = { showRavenMeshDialog = false }
         )
     }
