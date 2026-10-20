@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Majestic Flying Raven with spread wings in forward flight -->
+    <!-- Head, beak, and aerodynamic body -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M24,12 C23,10 21,8 18,9 C15,9.5 13,11 11,10 C10.5,10 11.5,11.5 13,12.5 C14.5,13.5 17,14 18,15 C20,17 22,20 23,24 L24,34 C24.5,37 25,40 26,42 C26.5,43 27,41 27,39 L27,24 C28,20 30,17 32,15 C33,14 35.5,13.5 37,12.5 C38.5,11.5 39.5,10 39,10 C37,11 35,9.5 32,9 C29,8 27,10 26,12 C25.5,13 24.5,13 24,12 Z" />
+    <!-- Left Wing Feathers (sweeping upward and back) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M22,17 C18,13 11,8 4,11 C2,12 2,13 4,14 C9,16 14,19 19,23 C14,20 9,18 5,19 C3,19.5 3,20.5 5,21.5 C10,23 15,25 20,28 L22,23 Z" />
+    <!-- Right Wing Feathers (sweeping upward and back) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M28,17 C32,13 39,8 46,11 C48,12 48,13 46,14 C41,16 36,19 31,23 C36,20 41,18 45,19 C47,19.5 47,20.5 45,21.5 C40,23 35,25 30,28 L28,23 Z" />
+    <!-- Tail Feathers Wedge -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M23,32 L20,44 C22,43 24,42 25,44 C26,42 28,43 30,44 L27,32 Z" />
+</vector>

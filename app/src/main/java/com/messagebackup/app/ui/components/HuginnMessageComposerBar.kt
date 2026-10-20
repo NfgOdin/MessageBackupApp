@@ -165,6 +165,8 @@ fun HuginnMessageComposerBar(
         }
     }
 
+    var isHuginnFlying by remember { mutableStateOf(false) }
+
     fun dispatchSms(textToSend: String) {
         if (textToSend.isBlank()) return
         val recipientAddress = thread.address
@@ -175,6 +177,7 @@ fun HuginnMessageComposerBar(
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(smsIntent)
+            isHuginnFlying = true
             textInput = ""
             thoughtSuggestion = null
             showThoughtSheet = false
@@ -463,5 +466,11 @@ fun HuginnMessageComposerBar(
                 }
             }
         }
+
+        // Overlay animation: Soaring raven flight from send button
+        HuginnFlightOverlay(
+            isFlying = isHuginnFlying,
+            onFlightCompleted = { isHuginnFlying = false }
+        )
     }
 }

@@ -104,6 +104,7 @@ fun RavenIdentityDialog(
     var peerForDirectPing by remember { mutableStateOf<RavenPeer?>(null) }
     var pingMessageText by remember { mutableStateOf("⚡ Raven Whisper: Greetings from Muninn!") }
     var isSendingPing by remember { mutableStateOf(false) }
+    var isRavenFlying by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         socketTransport.startServer()
@@ -567,6 +568,7 @@ fun RavenIdentityDialog(
                                 isSendingPing = false
                                 when (res) {
                                     is com.messagebackup.app.domain.mesh.RavenSendResult.Success -> {
+                                        isRavenFlying = true
                                         Toast.makeText(context, "🪶 Raven packet delivered!", Toast.LENGTH_SHORT).show()
                                         peerForDirectPing = null
                                     }
@@ -723,4 +725,10 @@ fun RavenIdentityDialog(
             }
         )
     }
+
+    // Overlay animation: Soaring raven flight upon transmission
+    com.messagebackup.app.ui.components.HuginnFlightOverlay(
+        isFlying = isRavenFlying,
+        onFlightCompleted = { isRavenFlying = false }
+    )
 }
