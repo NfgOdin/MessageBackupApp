@@ -66,6 +66,10 @@ class RavenSocketTransport(
         }
     }
 
+    fun pollRelayImmediately() {
+        globalRelay.pollImmediately()
+    }
+
     private var serverSocket: ServerSocket? = null
     private var serverJob: Job? = null
 

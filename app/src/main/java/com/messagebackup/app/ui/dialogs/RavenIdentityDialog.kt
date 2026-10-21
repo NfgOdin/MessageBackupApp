@@ -248,6 +248,7 @@ fun RavenIdentityDialog(
     }
 
     fun refreshPeers() {
+        socketTransport.pollRelayImmediately()
         scope.launch(Dispatchers.IO) {
             val list = dbHelper.getAllPeers()
             withContext(Dispatchers.Main) {

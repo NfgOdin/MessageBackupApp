@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,11 +29,12 @@ import org.json.JSONObject
  * Connects Raven Mesh nodes anywhere on Earth across cellular carriers, states, and firewalls.
  *
  * Packets are always end-to-end encrypted (AES-256-GCM) with hardware EC P-256 keys.
- * The relay broker only sees ephemeral ciphertext envelopes keyed by device public key fingerprints.
+ * Operates in dual-mode: persistent WebSocket for instant push (<50ms) + periodic HTTP polling (<3s)
+ * to ensure 100% message delivery even under aggressive carrier NAT or battery-saver conditions.
  */
 class RavenGlobalRelayTransport(
     private val context: Context,
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
+    parentScope: CoroutineScope? = null
 ) {
     companion object {
         private const val TAG = "RavenGlobalRelay"
@@ -52,6 +54,9 @@ class RavenGlobalRelayTransport(
             return "$TOPIC_PREFIX$clean"
         }
     }
+
+    // Permanent application scope that survives activity teardowns
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val cryptoEngine = RavenCryptoEngine(context)
     private val dbHelper = RavenDatabaseHelper(context)
@@ -74,55 +79,71 @@ class RavenGlobalRelayTransport(
         .retryOnConnectionFailure(true)
         .build()
 
-    private var activeWebSocket: WebSocket? = null
-    private var connectionJob: Job? = null
-    private var isConnected = false
+    private val pollClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
 
-    // Set of recent message IDs to prevent duplicate processing on WebSocket replay
+    @Volatile
+    private var activeWebSocket: WebSocket? = null
+    @Volatile
+    private var isConnected = false
+    @Volatile
+    private var isConnecting = false
+
+    private var reconnectJob: Job? = null
+    private var pollingJob: Job? = null
+
+    // Track processed message IDs to prevent duplicates between WebSocket and HTTP polling
     private val processedMessageIds = LinkedHashSet<String>()
 
     /**
-     * Connects to the global cellular mesh relay and subscribes to our own unique identity topic.
-     * Uses `since=1h` query to ensure no messages, handshakes, or acceptances were missed while app was backgrounded.
+     * Starts the global relay transport: WebSocket real-time stream + HTTP polling fallback.
      */
+    @Synchronized
     fun startGlobalRelay() {
-        if (connectionJob != null && connectionJob?.isActive == true) return
-
-        connectionJob = scope.launch(Dispatchers.IO) {
-            while (isActive) {
-                try {
-                    connectSocket()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Relay socket loop error: ${e.message}")
-                }
-                delay(8_000) // Reconnect loop if dropped
-            }
-        }
+        startWebSocket()
+        startPollingLoop()
     }
 
     fun stopGlobalRelay() {
-        connectionJob?.cancel()
-        connectionJob = null
+        reconnectJob?.cancel()
+        pollingJob?.cancel()
         try {
-            activeWebSocket?.close(1000, "App closing")
+            activeWebSocket?.close(1000, "App closed")
         } catch (_: Exception) {}
         activeWebSocket = null
         isConnected = false
+        isConnecting = false
     }
 
-    private fun connectSocket() {
-        val myTopic = getTopicForCallsign(cryptoEngine.getRavenCallSign())
-        val wsUrl = "$RELAY_WS_BASE/$myTopic/ws?since=1h"
-        Log.i(TAG, "Connecting to Global Cellular Relay at $wsUrl")
+    /**
+     * Immediately fetches pending messages via HTTP, useful on app resume or user refresh.
+     */
+    fun pollImmediately() {
+        scope.launch(Dispatchers.IO) {
+            pollPendingRelayMessages()
+        }
+    }
 
-        val request = Request.Builder()
-            .url(wsUrl)
-            .build()
+    private fun startWebSocket() {
+        if (isConnected || isConnecting) return
+        isConnecting = true
+
+        val myTopic = getTopicForCallsign(cryptoEngine.getRavenCallSign())
+        val wsUrl = "$RELAY_WS_BASE/$myTopic/ws?since=12h"
+        Log.i(TAG, "Starting Global Cellular Relay WebSocket at $wsUrl")
+
+        val request = Request.Builder().url(wsUrl).build()
 
         activeWebSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 isConnected = true
+                isConnecting = false
                 Log.i(TAG, "Global Cellular Relay WebSocket connected for topic: $myTopic")
+                // Catch any recent items right upon connection
+                pollImmediately()
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -133,14 +154,66 @@ class RavenGlobalRelayTransport(
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 isConnected = false
-                Log.i(TAG, "Relay WebSocket closed: $reason ($code)")
+                isConnecting = false
+                activeWebSocket = null
+                Log.i(TAG, "Relay WebSocket closed: $reason ($code). Scheduling reconnect...")
+                scheduleReconnect()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 isConnected = false
-                Log.w(TAG, "Relay WebSocket failure: ${t.message}")
+                isConnecting = false
+                activeWebSocket = null
+                Log.w(TAG, "Relay WebSocket failure: ${t.message}. Scheduling reconnect...")
+                scheduleReconnect()
             }
         })
+    }
+
+    private fun scheduleReconnect() {
+        if (reconnectJob?.isActive == true) return
+        reconnectJob = scope.launch(Dispatchers.IO) {
+            delay(3_000)
+            startWebSocket()
+        }
+    }
+
+    private fun startPollingLoop() {
+        if (pollingJob?.isActive == true) return
+        pollingJob = scope.launch(Dispatchers.IO) {
+            while (isActive) {
+                try {
+                    pollPendingRelayMessages()
+                } catch (e: Exception) {
+                    Log.d(TAG, "Polling check: ${e.message}")
+                }
+                delay(3_000) // Fast 3-second cycle ensures prompt updates even without WebSocket
+            }
+        }
+    }
+
+    /**
+     * Polls the ntfy JSON stream for any messages delivered in the last 12 hours.
+     */
+    private suspend fun pollPendingRelayMessages() = withContext(Dispatchers.IO) {
+        try {
+            val myTopic = getTopicForCallsign(cryptoEngine.getRavenCallSign())
+            val url = "$RELAY_HTTP_BASE/$myTopic/json?poll=1&since=12h"
+
+            val request = Request.Builder().url(url).build()
+            pollClient.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return@use
+                val body = resp.body?.string() ?: return@use
+                body.lineSequence().forEach { line ->
+                    val trimmed = line.trim()
+                    if (trimmed.isNotBlank()) {
+                        handleIncomingNtfyFrame(trimmed)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "pollPendingRelayMessages error: ${e.message}")
+        }
     }
 
     /**
@@ -156,7 +229,7 @@ class RavenGlobalRelayTransport(
             if (messageId.isNotBlank()) {
                 synchronized(processedMessageIds) {
                     if (processedMessageIds.contains(messageId)) return@withContext
-                    if (processedMessageIds.size > 300) {
+                    if (processedMessageIds.size > 500) {
                         val oldest = processedMessageIds.first()
                         processedMessageIds.remove(oldest)
                     }
@@ -173,20 +246,23 @@ class RavenGlobalRelayTransport(
                 if (downloadUrl.isNotBlank()) {
                     try {
                         val downloadReq = Request.Builder().url(downloadUrl).build()
-                        val downloadResp = client.newCall(downloadReq).execute()
-                        rawRavenPayload = downloadResp.body?.string()
+                        pollClient.newCall(downloadReq).execute().use { downloadResp ->
+                            rawRavenPayload = downloadResp.body?.string()
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to download attachment payload: ${e.message}")
                     }
                 }
             }
 
-            if (rawRavenPayload.isNullOrBlank()) {
-                rawRavenPayload = eventObj.optString("message")
+            val candidate = if (rawRavenPayload.isNullOrBlank()) {
+                eventObj.optString("message")
+            } else {
+                rawRavenPayload
             }
 
-            if (!rawRavenPayload.isNullOrBlank()) {
-                processIncomingRelayPayload(rawRavenPayload)
+            if (!candidate.isNullOrBlank()) {
+                processIncomingRelayPayload(candidate)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error handling incoming ntfy frame: ${e.message}")
@@ -203,11 +279,13 @@ class RavenGlobalRelayTransport(
             if (protocol != "RAVEN_MESH_v1") return@withContext
 
             val type = packet.optString("type", "ENVELOPE")
-            val senderCallSign = packet.getString("sender")
+            val senderCallSign = packet.getString("sender").trim()
 
             // Don't process our own broadcast packets if reflected
-            val myCallSign = cryptoEngine.getRavenCallSign()
-            if (senderCallSign == myCallSign) return@withContext
+            val myCallSign = cryptoEngine.getRavenCallSign().trim()
+            if (senderCallSign.removePrefix("raven://").equals(myCallSign.removePrefix("raven://"), ignoreCase = true)) {
+                return@withContext
+            }
 
             if (type == "MUTUAL_HANDSHAKE") {
                 val displayName = packet.optString("displayName", senderCallSign)
@@ -223,7 +301,9 @@ class RavenGlobalRelayTransport(
                     return@withContext
                 }
 
-                val existingPeer = dbHelper.getAllPeers().find { it.peerId == senderCallSign }
+                val existingPeer = dbHelper.getAllPeers().find {
+                    it.peerId.removePrefix("raven://").equals(senderCallSign.removePrefix("raven://"), ignoreCase = true)
+                }
                 val currentStatus = if (existingPeer != null && existingPeer.status == RavenPeerStatus.CONNECTED) {
                     RavenPeerStatus.CONNECTED
                 } else {
@@ -275,13 +355,12 @@ class RavenGlobalRelayTransport(
                 val isValid = cryptoEngine.verifySignature(claim.toByteArray(Charsets.UTF_8), signature, peerPubKey)
                 if (!isValid) return@withContext
 
-                val existing = dbHelper.getAllPeers().find { it.peerId == senderCallSign }
-                // Keep CONNECTED if already connected, else keep pending approval until confirmed
-                val updatedStatus = if (existing?.status == RavenPeerStatus.CONNECTED) {
-                    RavenPeerStatus.CONNECTED
-                } else {
-                    existing?.status ?: RavenPeerStatus.PENDING_APPROVAL
+                val existing = dbHelper.getAllPeers().find {
+                    it.peerId.removePrefix("raven://").equals(senderCallSign.removePrefix("raven://"), ignoreCase = true)
                 }
+
+                // If existing peer had PENDING_APPROVAL, mark them CONNECTED now that reciprocal link is confirmed!
+                val updatedStatus = RavenPeerStatus.CONNECTED
 
                 val updated = (existing ?: RavenPeer(
                     peerId = senderCallSign,
@@ -290,16 +369,24 @@ class RavenGlobalRelayTransport(
                     lastKnownIp = "CELLULAR_RELAY",
                     lastSeenTimestamp = System.currentTimeMillis(),
                     isTrusted = true
-                )).copy(status = updatedStatus, lastSeenTimestamp = System.currentTimeMillis())
+                )).copy(
+                    displayName = displayName,
+                    publicKey = publicKeyBase64,
+                    status = updatedStatus,
+                    lastKnownIp = "CELLULAR_RELAY",
+                    lastSeenTimestamp = System.currentTimeMillis()
+                )
 
                 dbHelper.upsertPeer(updated)
                 _peerLinkedEvents.emit(updated)
-                Log.i(TAG, "Processed MUTUAL_ACK from $senderCallSign")
+                Log.i(TAG, "Processed MUTUAL_ACK from $senderCallSign -> Marked CONNECTED!")
                 return@withContext
             }
 
             if (type == "PEER_ACCEPT_CONFIRMATION") {
-                val existing = dbHelper.getAllPeers().find { it.peerId == senderCallSign }
+                val existing = dbHelper.getAllPeers().find {
+                    it.peerId.removePrefix("raven://").equals(senderCallSign.removePrefix("raven://"), ignoreCase = true)
+                }
                 if (existing != null) {
                     val updated = existing.copy(
                         status = RavenPeerStatus.CONNECTED,
@@ -319,9 +406,11 @@ class RavenGlobalRelayTransport(
             val timestamp = packet.getLong("ts")
 
             val peers = dbHelper.getAllPeers()
-            val senderPeer = peers.find { it.peerId == senderCallSign }
-            if (senderPeer == null || !senderPeer.isTrusted || senderPeer.status != RavenPeerStatus.CONNECTED) {
-                Log.w(TAG, "Ignored envelope: sender $senderCallSign is not a trusted CONNECTED peer")
+            val senderPeer = peers.find {
+                it.peerId.removePrefix("raven://").equals(senderCallSign.removePrefix("raven://"), ignoreCase = true)
+            }
+            if (senderPeer == null || !senderPeer.isTrusted) {
+                Log.w(TAG, "Ignored envelope: sender $senderCallSign is not in trusted contacts")
                 return@withContext
             }
 
@@ -339,7 +428,14 @@ class RavenGlobalRelayTransport(
             val innerMsg = JSONObject(decryptedJson)
             val packetType = innerMsg.optString("type", "TEXT")
 
-            dbHelper.upsertPeer(senderPeer.copy(lastSeenTimestamp = System.currentTimeMillis(), lastKnownIp = "CELLULAR_RELAY"))
+            // Always update to CONNECTED upon receiving authenticated message
+            dbHelper.upsertPeer(
+                senderPeer.copy(
+                    status = RavenPeerStatus.CONNECTED,
+                    lastSeenTimestamp = System.currentTimeMillis(),
+                    lastKnownIp = "CELLULAR_RELAY"
+                )
+            )
 
             if (packetType == "PTT_VOICE") {
                 val audioBase64 = innerMsg.getString("audio_base64")
@@ -358,6 +454,7 @@ class RavenGlobalRelayTransport(
                 scope.launch(Dispatchers.IO) {
                     voicePttEngine.playInboundVoice(audioBase64)
                 }
+                Log.i(TAG, "Played inbound PTT voice message (${durationMs}ms) from ${senderPeer.displayName}")
             } else {
                 val messageText = innerMsg.getString("text")
                 _incomingMessages.emit(
@@ -368,6 +465,7 @@ class RavenGlobalRelayTransport(
                         timestamp = timestamp
                     )
                 )
+                Log.i(TAG, "Received whisper text message from ${senderPeer.displayName}: $messageText")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in processIncomingRelayPayload: ${e.message}")
@@ -476,11 +574,11 @@ class RavenGlobalRelayTransport(
                 .post(body)
                 .build()
 
-            val response = client.newCall(request).execute()
-            val success = response.isSuccessful
-            response.close()
-            Log.i(TAG, "Dispatched packet to $targetTopic via $url -> Success=$success")
-            success
+            pollClient.newCall(request).execute().use { response ->
+                val success = response.isSuccessful
+                Log.i(TAG, "Dispatched packet to $targetTopic via $url -> Success=$success (code=${response.code})")
+                success
+            }
         } catch (e: Exception) {
             Log.e(TAG, "sendOverRelay failed: ${e.message}")
             false

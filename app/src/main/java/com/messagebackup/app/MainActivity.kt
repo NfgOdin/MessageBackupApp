@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
         handleIntentAction(intent)
 
         // Keep Raven Mesh & Global Cellular Relay alive across app sessions for instant out-of-state links
-        com.messagebackup.app.domain.mesh.RavenSocketTransport.getInstance(applicationContext, lifecycleScope)
+        com.messagebackup.app.domain.mesh.RavenSocketTransport.getInstance(applicationContext)
 
         setContent {
             val appTheme by viewModel.prefs.appTheme.collectAsState()
