@@ -48,6 +48,9 @@ class RavenSocketTransport(
     private val _incomingVoiceStreams = MutableSharedFlow<RavenIncomingVoice>(extraBufferCapacity = 32)
     val incomingVoiceStreams: SharedFlow<RavenIncomingVoice> = _incomingVoiceStreams.asSharedFlow()
 
+    private val _peerLinkedEvents = MutableSharedFlow<RavenPeer>(extraBufferCapacity = 16)
+    val peerLinkedEvents: SharedFlow<RavenPeer> = _peerLinkedEvents.asSharedFlow()
+
     /**
      * Starts listening for incoming Raven Mesh connections on the local network.
      */
@@ -108,6 +111,59 @@ class RavenSocketTransport(
             val protocol = packet.getString("protocol")
             if (protocol != "RAVEN_MESH_v1") {
                 writer.println(JSONObject().apply { put("status", "ERR_INVALID_PROTOCOL") })
+                return@withContext
+            }
+
+            val rootPacketType = packet.optString("type", "ENVELOPE")
+            if (rootPacketType == "MUTUAL_HANDSHAKE") {
+                val senderCallSign = packet.getString("sender")
+                val displayName = packet.optString("displayName", senderCallSign)
+                val publicKeyBase64 = packet.getString("publicKey")
+                val senderLocalIp = packet.optString("localIp", socket.inetAddress?.hostAddress ?: "")
+                val signature = packet.getString("sig")
+                val timestamp = packet.getLong("ts")
+
+                val peerPubKey = cryptoEngine.decodePublicKey(publicKeyBase64)
+                val claim = "MUTUAL_HANDSHAKE|$senderCallSign|$publicKeyBase64|$timestamp"
+                val isValid = cryptoEngine.verifySignature(claim.toByteArray(Charsets.UTF_8), signature, peerPubKey)
+
+                if (!isValid) {
+                    writer.println(JSONObject().apply { put("status", "ERR_INVALID_SIGNATURE") })
+                    return@withContext
+                }
+
+                // Automatically save the scanning peer as trusted in our database!
+                val resolvedIp = if (senderLocalIp.isNotBlank()) senderLocalIp else (socket.inetAddress?.hostAddress ?: "")
+                val mutualPeer = RavenPeer(
+                    peerId = senderCallSign,
+                    displayName = displayName,
+                    publicKey = publicKeyBase64,
+                    lastKnownIp = resolvedIp,
+                    lastSeenTimestamp = System.currentTimeMillis(),
+                    isTrusted = true
+                )
+                dbHelper.upsertPeer(mutualPeer)
+
+                // Return our identity so the scanning phone is 100% confirmed as well
+                val myCallSign = cryptoEngine.getRavenCallSign()
+                val myPubKey = cryptoEngine.getPublicKeyBase64()
+                val myName = cryptoEngine.getRavenCallSign().removePrefix("raven://")
+                val myIp = DirectLocalMigrationManager.getLocalIpAddress() ?: ""
+                val ackTs = System.currentTimeMillis()
+                val ackClaim = "MUTUAL_ACK|$myCallSign|$myPubKey|$ackTs"
+                val ackSig = cryptoEngine.signData(ackClaim.toByteArray(Charsets.UTF_8))
+
+                writer.println(JSONObject().apply {
+                    put("status", "OK_MUTUAL_LINK_ESTABLISHED")
+                    put("peerId", myCallSign)
+                    put("displayName", myName)
+                    put("publicKey", myPubKey)
+                    put("localIp", myIp)
+                    put("sig", ackSig)
+                    put("ts", ackTs)
+                })
+
+                _peerLinkedEvents.emit(mutualPeer)
                 return@withContext
             }
 
@@ -232,6 +288,80 @@ class RavenSocketTransport(
             put("ts", System.currentTimeMillis())
         }.toString()
         sendRawPayloadToPeer(peer, payload, targetIp, port)
+    }
+
+    /**
+     * Automatically completes 2-way mutual link with a scanned peer over local Wi-Fi / hotspot socket.
+     * When Phone B scans Phone A, this immediately sends Phone B's identity to Phone A so that
+     * Phone A automatically adds Phone B without needing a reciprocal scan!
+     */
+    suspend fun sendMutualHandshake(
+        targetIp: String,
+        port: Int = DEFAULT_MESH_PORT
+    ): Result<RavenPeer> = withContext(Dispatchers.IO) {
+        if (targetIp.isBlank()) {
+            return@withContext Result.failure(Exception("Unknown peer IP"))
+        }
+
+        try {
+            val myCallSign = cryptoEngine.getRavenCallSign()
+            val myPubKey = cryptoEngine.getPublicKeyBase64()
+            val myName = cryptoEngine.getRavenCallSign().removePrefix("raven://")
+            val myIp = DirectLocalMigrationManager.getLocalIpAddress() ?: ""
+            val timestamp = System.currentTimeMillis()
+
+            val claim = "MUTUAL_HANDSHAKE|$myCallSign|$myPubKey|$timestamp"
+            val signature = cryptoEngine.signData(claim.toByteArray(Charsets.UTF_8))
+
+            val packet = JSONObject().apply {
+                put("protocol", "RAVEN_MESH_v1")
+                put("type", "MUTUAL_HANDSHAKE")
+                put("sender", myCallSign)
+                put("displayName", myName)
+                put("publicKey", myPubKey)
+                put("localIp", myIp)
+                put("sig", signature)
+                put("ts", timestamp)
+            }
+
+            val socket = Socket()
+            socket.connect(InetSocketAddress(targetIp, port), 6_000)
+            socket.soTimeout = 8_000
+
+            val writer = PrintWriter(socket.getOutputStream(), true)
+            val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
+
+            writer.println(packet.toString())
+            val responseLine = reader.readLine()
+            socket.close()
+
+            if (responseLine != null) {
+                val resp = JSONObject(responseLine)
+                if (resp.optString("status") == "OK_MUTUAL_LINK_ESTABLISHED") {
+                    val peerId = resp.getString("peerId")
+                    val displayName = resp.optString("displayName", peerId)
+                    val publicKey = resp.getString("publicKey")
+                    val remoteIp = resp.optString("localIp", targetIp).ifBlank { targetIp }
+
+                    val confirmedPeer = RavenPeer(
+                        peerId = peerId,
+                        displayName = displayName,
+                        publicKey = publicKey,
+                        lastKnownIp = remoteIp,
+                        lastSeenTimestamp = System.currentTimeMillis(),
+                        isTrusted = true
+                    )
+                    dbHelper.upsertPeer(confirmedPeer)
+                    Result.success(confirmedPeer)
+                } else {
+                    Result.failure(Exception("Peer handshake rejected: ${resp.optString("status")}"))
+                }
+            } else {
+                Result.failure(Exception("No response from peer during mutual handshake."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     private suspend fun sendRawPayloadToPeer(
