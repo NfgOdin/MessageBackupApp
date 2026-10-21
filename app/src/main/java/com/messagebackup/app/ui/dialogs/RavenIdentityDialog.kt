@@ -123,6 +123,7 @@ fun RavenIdentityDialog(
     var showEditNameDialog by remember { mutableStateOf(false) }
     var showEnterCodeDialog by remember { mutableStateOf(false) }
     var inputFriendCodeText by remember { mutableStateOf("") }
+    var peerToShareBackWith by remember { mutableStateOf<RavenPeer?>(null) }
     var peerToDelete by remember { mutableStateOf<RavenPeer?>(null) }
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var peersList by remember { mutableStateOf<List<RavenPeer>>(emptyList()) }
@@ -775,19 +776,49 @@ fun RavenIdentityDialog(
                                                     }
                                                 }
                                             } else if (peer.status == com.messagebackup.app.domain.mesh.RavenPeerStatus.PENDING_APPROVAL) {
-                                                // User sent code/request to friend, awaiting their acceptance
-                                                Surface(
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                                    modifier = Modifier.fillMaxWidth()
+                                                // User entered code or sent request to friend, awaiting acceptance/reciprocal code
+                                                Column(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                                 ) {
-                                                    Text(
-                                                        text = "⏳ Connection pending friend's acceptance. PTT & messaging will unlock once accepted.",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        textAlign = TextAlign.Center,
-                                                        modifier = Modifier.padding(8.dp)
-                                                    )
+                                                    Surface(
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        Text(
+                                                            text = "⏳ Awaiting friend's acceptance. If you are not on the same Wi-Fi, text them your code so they can add you back!",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            textAlign = TextAlign.Center,
+                                                            modifier = Modifier.padding(8.dp)
+                                                        )
+                                                    }
+
+                                                    OutlinedButton(
+                                                        onClick = {
+                                                            val myIp = com.messagebackup.app.domain.migration.DirectLocalMigrationManager.getLocalIpAddress()
+                                                            val myCode = cryptoEngine.buildTextableConnectionCode(
+                                                                displayName = myCallSign.removePrefix("raven://"),
+                                                                localIp = myIp
+                                                            )
+                                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                                type = "text/plain"
+                                                                putExtra(Intent.EXTRA_SUBJECT, "MUNINN Raven Connection Reply")
+                                                                putExtra(
+                                                                    Intent.EXTRA_TEXT,
+                                                                    "I added you on MUNINN! Copy & paste my code back into MUNINN to complete our connection:\n\n$myCode"
+                                                                )
+                                                            }
+                                                            context.startActivity(Intent.createChooser(shareIntent, "Text Reply Code to ${peer.displayName}..."))
+                                                        },
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text("Text Reply Code to ${peer.displayName}", fontSize = 12.sp)
+                                                    }
                                                 }
                                             } else {
                                                 // Direct Instant Actions: Walkie-Talkie Talk & Message
@@ -1550,6 +1581,15 @@ fun RavenIdentityDialog(
                         val verified = cryptoEngine.parseAndVerifyHandshake(inputFriendCodeText.trim())
                         if (verified != null) {
                             scope.launch(Dispatchers.IO) {
+                                val existing = dbHelper.getAllPeers().find { it.peerId == verified.callsign }
+                                val newStatus = if (existing != null) {
+                                    // If they were already in our contacts (e.g., they sent code, we paste back), mark CONNECTED!
+                                    com.messagebackup.app.domain.mesh.RavenPeerStatus.CONNECTED
+                                } else {
+                                    // New peer added: if we can reach their socket, they'll become connected, else pending friend's reciprocal code
+                                    com.messagebackup.app.domain.mesh.RavenPeerStatus.PENDING_APPROVAL
+                                }
+
                                 val newPeer = RavenPeer(
                                     peerId = verified.callsign,
                                     displayName = verified.displayName,
@@ -1557,7 +1597,7 @@ fun RavenIdentityDialog(
                                     lastKnownIp = verified.localIp,
                                     lastSeenTimestamp = System.currentTimeMillis(),
                                     isTrusted = true,
-                                    status = com.messagebackup.app.domain.mesh.RavenPeerStatus.PENDING_APPROVAL
+                                    status = newStatus
                                 )
                                 dbHelper.upsertPeer(newPeer)
 
@@ -1580,9 +1620,11 @@ fun RavenIdentityDialog(
                                             Toast.LENGTH_LONG
                                         ).show()
                                     } else {
+                                        // Offer to text reciprocal code back to friend
+                                        peerToShareBackWith = newPeer
                                         Toast.makeText(
                                             context,
-                                            "Added ${verified.displayName} (${verified.callsign}) to Raven Contacts!",
+                                            "Verified ${verified.displayName}! Text them your reply code to complete connection.",
                                             Toast.LENGTH_LONG
                                         ).show()
                                     }
@@ -1600,6 +1642,71 @@ fun RavenIdentityDialog(
             dismissButton = {
                 TextButton(onClick = { showEnterCodeDialog = false }) {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Modal prompt to text reciprocal code back after adding a remote friend
+    peerToShareBackWith?.let { targetPeer ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { peerToShareBackWith = null },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text("Text Reply Code")
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "You've linked with ${targetPeer.displayName}!",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Since you aren't on the same local Wi-Fi, text your reply code back to ${targetPeer.displayName} so they can paste it and complete your connection.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val currentPeer = targetPeer
+                        peerToShareBackWith = null
+                        val myIp = com.messagebackup.app.domain.migration.DirectLocalMigrationManager.getLocalIpAddress()
+                        val myCode = cryptoEngine.buildTextableConnectionCode(
+                            displayName = myCallSign.removePrefix("raven://"),
+                            localIp = myIp
+                        )
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "MUNINN Raven Connection Reply")
+                            putExtra(
+                                Intent.EXTRA_TEXT,
+                                "I added you on MUNINN! Copy & paste my code back into MUNINN to complete our connection:\n\n$myCode"
+                            )
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Text Reply Code to ${currentPeer.displayName}..."))
+                    }
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Text Code Back")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { peerToShareBackWith = null }) {
+                    Text("Later")
                 }
             }
         )
