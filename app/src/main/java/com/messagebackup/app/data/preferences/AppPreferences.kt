@@ -74,6 +74,12 @@ class AppPreferences(context: Context) {
         private const val KEY_INITIAL_MESSAGE_BATCH_SIZE = "initial_message_batch_size"
         private const val KEY_SCROLL_MESSAGE_BATCH_SIZE = "scroll_message_batch_size"
         private const val KEY_FAST_PAGINATION_ENABLED = "fast_pagination_enabled"
+
+        // Google Account & Authentication
+        private const val KEY_GOOGLE_ACCOUNT_EMAIL = "google_account_email"
+        private const val KEY_GOOGLE_ACCOUNT_NAME = "google_account_name"
+        private const val KEY_GOOGLE_ACCOUNT_PHOTO_URL = "google_account_photo_url"
+        private const val KEY_GOOGLE_ID_TOKEN = "google_id_token"
     }
 
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
@@ -241,6 +247,18 @@ class AppPreferences(context: Context) {
 
     private val _fastPaginationEnabled = MutableStateFlow(prefs.getBoolean(KEY_FAST_PAGINATION_ENABLED, true))
     val fastPaginationEnabled: StateFlow<Boolean> = _fastPaginationEnabled.asStateFlow()
+
+    private val _googleAccountEmail = MutableStateFlow(prefs.getString(KEY_GOOGLE_ACCOUNT_EMAIL, "") ?: "")
+    val googleAccountEmail: StateFlow<String> = _googleAccountEmail.asStateFlow()
+
+    private val _googleAccountName = MutableStateFlow(prefs.getString(KEY_GOOGLE_ACCOUNT_NAME, "") ?: "")
+    val googleAccountName: StateFlow<String> = _googleAccountName.asStateFlow()
+
+    private val _googleAccountPhotoUrl = MutableStateFlow(prefs.getString(KEY_GOOGLE_ACCOUNT_PHOTO_URL, "") ?: "")
+    val googleAccountPhotoUrl: StateFlow<String> = _googleAccountPhotoUrl.asStateFlow()
+
+    private val _googleIdToken = MutableStateFlow(prefs.getString(KEY_GOOGLE_ID_TOKEN, "") ?: "")
+    val googleIdToken: StateFlow<String> = _googleIdToken.asStateFlow()
 
     fun setFastPaginationEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_FAST_PAGINATION_ENABLED, enabled).apply()
@@ -689,6 +707,32 @@ class AppPreferences(context: Context) {
         } catch (e: Exception) {
             null
         }
+    }
+
+    fun setGoogleAccount(email: String, displayName: String, photoUrl: String, idToken: String) {
+        prefs.edit()
+            .putString(KEY_GOOGLE_ACCOUNT_EMAIL, email)
+            .putString(KEY_GOOGLE_ACCOUNT_NAME, displayName)
+            .putString(KEY_GOOGLE_ACCOUNT_PHOTO_URL, photoUrl)
+            .putString(KEY_GOOGLE_ID_TOKEN, idToken)
+            .apply()
+        _googleAccountEmail.value = email
+        _googleAccountName.value = displayName
+        _googleAccountPhotoUrl.value = photoUrl
+        _googleIdToken.value = idToken
+    }
+
+    fun clearGoogleAccount() {
+        prefs.edit()
+            .remove(KEY_GOOGLE_ACCOUNT_EMAIL)
+            .remove(KEY_GOOGLE_ACCOUNT_NAME)
+            .remove(KEY_GOOGLE_ACCOUNT_PHOTO_URL)
+            .remove(KEY_GOOGLE_ID_TOKEN)
+            .apply()
+        _googleAccountEmail.value = ""
+        _googleAccountName.value = ""
+        _googleAccountPhotoUrl.value = ""
+        _googleIdToken.value = ""
     }
 
     private fun hashPinSha256(pin: String): String {

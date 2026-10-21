@@ -140,7 +140,8 @@ fun HuginnMessageComposerBar(
                 temperature = prefs.odinTemperature.value,
                 topP = prefs.odinTopP.value,
                 numCtx = prefs.odinNumCtx.value,
-                customSystemPrompt = prefs.odinCustomSystemPrompt.value
+                customSystemPrompt = prefs.odinCustomSystemPrompt.value,
+                context = context
             )
 
             withContext(Dispatchers.Main) {

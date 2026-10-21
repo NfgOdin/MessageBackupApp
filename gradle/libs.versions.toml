@@ -21,6 +21,8 @@ workManager = "2.10.0"
 coreSplashScreen = "1.0.1"
 zip4j = "2.11.5"
 zxing = "3.5.3"
+androidxCredentials = "1.3.0"
+googleid = "1.1.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -54,6 +56,9 @@ play-billing = { module = "com.android.billingclient:billing-ktx", version.ref =
 user-messaging-platform = { module = "com.google.android.ump:user-messaging-platform", version.ref = "userMessagingPlatform" }
 zip4j = { module = "net.lingala.zip4j:zip4j", version.ref = "zip4j" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "androidxCredentials" }
+androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "androidxCredentials" }
+googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }

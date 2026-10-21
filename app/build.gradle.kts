@@ -92,6 +92,11 @@ dependencies {
   implementation(libs.zip4j)
   implementation(libs.zxing.core)
 
+  // Google Sign-In & Credential Manager
+  implementation(libs.androidx.credentials)
+  implementation(libs.androidx.credentials.play.services.auth)
+  implementation(libs.googleid)
+
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)

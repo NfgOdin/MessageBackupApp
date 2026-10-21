@@ -38,6 +38,9 @@ class MessageBackupApp : Application() {
     lateinit var localDatabase: com.messagebackup.app.data.local.LocalMessageDatabase
         private set
 
+    lateinit var googleAuthManager: com.messagebackup.app.domain.auth.GoogleAuthManager
+        private set
+
     val currentTelephonyRepository: TelephonyRepository
         get() = realTelephonyRepository
 
@@ -52,6 +55,7 @@ class MessageBackupApp : Application() {
         googleDriveSyncManager = com.messagebackup.app.domain.cloud.GoogleDriveSyncManager(this)
         cloudStorageDispatcher = com.messagebackup.app.domain.cloud.CloudStorageDispatcher(this)
         localDatabase = com.messagebackup.app.data.local.LocalMessageDatabase.getInstance(this)
+        googleAuthManager = com.messagebackup.app.domain.auth.GoogleAuthManager(this, appPreferences)
 
         exportEngine = ExportEngine(
             context = this,

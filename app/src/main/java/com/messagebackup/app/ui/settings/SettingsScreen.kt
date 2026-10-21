@@ -17,7 +17,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -139,6 +142,10 @@ fun SettingsScreen(
     val odinTopP by prefs.odinTopP.collectAsState()
     val odinNumCtx by prefs.odinNumCtx.collectAsState()
     val customSystemPrompt by prefs.odinCustomSystemPrompt.collectAsState()
+    val googleAccountEmail by prefs.googleAccountEmail.collectAsState()
+    val googleAccountName by prefs.googleAccountName.collectAsState()
+    val googleAuthManager = app.googleAuthManager
+    var isSigningInGoogle by remember { mutableStateOf(false) }
     var isAdvancedOdinExpanded by remember { mutableStateOf(false) }
     var promptEditText by remember(customSystemPrompt) { mutableStateOf(customSystemPrompt) }
 
@@ -1020,7 +1027,12 @@ fun SettingsScreen(
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = if (aiProvider == "GEMINI") "Google Gemini ($geminiModel)" else "Local Ollama ($ollamaModel)",
+                                    text = when (aiProvider) {
+                                        "ON_DEVICE_NANO" -> "⚡ Gemini Nano (On-Device NPU)"
+                                        "OPENAI" -> "OpenAI ChatGPT ($openaiModel)"
+                                        "OLLAMA" -> "Local Ollama ($ollamaModel)"
+                                        else -> "Google Gemini ($geminiModel)"
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -1056,6 +1068,107 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Google Account Authentication Card
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = if (googleAccountName.isNotBlank()) googleAccountName.take(1).uppercase() else "G",
+                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 16.sp
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = if (googleAccountEmail.isNotBlank()) {
+                                                if (googleAccountName.isNotBlank()) googleAccountName else "Google User"
+                                            } else "Google Account",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = if (googleAccountEmail.isNotBlank()) googleAccountEmail else "Sign in for 1-tap AI access",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (googleAccountEmail.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                if (googleAccountEmail.isNotBlank()) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            scope.launch {
+                                                googleAuthManager.signOut()
+                                                android.widget.Toast.makeText(context, "Signed out of Google account", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Sign Out", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                isSigningInGoogle = true
+                                                val res = googleAuthManager.signIn(context)
+                                                isSigningInGoogle = false
+                                                when (res) {
+                                                    is com.messagebackup.app.domain.auth.GoogleSignInResult.Success -> {
+                                                        android.widget.Toast.makeText(context, "Welcome, ${res.user.displayName ?: res.user.email}!", android.widget.Toast.LENGTH_SHORT).show()
+                                                    }
+                                                    is com.messagebackup.app.domain.auth.GoogleSignInResult.Error -> {
+                                                        android.widget.Toast.makeText(context, res.errorMessage, android.widget.Toast.LENGTH_LONG).show()
+                                                    }
+                                                    is com.messagebackup.app.domain.auth.GoogleSignInResult.Cancelled -> {
+                                                        // User dismissed sign-in sheet
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        enabled = !isSigningInGoogle
+                                    ) {
+                                        if (isSigningInGoogle) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        } else {
+                                            Text("Sign In", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(12.dp))
 
                         // Clean Unified Provider Dropdown
@@ -1067,6 +1180,7 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(4.dp))
 
                         val providerDisplayName = when (aiProvider) {
+                            "ON_DEVICE_NANO" -> "⚡ On-Device AI (Gemini Nano)"
                             "OPENAI" -> "🧠 OpenAI ChatGPT"
                             "OLLAMA" -> "🔒 Local / Self-Hosted (Ollama / LAN)"
                             else -> "☁️ Google Gemini"
@@ -1105,6 +1219,38 @@ fun SettingsScreen(
                                 onDismissRequest = { showProviderDropdown = false },
                                 modifier = Modifier.fillMaxWidth(0.85f)
                             ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text("⚡ On-Device AI (Gemini Nano)", fontWeight = FontWeight.Bold)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                if (com.messagebackup.app.domain.ai.AiClientEngine.isOnDeviceNanoSupported(context)) {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = MaterialTheme.colorScheme.primaryContainer
+                                                    ) {
+                                                        Text(
+                                                            text = "READY",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            Text(
+                                                text = "100% Private on-device NPU • No cloud • 0 data used",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        prefs.setAiProvider("ON_DEVICE_NANO")
+                                        showProviderDropdown = false
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = {
                                         Column {
@@ -1148,6 +1294,49 @@ fun SettingsScreen(
 
                         // Dynamic Settings Based on Selected Provider
                         when (aiProvider) {
+                            "ON_DEVICE_NANO" -> {
+                                val isSupported = com.messagebackup.app.domain.ai.AiClientEngine.isOnDeviceNanoSupported(context)
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isSupported) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                        else MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = if (isSupported) Icons.Default.Bolt else Icons.Default.Info,
+                                                contentDescription = null,
+                                                tint = if (isSupported) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = if (isSupported) "Hardware NPU Acceleration Active" else "Hardware Not Supported",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isSupported) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = com.messagebackup.app.domain.ai.AiClientEngine.getDeviceAiHardwareStatus(context),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        if (!isSupported) {
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                text = "Your device does not have Android AICore pre-installed. You can switch to Google Gemini (Cloud) or Local Ollama above.",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             "GEMINI" -> {
                                 OutlinedTextField(
                                     value = geminiApiKey,

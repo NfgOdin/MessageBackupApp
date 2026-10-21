@@ -197,7 +197,8 @@ fun MessageCopilotScreen(
                 temperature = odinTemperature,
                 topP = odinTopP,
                 numCtx = odinNumCtx,
-                customSystemPrompt = customSystemPrompt
+                customSystemPrompt = customSystemPrompt,
+                context = context
             )
 
             isThinking = false
@@ -289,7 +290,12 @@ fun MessageCopilotScreen(
                                 shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
-                                    text = if (currentProvider == AiProviderType.OLLAMA) "OLLAMA" else "GEMINI",
+                                    text = when (currentProvider) {
+                                        AiProviderType.ON_DEVICE_NANO -> "NANO (ON-DEVICE)"
+                                        AiProviderType.OPENAI -> "OPENAI"
+                                        AiProviderType.OLLAMA -> "OLLAMA"
+                                        AiProviderType.GEMINI -> "GEMINI"
+                                    },
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     fontWeight = FontWeight.Bold,
@@ -446,6 +452,7 @@ fun MessageCopilotScreen(
             ) {
                 Text(
                     text = when (currentProvider) {
+                        AiProviderType.ON_DEVICE_NANO -> "⚡ On-Device NPU Mode: 100% Private, hardware accelerated, zero data leaves this device"
                         AiProviderType.OLLAMA -> "🔒 Local Privacy Mode: Queries stay on your private local network ($ollamaUrl)"
                         AiProviderType.OPENAI -> "☁️ OpenAI ChatGPT Mode (BYOK): Queries use your personal API key ($openaiModel)"
                         AiProviderType.GEMINI -> "☁️ Google Gemini Mode (BYOK): Queries use your personal API key ($geminiModel)"
