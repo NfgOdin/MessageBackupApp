@@ -3,6 +3,8 @@ package com.messagebackup.app.ui.dialogs
 import android.app.Activity
 import android.graphics.Bitmap
 import android.widget.Toast
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -281,9 +283,9 @@ fun RavenIdentityDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -350,48 +352,52 @@ fun RavenIdentityDialog(
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(horizontal = 24.dp)
                         )
-                    }
 
-                    // Action: Launch Google Code Scanner
-                    Button(
-                        onClick = {
-                            if (activity != null) {
-                                qrManager.startPeerScanner(
-                                    activity = activity,
-                                    onPeerScanned = { handshake ->
-                                        scope.launch(Dispatchers.IO) {
-                                            val newPeer = RavenPeer(
-                                                peerId = handshake.callsign,
-                                                displayName = handshake.displayName,
-                                                publicKey = handshake.publicKeyBase64,
-                                                lastKnownIp = handshake.localIp,
-                                                lastSeenTimestamp = System.currentTimeMillis(),
-                                                isTrusted = true
-                                            )
-                                            dbHelper.upsertPeer(newPeer)
-                                            withContext(Dispatchers.Main) {
-                                                refreshPeers()
-                                                selectedTab = 1
-                                                Toast.makeText(
-                                                    context,
-                                                    "Linked with ${handshake.callsign}!",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        // Action: Launch Google Code Scanner
+                        Button(
+                            onClick = {
+                                if (activity != null) {
+                                    qrManager.startPeerScanner(
+                                        activity = activity,
+                                        onPeerScanned = { handshake ->
+                                            scope.launch(Dispatchers.IO) {
+                                                val newPeer = RavenPeer(
+                                                    peerId = handshake.callsign,
+                                                    displayName = handshake.displayName,
+                                                    publicKey = handshake.publicKeyBase64,
+                                                    lastKnownIp = handshake.localIp,
+                                                    lastSeenTimestamp = System.currentTimeMillis(),
+                                                    isTrusted = true
+                                                )
+                                                dbHelper.upsertPeer(newPeer)
+                                                withContext(Dispatchers.Main) {
+                                                    refreshPeers()
+                                                    selectedTab = 1
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Linked with ${handshake.callsign}!",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+                                                }
                                             }
+                                        },
+                                        onError = { err ->
+                                            Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
                                         }
-                                    },
-                                    onError = { err ->
-                                        Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
-                                    }
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Scan Peer QR Sigil")
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Scan Peer QR Sigil")
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 } else if (selectedTab == 1) {
                     // Peers List
@@ -572,7 +578,8 @@ fun RavenIdentityDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
@@ -699,6 +706,7 @@ fun RavenIdentityDialog(
                                 }
                             }
                         }
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
@@ -714,7 +722,10 @@ fun RavenIdentityDialog(
                 Text("Transmit Raven Whisper")
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Text(
                         text = "Sending authenticated AES-256-GCM encrypted packet to ${targetPeer.displayName} (${targetPeer.peerId})",
                         style = MaterialTheme.typography.bodySmall,
@@ -916,7 +927,10 @@ fun RavenIdentityDialog(
             onDismissRequest = { showEditNameDialog = false },
             title = { Text("Customize Raven Call-Sign") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
                         text = "Choose your moniker or Norse call-sign. Your hardware-backed cryptographic suffix will be automatically appended to preserve global peer uniqueness.",
                         style = MaterialTheme.typography.bodySmall,
