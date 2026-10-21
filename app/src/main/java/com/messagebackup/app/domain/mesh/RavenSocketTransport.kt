@@ -115,6 +115,21 @@ class RavenSocketTransport(
             }
 
             val rootPacketType = packet.optString("type", "ENVELOPE")
+            if (rootPacketType == "PEER_ACCEPT_CONFIRMATION") {
+                val senderCallSign = packet.getString("sender")
+                val existing = dbHelper.getAllPeers().find { it.peerId == senderCallSign }
+                if (existing != null) {
+                    val updated = existing.copy(
+                        status = RavenPeerStatus.CONNECTED,
+                        lastSeenTimestamp = System.currentTimeMillis()
+                    )
+                    dbHelper.upsertPeer(updated)
+                    _peerLinkedEvents.emit(updated)
+                }
+                writer.println(JSONObject().apply { put("status", "OK_ACCEPTED") })
+                return@withContext
+            }
+
             if (rootPacketType == "MUTUAL_HANDSHAKE") {
                 val senderCallSign = packet.getString("sender")
                 val displayName = packet.optString("displayName", senderCallSign)
@@ -132,7 +147,14 @@ class RavenSocketTransport(
                     return@withContext
                 }
 
-                // Automatically save the scanning peer as trusted in our database!
+                // Save the peer with PENDING_ACCEPTANCE if not already accepted/connected
+                val existingPeer = dbHelper.getAllPeers().find { it.peerId == senderCallSign }
+                val currentStatus = if (existingPeer != null && existingPeer.status == RavenPeerStatus.CONNECTED) {
+                    RavenPeerStatus.CONNECTED
+                } else {
+                    RavenPeerStatus.PENDING_ACCEPTANCE
+                }
+
                 val resolvedIp = if (senderLocalIp.isNotBlank()) senderLocalIp else (socket.inetAddress?.hostAddress ?: "")
                 val mutualPeer = RavenPeer(
                     peerId = senderCallSign,
@@ -140,7 +162,8 @@ class RavenSocketTransport(
                     publicKey = publicKeyBase64,
                     lastKnownIp = resolvedIp,
                     lastSeenTimestamp = System.currentTimeMillis(),
-                    isTrusted = true
+                    isTrusted = true,
+                    status = currentStatus
                 )
                 dbHelper.upsertPeer(mutualPeer)
 
@@ -175,7 +198,7 @@ class RavenSocketTransport(
             // Look up peer in database
             val peers = dbHelper.getAllPeers()
             val senderPeer = peers.find { it.peerId == senderCallSign }
-            if (senderPeer == null || !senderPeer.isTrusted) {
+            if (senderPeer == null || !senderPeer.isTrusted || senderPeer.status != RavenPeerStatus.CONNECTED) {
                 writer.println(JSONObject().apply { put("status", "ERR_UNTRUSTED_PEER") })
                 return@withContext
             }
@@ -349,7 +372,8 @@ class RavenSocketTransport(
                         publicKey = publicKey,
                         lastKnownIp = remoteIp,
                         lastSeenTimestamp = System.currentTimeMillis(),
-                        isTrusted = true
+                        isTrusted = true,
+                        status = RavenPeerStatus.CONNECTED
                     )
                     dbHelper.upsertPeer(confirmedPeer)
                     Result.success(confirmedPeer)
@@ -361,6 +385,39 @@ class RavenSocketTransport(
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Sends an acceptance confirmation packet to the peer once the local user clicks 'Accept'.
+     */
+    suspend fun sendAcceptanceConfirmation(peer: RavenPeer, port: Int = DEFAULT_MESH_PORT): Boolean = withContext(Dispatchers.IO) {
+        val targetIp = peer.lastKnownIp
+        if (targetIp.isNullOrBlank()) return@withContext false
+
+        try {
+            val myCallSign = cryptoEngine.getRavenCallSign()
+            val packet = JSONObject().apply {
+                put("protocol", "RAVEN_MESH_v1")
+                put("type", "PEER_ACCEPT_CONFIRMATION")
+                put("sender", myCallSign)
+                put("ts", System.currentTimeMillis())
+            }
+
+            val socket = Socket()
+            socket.connect(InetSocketAddress(targetIp, port), 5_000)
+            socket.soTimeout = 5_000
+
+            val writer = PrintWriter(socket.getOutputStream(), true)
+            val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
+
+            writer.println(packet.toString())
+            val responseLine = reader.readLine()
+            socket.close()
+
+            responseLine != null && JSONObject(responseLine).optString("status") == "OK_ACCEPTED"
+        } catch (_: Exception) {
+            false
         }
     }
 

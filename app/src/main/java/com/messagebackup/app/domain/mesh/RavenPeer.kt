@@ -1,7 +1,19 @@
 package com.messagebackup.app.domain.mesh
 
 /**
- * Represents a trusted contact in the Raven Mesh peer-to-peer network.
+ * Status of connection with a peer:
+ * - CONNECTED: Mutual handshake established and verified. Full PTT and messaging active.
+ * - PENDING_ACCEPTANCE: Peer reached out or sent connection code, awaiting my approval.
+ * - PENDING_APPROVAL: I added/sent code to peer, awaiting peer's confirmation/acceptance.
+ */
+enum class RavenPeerStatus {
+    CONNECTED,
+    PENDING_ACCEPTANCE,
+    PENDING_APPROVAL
+}
+
+/**
+ * Represents a contact in the Raven Mesh peer-to-peer network.
  */
 data class RavenPeer(
     val peerId: String,               // e.g. "raven://valkyrie-7a3f"
@@ -10,7 +22,8 @@ data class RavenPeer(
     val lastKnownIp: String?,
     val lastSeenTimestamp: Long,
     val isTrusted: Boolean = true,
-    val avatarColor: String = "#0284c7"
+    val avatarColor: String = "#0284c7",
+    val status: RavenPeerStatus = RavenPeerStatus.CONNECTED
 ) {
     /**
      * Short visual fingerprint of the peer's public key (e.g. 4 hex characters).

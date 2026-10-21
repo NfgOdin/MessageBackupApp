@@ -123,6 +123,7 @@ fun RavenIdentityDialog(
     var showEditNameDialog by remember { mutableStateOf(false) }
     var showEnterCodeDialog by remember { mutableStateOf(false) }
     var inputFriendCodeText by remember { mutableStateOf("") }
+    var peerToDelete by remember { mutableStateOf<RavenPeer?>(null) }
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var peersList by remember { mutableStateOf<List<RavenPeer>>(emptyList()) }
     var isLoadingQr by remember { mutableStateOf(true) }
@@ -683,11 +684,21 @@ fun RavenIdentityDialog(
                                                             Spacer(modifier = Modifier.width(6.dp))
                                                             Surface(
                                                                 shape = RoundedCornerShape(4.dp),
-                                                                color = if (!peer.lastKnownIp.isNullOrBlank()) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                                                                else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                                                                color = when (peer.status) {
+                                                                    com.messagebackup.app.domain.mesh.RavenPeerStatus.CONNECTED -> {
+                                                                        if (!peer.lastKnownIp.isNullOrBlank()) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                                                                        else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                                                                    }
+                                                                    com.messagebackup.app.domain.mesh.RavenPeerStatus.PENDING_ACCEPTANCE -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f)
+                                                                    com.messagebackup.app.domain.mesh.RavenPeerStatus.PENDING_APPROVAL -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)
+                                                                }
                                                             ) {
                                                                 Text(
-                                                                    text = if (!peer.lastKnownIp.isNullOrBlank()) "🟢 READY" else "🔵 MESH",
+                                                                    text = when (peer.status) {
+                                                                        com.messagebackup.app.domain.mesh.RavenPeerStatus.CONNECTED -> if (!peer.lastKnownIp.isNullOrBlank()) "🟢 CONNECTED" else "🔵 MESH"
+                                                                        com.messagebackup.app.domain.mesh.RavenPeerStatus.PENDING_ACCEPTANCE -> "🟡 NEEDS ACCEPTANCE"
+                                                                        com.messagebackup.app.domain.mesh.RavenPeerStatus.PENDING_APPROVAL -> "⏳ PENDING"
+                                                                    },
                                                                     style = MaterialTheme.typography.labelSmall,
                                                                     fontWeight = FontWeight.Bold,
                                                                     color = MaterialTheme.colorScheme.onSurface,
@@ -711,12 +722,7 @@ fun RavenIdentityDialog(
                                                 }
 
                                                 IconButton(
-                                                    onClick = {
-                                                        scope.launch(Dispatchers.IO) {
-                                                            dbHelper.deletePeer(peer.peerId)
-                                                            refreshPeers()
-                                                        }
-                                                    }
+                                                    onClick = { peerToDelete = peer }
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Default.Delete,
@@ -728,68 +734,125 @@ fun RavenIdentityDialog(
 
                                             Spacer(modifier = Modifier.height(10.dp))
 
-                                            // Direct Instant Actions: Walkie-Talkie Talk & Message
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                Button(
-                                                    onClick = {
-                                                        checkAndRequestAudioPermission {
-                                                            isPttRecording = true
+                                            if (peer.status == com.messagebackup.app.domain.mesh.RavenPeerStatus.PENDING_ACCEPTANCE) {
+                                                // Peer requested connection: Local user can Accept or Deny
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Button(
+                                                        onClick = {
                                                             scope.launch(Dispatchers.IO) {
-                                                                val started = pttEngine.startRecording()
-                                                                if (!started) {
+                                                                val updated = peer.copy(status = com.messagebackup.app.domain.mesh.RavenPeerStatus.CONNECTED)
+                                                                dbHelper.upsertPeer(updated)
+                                                                socketTransport.sendAcceptanceConfirmation(peer)
+                                                                withContext(Dispatchers.Main) {
+                                                                    refreshPeers()
+                                                                    Toast.makeText(context, "✅ Accepted ${peer.displayName}! You are now connected.", Toast.LENGTH_SHORT).show()
+                                                                }
+                                                            }
+                                                        },
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Text("Accept")
+                                                    }
+
+                                                    OutlinedButton(
+                                                        onClick = {
+                                                            scope.launch(Dispatchers.IO) {
+                                                                dbHelper.deletePeer(peer.peerId)
+                                                                withContext(Dispatchers.Main) {
+                                                                    refreshPeers()
+                                                                    Toast.makeText(context, "Denied connection request.", Toast.LENGTH_SHORT).show()
+                                                                }
+                                                            }
+                                                        },
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Text("Deny")
+                                                    }
+                                                }
+                                            } else if (peer.status == com.messagebackup.app.domain.mesh.RavenPeerStatus.PENDING_APPROVAL) {
+                                                // User sent code/request to friend, awaiting their acceptance
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Text(
+                                                        text = "⏳ Connection pending friend's acceptance. PTT & messaging will unlock once accepted.",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        textAlign = TextAlign.Center,
+                                                        modifier = Modifier.padding(8.dp)
+                                                    )
+                                                }
+                                            } else {
+                                                // Direct Instant Actions: Walkie-Talkie Talk & Message
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Button(
+                                                        onClick = {
+                                                            checkAndRequestAudioPermission {
+                                                                isPttRecording = true
+                                                                scope.launch(Dispatchers.IO) {
+                                                                    val started = pttEngine.startRecording()
+                                                                    if (!started) {
+                                                                        withContext(Dispatchers.Main) {
+                                                                            isPttRecording = false
+                                                                            Toast.makeText(context, "Microphone unavailable. Check permissions.", Toast.LENGTH_SHORT).show()
+                                                                        }
+                                                                        return@launch
+                                                                    }
+                                                                    kotlinx.coroutines.delay(2000)
+                                                                    val snippet = pttEngine.stopRecording()
                                                                     withContext(Dispatchers.Main) {
                                                                         isPttRecording = false
-                                                                        Toast.makeText(context, "Microphone unavailable. Check permissions.", Toast.LENGTH_SHORT).show()
                                                                     }
-                                                                    return@launch
-                                                                }
-                                                                kotlinx.coroutines.delay(2000)
-                                                                val snippet = pttEngine.stopRecording()
-                                                                withContext(Dispatchers.Main) {
-                                                                    isPttRecording = false
-                                                                }
-                                                                if (snippet != null) {
-                                                                    val res = socketTransport.sendVoiceSnippetToPeer(
-                                                                        peer = peer,
-                                                                        voiceSnippet = snippet
-                                                                    )
-                                                                    withContext(Dispatchers.Main) {
-                                                                        when (res) {
-                                                                            is com.messagebackup.app.domain.mesh.RavenSendResult.Success -> {
-                                                                                isRavenFlying = true
-                                                                                Toast.makeText(context, "🎙️ Walkie-Talkie voice delivered to ${peer.displayName}!", Toast.LENGTH_SHORT).show()
-                                                                            }
-                                                                            is com.messagebackup.app.domain.mesh.RavenSendResult.Error -> {
-                                                                                Toast.makeText(context, "⚠️ " + res.errorMessage, Toast.LENGTH_LONG).show()
+                                                                    if (snippet != null) {
+                                                                        val res = socketTransport.sendVoiceSnippetToPeer(
+                                                                            peer = peer,
+                                                                            voiceSnippet = snippet
+                                                                        )
+                                                                        withContext(Dispatchers.Main) {
+                                                                            when (res) {
+                                                                                is com.messagebackup.app.domain.mesh.RavenSendResult.Success -> {
+                                                                                    isRavenFlying = true
+                                                                                    Toast.makeText(context, "🎙️ Walkie-Talkie voice delivered to ${peer.displayName}!", Toast.LENGTH_SHORT).show()
+                                                                                }
+                                                                                is com.messagebackup.app.domain.mesh.RavenSendResult.Error -> {
+                                                                                    Toast.makeText(context, "⚠️ " + res.errorMessage, Toast.LENGTH_LONG).show()
+                                                                                }
                                                                             }
                                                                         }
                                                                     }
                                                                 }
                                                             }
-                                                        }
-                                                    },
-                                                    shape = RoundedCornerShape(10.dp),
-                                                    modifier = Modifier.weight(1f),
-                                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                                        containerColor = if (isPttRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                                                    )
-                                                ) {
-                                                    Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Text(if (isPttRecording) "Speaking..." else "Talk (PTT)")
-                                                }
+                                                        },
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        modifier = Modifier.weight(1f),
+                                                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                                            containerColor = if (isPttRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                                        )
+                                                    ) {
+                                                        Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text(if (isPttRecording) "Speaking..." else "Talk (PTT)")
+                                                    }
 
-                                                OutlinedButton(
-                                                    onClick = { peerForDirectPing = peer },
-                                                    shape = RoundedCornerShape(10.dp),
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Text("Message")
+                                                    OutlinedButton(
+                                                        onClick = { peerForDirectPing = peer },
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text("Message")
+                                                    }
                                                 }
                                             }
                                         }
@@ -1493,7 +1556,8 @@ fun RavenIdentityDialog(
                                     publicKey = verified.publicKeyBase64,
                                     lastKnownIp = verified.localIp,
                                     lastSeenTimestamp = System.currentTimeMillis(),
-                                    isTrusted = true
+                                    isTrusted = true,
+                                    status = com.messagebackup.app.domain.mesh.RavenPeerStatus.PENDING_APPROVAL
                                 )
                                 dbHelper.upsertPeer(newPeer)
 
@@ -1535,6 +1599,58 @@ fun RavenIdentityDialog(
             },
             dismissButton = {
                 TextButton(onClick = { showEnterCodeDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Confirmation Dialog before deleting peer
+    peerToDelete?.let { targetPeer ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { peerToDelete = null },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                    Text("Remove Peer Contact?")
+                }
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to remove ${targetPeer.displayName} (${targetPeer.peerId})? You will no longer be able to transmit encrypted whispers or walkie-talkie packets until you re-link.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val idToRemove = targetPeer.peerId
+                        peerToDelete = null
+                        scope.launch(Dispatchers.IO) {
+                            dbHelper.deletePeer(idToRemove)
+                            withContext(Dispatchers.Main) {
+                                refreshPeers()
+                                Toast.makeText(context, "Peer removed.", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Remove")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { peerToDelete = null }) {
                     Text("Cancel")
                 }
             }
