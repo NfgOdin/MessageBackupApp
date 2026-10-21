@@ -323,24 +323,26 @@ class RavenGlobalRelayTransport(
                 _peerLinkedEvents.emit(mutualPeer)
                 Log.i(TAG, "Received MUTUAL_HANDSHAKE from $displayName ($senderCallSign) -> Status: $currentStatus")
 
-                // Return an ACK via global relay so sender instantly knows their handshake reached
-                val ackTs = System.currentTimeMillis()
-                val myPubKey = cryptoEngine.getPublicKeyBase64()
-                val myName = myCallSign.removePrefix("raven://")
-                val ackClaim = "MUTUAL_ACK|$myCallSign|$myPubKey|$ackTs"
-                val ackSig = cryptoEngine.signData(ackClaim.toByteArray(Charsets.UTF_8))
+                if (existingPeer?.status != RavenPeerStatus.CONNECTED) {
+                    // Return an ACK via global relay so sender instantly knows their handshake reached
+                    val ackTs = System.currentTimeMillis()
+                    val myPubKey = cryptoEngine.getPublicKeyBase64()
+                    val myName = myCallSign.removePrefix("raven://")
+                    val ackClaim = "MUTUAL_ACK|$myCallSign|$myPubKey|$ackTs"
+                    val ackSig = cryptoEngine.signData(ackClaim.toByteArray(Charsets.UTF_8))
 
-                val ackPacket = JSONObject().apply {
-                    put("protocol", "RAVEN_MESH_v1")
-                    put("type", "MUTUAL_ACK")
-                    put("sender", myCallSign)
-                    put("recipient", senderCallSign)
-                    put("displayName", myName)
-                    put("publicKey", myPubKey)
-                    put("sig", ackSig)
-                    put("ts", ackTs)
+                    val ackPacket = JSONObject().apply {
+                        put("protocol", "RAVEN_MESH_v1")
+                        put("type", "MUTUAL_ACK")
+                        put("sender", myCallSign)
+                        put("recipient", senderCallSign)
+                        put("displayName", myName)
+                        put("publicKey", myPubKey)
+                        put("sig", ackSig)
+                        put("ts", ackTs)
+                    }
+                    sendOverRelay(senderCallSign, ackPacket.toString())
                 }
-                sendOverRelay(senderCallSign, ackPacket.toString())
                 return@withContext
             }
 
@@ -441,6 +443,17 @@ class RavenGlobalRelayTransport(
                 val audioBase64 = innerMsg.getString("audio_base64")
                 val durationMs = innerMsg.optLong("duration_ms", 0L)
 
+                val chatMsg = com.messagebackup.app.data.local.RavenChatMessage(
+                    peerId = senderPeer.peerId,
+                    senderCallsign = senderCallSign,
+                    senderDisplayName = senderPeer.displayName,
+                    isOutbound = false,
+                    messageText = "🎙️ PTT Voice Note (${durationMs}ms)",
+                    messageType = "VOICE",
+                    timestamp = timestamp
+                )
+                dbHelper.insertMessage(chatMsg)
+
                 _incomingVoiceStreams.emit(
                     RavenIncomingVoice(
                         senderCallsign = senderCallSign,
@@ -457,6 +470,18 @@ class RavenGlobalRelayTransport(
                 Log.i(TAG, "Played inbound PTT voice message (${durationMs}ms) from ${senderPeer.displayName}")
             } else {
                 val messageText = innerMsg.getString("text")
+
+                val chatMsg = com.messagebackup.app.data.local.RavenChatMessage(
+                    peerId = senderPeer.peerId,
+                    senderCallsign = senderCallSign,
+                    senderDisplayName = senderPeer.displayName,
+                    isOutbound = false,
+                    messageText = messageText,
+                    messageType = "TEXT",
+                    timestamp = timestamp
+                )
+                dbHelper.insertMessage(chatMsg)
+
                 _incomingMessages.emit(
                     RavenIncomingMessage(
                         senderCallsign = senderCallSign,
@@ -562,26 +587,34 @@ class RavenGlobalRelayTransport(
      * High-speed, atomic HTTP POST dispatch to peer's global relay inbox.
      */
     private fun sendOverRelay(targetPeerId: String, payload: String): Boolean {
-        return try {
-            val targetTopic = getTopicForCallsign(targetPeerId)
-            val url = "$RELAY_HTTP_BASE/$targetTopic"
+        val targetTopic = getTopicForCallsign(targetPeerId)
+        val url = "$RELAY_HTTP_BASE/$targetTopic"
 
-            val body = payload.toRequestBody("application/json; charset=utf-8".toMediaType())
-            val request = Request.Builder()
-                .url(url)
-                .header("Title", "MUNINN")
-                .header("Priority", "high")
-                .post(body)
-                .build()
+        val body = payload.toRequestBody("application/json; charset=utf-8".toMediaType())
+        val request = Request.Builder()
+            .url(url)
+            .header("Title", "MUNINN")
+            .header("Priority", "high")
+            .post(body)
+            .build()
 
-            pollClient.newCall(request).execute().use { response ->
-                val success = response.isSuccessful
-                Log.i(TAG, "Dispatched packet to $targetTopic via $url -> Success=$success (code=${response.code})")
-                success
+        for (attempt in 1..3) {
+            try {
+                pollClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        Log.i(TAG, "Dispatched packet to $targetTopic via $url -> Success=true (attempt $attempt)")
+                        return true
+                    }
+                    if (response.code == 429) {
+                        Log.w(TAG, "Rate limited on $url (attempt $attempt), backing off 600ms...")
+                        Thread.sleep(600)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "sendOverRelay attempt $attempt failed: ${e.message}")
+                try { Thread.sleep(300) } catch (_: Exception) {}
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "sendOverRelay failed: ${e.message}")
-            false
         }
+        return false
     }
 }

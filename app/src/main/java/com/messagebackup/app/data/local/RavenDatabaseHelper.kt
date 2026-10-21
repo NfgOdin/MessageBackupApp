@@ -13,7 +13,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
 
     companion object {
         private const val DATABASE_NAME = "raven_mesh.db"
-        private const val DATABASE_VERSION = 2
+        private const val DATABASE_VERSION = 3
 
         const val TABLE_PEERS = "raven_peers"
         const val COL_PEER_ID = "peer_id"               // e.g. "raven://valkyrie-7a3f"
@@ -24,6 +24,16 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
         const val COL_IS_TRUSTED = "is_trusted"
         const val COL_AVATAR_COLOR = "avatar_color"
         const val COL_STATUS = "peer_status"
+
+        const val TABLE_MESSAGES = "raven_messages"
+        const val COL_MSG_ID = "id"
+        const val COL_MSG_PEER_ID = "peer_id"
+        const val COL_MSG_SENDER_CALLSIGN = "sender_callsign"
+        const val COL_MSG_SENDER_NAME = "sender_display_name"
+        const val COL_MSG_IS_OUTBOUND = "is_outbound"
+        const val COL_MSG_TEXT = "message_text"
+        const val COL_MSG_TYPE = "message_type"
+        const val COL_MSG_TIMESTAMP = "timestamp"
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -41,12 +51,45 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
             )
             """.trimIndent()
         )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_MESSAGES (
+                $COL_MSG_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                $COL_MSG_PEER_ID TEXT NOT NULL,
+                $COL_MSG_SENDER_CALLSIGN TEXT NOT NULL,
+                $COL_MSG_SENDER_NAME TEXT NOT NULL,
+                $COL_MSG_IS_OUTBOUND INTEGER NOT NULL,
+                $COL_MSG_TEXT TEXT NOT NULL,
+                $COL_MSG_TYPE TEXT DEFAULT 'TEXT',
+                $COL_MSG_TIMESTAMP INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
             try {
                 db.execSQL("ALTER TABLE $TABLE_PEERS ADD COLUMN $COL_STATUS TEXT DEFAULT 'CONNECTED'")
+            } catch (_: Exception) {
+            }
+        }
+        if (oldVersion < 3) {
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS $TABLE_MESSAGES (
+                        $COL_MSG_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                        $COL_MSG_PEER_ID TEXT NOT NULL,
+                        $COL_MSG_SENDER_CALLSIGN TEXT NOT NULL,
+                        $COL_MSG_SENDER_NAME TEXT NOT NULL,
+                        $COL_MSG_IS_OUTBOUND INTEGER NOT NULL,
+                        $COL_MSG_TEXT TEXT NOT NULL,
+                        $COL_MSG_TYPE TEXT DEFAULT 'TEXT',
+                        $COL_MSG_TIMESTAMP INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
             } catch (_: Exception) {
             }
         }
@@ -118,6 +161,90 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
 
     fun deletePeer(peerId: String): Boolean {
         val db = writableDatabase
+        deleteMessagesForPeer(peerId)
         return db.delete(TABLE_PEERS, "$COL_PEER_ID = ?", arrayOf(peerId)) > 0
     }
+
+    fun insertMessage(msg: RavenChatMessage): Long {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put(COL_MSG_PEER_ID, msg.peerId)
+            put(COL_MSG_SENDER_CALLSIGN, msg.senderCallsign)
+            put(COL_MSG_SENDER_NAME, msg.senderDisplayName)
+            put(COL_MSG_IS_OUTBOUND, if (msg.isOutbound) 1 else 0)
+            put(COL_MSG_TEXT, msg.messageText)
+            put(COL_MSG_TYPE, msg.messageType)
+            put(COL_MSG_TIMESTAMP, msg.timestamp)
+        }
+        return db.insert(TABLE_MESSAGES, null, values)
+    }
+
+    fun getMessagesForPeer(peerId: String): List<RavenChatMessage> {
+        val messages = mutableListOf<RavenChatMessage>()
+        val db = readableDatabase
+        val cleanId = peerId.removePrefix("raven://").trim()
+        val withPrefix = "raven://$cleanId"
+
+        val cursor = db.query(
+            TABLE_MESSAGES,
+            null,
+            "$COL_MSG_PEER_ID = ? OR $COL_MSG_PEER_ID = ? OR $COL_MSG_PEER_ID LIKE ?",
+            arrayOf(cleanId, withPrefix, "%$cleanId%"),
+            null,
+            null,
+            "$COL_MSG_TIMESTAMP ASC"
+        )
+
+        cursor.use { c ->
+            val idxId = c.getColumnIndexOrThrow(COL_MSG_ID)
+            val idxPeerId = c.getColumnIndexOrThrow(COL_MSG_PEER_ID)
+            val idxCallsign = c.getColumnIndexOrThrow(COL_MSG_SENDER_CALLSIGN)
+            val idxName = c.getColumnIndexOrThrow(COL_MSG_SENDER_NAME)
+            val idxOutbound = c.getColumnIndexOrThrow(COL_MSG_IS_OUTBOUND)
+            val idxText = c.getColumnIndexOrThrow(COL_MSG_TEXT)
+            val idxType = c.getColumnIndexOrThrow(COL_MSG_TYPE)
+            val idxTs = c.getColumnIndexOrThrow(COL_MSG_TIMESTAMP)
+
+            while (c.moveToNext()) {
+                messages.add(
+                    RavenChatMessage(
+                        id = c.getLong(idxId),
+                        peerId = c.getString(idxPeerId),
+                        senderCallsign = c.getString(idxCallsign),
+                        senderDisplayName = c.getString(idxName),
+                        isOutbound = c.getInt(idxOutbound) == 1,
+                        messageText = c.getString(idxText),
+                        messageType = c.getString(idxType) ?: "TEXT",
+                        timestamp = c.getLong(idxTs)
+                    )
+                )
+            }
+        }
+        return messages
+    }
+
+    fun deleteMessagesForPeer(peerId: String): Boolean {
+        val db = writableDatabase
+        val cleanId = peerId.removePrefix("raven://").trim()
+        val withPrefix = "raven://$cleanId"
+        return db.delete(
+            TABLE_MESSAGES,
+            "$COL_MSG_PEER_ID = ? OR $COL_MSG_PEER_ID = ? OR $COL_MSG_PEER_ID LIKE ?",
+            arrayOf(cleanId, withPrefix, "%$cleanId%")
+        ) > 0
+    }
 }
+
+/**
+ * Data model for persistent Raven Mesh E2EE chat messages and voice snippets.
+ */
+data class RavenChatMessage(
+    val id: Long = 0,
+    val peerId: String,
+    val senderCallsign: String,
+    val senderDisplayName: String,
+    val isOutbound: Boolean,
+    val messageText: String,
+    val messageType: String = "TEXT",
+    val timestamp: Long = System.currentTimeMillis()
+)

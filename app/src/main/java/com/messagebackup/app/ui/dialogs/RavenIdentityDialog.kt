@@ -128,6 +128,7 @@ fun RavenIdentityDialog(
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var peersList by remember { mutableStateOf<List<RavenPeer>>(emptyList()) }
     var isLoadingQr by remember { mutableStateOf(true) }
+    var activeChatPeer by remember { mutableStateOf<RavenPeer?>(null) }
     var peerForDirectPing by remember { mutableStateOf<RavenPeer?>(null) }
     var pingMessageText by remember { mutableStateOf("⚡ Raven Whisper: Greetings from Muninn!") }
     var isSendingPing by remember { mutableStateOf(false) }
@@ -879,7 +880,7 @@ fun RavenIdentityDialog(
                                                     }
 
                                                     OutlinedButton(
-                                                        onClick = { peerForDirectPing = peer },
+                                                        onClick = { activeChatPeer = peer },
                                                         shape = RoundedCornerShape(10.dp),
                                                         modifier = Modifier.weight(1f)
                                                     ) {
@@ -1767,6 +1768,18 @@ fun RavenIdentityDialog(
                 TextButton(onClick = { peerToDelete = null }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    // Dedicated End-to-End Encrypted Raven Chat Thread
+    activeChatPeer?.let { chatPeer ->
+        RavenChatDialog(
+            peer = chatPeer,
+            socketTransport = socketTransport,
+            onDismiss = {
+                activeChatPeer = null
+                refreshPeers()
             }
         )
     }

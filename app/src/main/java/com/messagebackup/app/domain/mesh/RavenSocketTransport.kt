@@ -267,6 +267,17 @@ class RavenSocketTransport(
                 val audioBase64 = innerMsg.getString("audio_base64")
                 val durationMs = innerMsg.optLong("duration_ms", 0L)
 
+                val chatMsg = com.messagebackup.app.data.local.RavenChatMessage(
+                    peerId = senderPeer.peerId,
+                    senderCallsign = senderCallSign,
+                    senderDisplayName = senderPeer.displayName,
+                    isOutbound = false,
+                    messageText = "🎙️ PTT Voice Note (${durationMs}ms)",
+                    messageType = "VOICE",
+                    timestamp = timestamp
+                )
+                dbHelper.insertMessage(chatMsg)
+
                 // Emit voice stream event
                 _incomingVoiceStreams.emit(
                     RavenIncomingVoice(
@@ -284,6 +295,17 @@ class RavenSocketTransport(
                 }
             } else {
                 val messageText = innerMsg.getString("text")
+
+                val chatMsg = com.messagebackup.app.data.local.RavenChatMessage(
+                    peerId = senderPeer.peerId,
+                    senderCallsign = senderCallSign,
+                    senderDisplayName = senderPeer.displayName,
+                    isOutbound = false,
+                    messageText = messageText,
+                    messageType = "TEXT",
+                    timestamp = timestamp
+                )
+                dbHelper.insertMessage(chatMsg)
 
                 // Emit incoming message
                 _incomingMessages.emit(
@@ -323,7 +345,22 @@ class RavenSocketTransport(
             put("text", text)
             put("ts", System.currentTimeMillis())
         }.toString()
-        sendRawPayloadToPeer(peer, payload, targetIp, port)
+        val result = sendRawPayloadToPeer(peer, payload, targetIp, port)
+        if (result is RavenSendResult.Success) {
+            val myCallSign = cryptoEngine.getRavenCallSign()
+            val myName = myCallSign.removePrefix("raven://")
+            val chatMsg = com.messagebackup.app.data.local.RavenChatMessage(
+                peerId = peer.peerId,
+                senderCallsign = myCallSign,
+                senderDisplayName = myName,
+                isOutbound = true,
+                messageText = text,
+                messageType = "TEXT",
+                timestamp = System.currentTimeMillis()
+            )
+            dbHelper.insertMessage(chatMsg)
+        }
+        result
     }
 
     /**
@@ -341,7 +378,22 @@ class RavenSocketTransport(
             put("duration_ms", voiceSnippet.durationMs)
             put("ts", System.currentTimeMillis())
         }.toString()
-        sendRawPayloadToPeer(peer, payload, targetIp, port)
+        val result = sendRawPayloadToPeer(peer, payload, targetIp, port)
+        if (result is RavenSendResult.Success) {
+            val myCallSign = cryptoEngine.getRavenCallSign()
+            val myName = myCallSign.removePrefix("raven://")
+            val chatMsg = com.messagebackup.app.data.local.RavenChatMessage(
+                peerId = peer.peerId,
+                senderCallsign = myCallSign,
+                senderDisplayName = myName,
+                isOutbound = true,
+                messageText = "🎙️ PTT Voice Note (${voiceSnippet.durationMs}ms)",
+                messageType = "VOICE",
+                timestamp = System.currentTimeMillis()
+            )
+            dbHelper.insertMessage(chatMsg)
+        }
+        result
     }
 
     /**
