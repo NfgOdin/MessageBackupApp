@@ -46,6 +46,9 @@ import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.GroupAdd
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
@@ -118,6 +121,8 @@ fun RavenIdentityDialog(
     var selectedTab by remember { mutableIntStateOf(0) }
     var myCallSign by remember { mutableStateOf(cryptoEngine.getRavenCallSign()) }
     var showEditNameDialog by remember { mutableStateOf(false) }
+    var showEnterCodeDialog by remember { mutableStateOf(false) }
+    var inputFriendCodeText by remember { mutableStateOf("") }
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var peersList by remember { mutableStateOf<List<RavenPeer>>(emptyList()) }
     var isLoadingQr by remember { mutableStateOf(true) }
@@ -539,6 +544,52 @@ fun RavenIdentityDialog(
                             Text("Scan Peer QR Sigil")
                         }
 
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Remote Link Options (Text / Share Code or Input Code)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val myIp = com.messagebackup.app.domain.migration.DirectLocalMigrationManager.getLocalIpAddress()
+                                    val textCode = cryptoEngine.buildTextableConnectionCode(
+                                        displayName = myCallSign.removePrefix("raven://"),
+                                        localIp = myIp
+                                    )
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_SUBJECT, "Connect with me on MUNINN Raven Mesh")
+                                        putExtra(
+                                            Intent.EXTRA_TEXT,
+                                            "Let's link on MUNINN Raven Mesh for encrypted off-grid chat & walkie-talkie! Copy this connection code into your app:\n\n$textCode"
+                                        )
+                                    }
+                                    context.startActivity(Intent.createChooser(shareIntent, "Share Raven Code via..."))
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Text / Share Code", fontSize = 12.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    inputFriendCodeText = ""
+                                    showEnterCodeDialog = true
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Enter Code", fontSize = 12.sp)
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(16.dp))
                     }
                 } else if (selectedTab == 1) {
@@ -749,61 +800,79 @@ fun RavenIdentityDialog(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        Button(
-                            onClick = {
-                                if (activity != null) {
-                                    qrManager.startPeerScanner(
-                                        activity = activity,
-                                        onPeerScanned = { handshake ->
-                                            scope.launch(Dispatchers.IO) {
-                                                val newPeer = RavenPeer(
-                                                    peerId = handshake.callsign,
-                                                    displayName = handshake.displayName,
-                                                    publicKey = handshake.publicKeyBase64,
-                                                    lastKnownIp = handshake.localIp,
-                                                    lastSeenTimestamp = System.currentTimeMillis(),
-                                                    isTrusted = true
-                                                )
-                                                dbHelper.upsertPeer(newPeer)
-
-                                                var mutualConfirmed = false
-                                                if (!handshake.localIp.isNullOrBlank()) {
-                                                    val res = socketTransport.sendMutualHandshake(handshake.localIp)
-                                                    if (res.isSuccess) {
-                                                        mutualConfirmed = true
-                                                    }
-                                                }
-
-                                                withContext(Dispatchers.Main) {
-                                                    refreshPeers()
-                                                    if (mutualConfirmed) {
-                                                        Toast.makeText(
-                                                            context,
-                                                            "🪶 Instant 2-Way Link Established with ${handshake.displayName}! Both phones are paired.",
-                                                            Toast.LENGTH_LONG
-                                                        ).show()
-                                                    } else {
-                                                        Toast.makeText(
-                                                            context,
-                                                            "Linked with ${handshake.callsign}!",
-                                                            Toast.LENGTH_LONG
-                                                        ).show()
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        onError = { err ->
-                                            Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
-                                        }
-                                    )
-                                }
-                            },
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Scan New Peer")
+                            Button(
+                                onClick = {
+                                    if (activity != null) {
+                                        qrManager.startPeerScanner(
+                                            activity = activity,
+                                            onPeerScanned = { handshake ->
+                                                scope.launch(Dispatchers.IO) {
+                                                    val newPeer = RavenPeer(
+                                                        peerId = handshake.callsign,
+                                                        displayName = handshake.displayName,
+                                                        publicKey = handshake.publicKeyBase64,
+                                                        lastKnownIp = handshake.localIp,
+                                                        lastSeenTimestamp = System.currentTimeMillis(),
+                                                        isTrusted = true
+                                                    )
+                                                    dbHelper.upsertPeer(newPeer)
+
+                                                    var mutualConfirmed = false
+                                                    if (!handshake.localIp.isNullOrBlank()) {
+                                                        val res = socketTransport.sendMutualHandshake(handshake.localIp)
+                                                        if (res.isSuccess) {
+                                                            mutualConfirmed = true
+                                                        }
+                                                    }
+
+                                                    withContext(Dispatchers.Main) {
+                                                        refreshPeers()
+                                                        if (mutualConfirmed) {
+                                                            Toast.makeText(
+                                                                context,
+                                                                "🪶 Instant 2-Way Link Established with ${handshake.displayName}! Both phones are paired.",
+                                                                Toast.LENGTH_LONG
+                                                            ).show()
+                                                        } else {
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Linked with ${handshake.callsign}!",
+                                                                Toast.LENGTH_LONG
+                                                            ).show()
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            onError = { err ->
+                                                Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Scan QR", fontSize = 13.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    inputFriendCodeText = ""
+                                    showEnterCodeDialog = true
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Enter Code", fontSize = 13.sp)
+                            }
                         }
                     }
                 } else if (selectedTab == 2) {
@@ -1349,6 +1418,123 @@ fun RavenIdentityDialog(
             },
             dismissButton = {
                 TextButton(onClick = { permissionDialogTitle = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Dialog: Enter Friend's Raven Connection Code
+    if (showEnterCodeDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showEnterCodeDialog = false },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PersonAdd,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text("Add Raven Contact")
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Paste or enter the connection code or raven:// link your friend texted or shared with you:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    androidx.compose.material3.OutlinedTextField(
+                        value = inputFriendCodeText,
+                        onValueChange = { inputFriendCodeText = it },
+                        label = { Text("Raven Connection Code") },
+                        placeholder = { Text("raven://... or pasted code") },
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                val clip = clipboard?.primaryClip?.getItemAt(0)?.text?.toString()
+                                if (!clip.isNullOrBlank()) {
+                                    inputFriendCodeText = clip.trim()
+                                    Toast.makeText(context, "Pasted from clipboard", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Clipboard is empty", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Paste from Clipboard")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val verified = cryptoEngine.parseAndVerifyHandshake(inputFriendCodeText.trim())
+                        if (verified != null) {
+                            scope.launch(Dispatchers.IO) {
+                                val newPeer = RavenPeer(
+                                    peerId = verified.callsign,
+                                    displayName = verified.displayName,
+                                    publicKey = verified.publicKeyBase64,
+                                    lastKnownIp = verified.localIp,
+                                    lastSeenTimestamp = System.currentTimeMillis(),
+                                    isTrusted = true
+                                )
+                                dbHelper.upsertPeer(newPeer)
+
+                                var mutualConfirmed = false
+                                if (!verified.localIp.isNullOrBlank()) {
+                                    val res = socketTransport.sendMutualHandshake(verified.localIp)
+                                    if (res.isSuccess) {
+                                        mutualConfirmed = true
+                                    }
+                                }
+
+                                withContext(Dispatchers.Main) {
+                                    refreshPeers()
+                                    showEnterCodeDialog = false
+                                    selectedTab = 1
+                                    if (mutualConfirmed) {
+                                        Toast.makeText(
+                                            context,
+                                            "🪶 Verified & Linked with ${verified.displayName}! Both phones are paired.",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            "Added ${verified.displayName} (${verified.callsign}) to Raven Contacts!",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                }
+                            }
+                        } else {
+                            Toast.makeText(context, "Invalid or unverified Raven Code. Please check the code and try again.", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    enabled = inputFriendCodeText.isNotBlank()
+                ) {
+                    Text("Verify & Link")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEnterCodeDialog = false }) {
                     Text("Cancel")
                 }
             }

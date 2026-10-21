@@ -194,11 +194,48 @@ class RavenCryptoEngine(private val context: Context) {
     }
 
     /**
-     * Parses and verifies an incoming QR handshake payload.
+     * Generates a portable, URL-safe connection code or deep link string that can be texted via SMS or messaging apps.
+     */
+    fun buildTextableConnectionCode(displayName: String, localIp: String? = null): String {
+        val rawJson = buildHandshakePayload(displayName, localIp)
+        val base64 = Base64.encodeToString(rawJson.toByteArray(Charsets.UTF_8), Base64.URL_SAFE or Base64.NO_WRAP)
+        return "raven://$base64"
+    }
+
+    /**
+     * Parses and verifies an incoming QR handshake payload or textable connection code.
+     * Supports raw JSON, "raven://<Base64>", "raven-link://<Base64>", or raw Base64.
      * Returns a VerifiedPeerHandshake or null if verification fails.
      */
-    fun parseAndVerifyHandshake(jsonString: String): VerifiedPeerHandshake? {
+    fun parseAndVerifyHandshake(input: String): VerifiedPeerHandshake? {
         return try {
+            val cleanInput = input.trim()
+            val jsonString = when {
+                cleanInput.startsWith("{") && cleanInput.endsWith("}") -> cleanInput
+                cleanInput.startsWith("raven://") -> {
+                    val encoded = cleanInput.removePrefix("raven://").trim()
+                    String(Base64.decode(encoded, Base64.URL_SAFE or Base64.DEFAULT), Charsets.UTF_8)
+                }
+                cleanInput.startsWith("raven-link://") -> {
+                    val encoded = cleanInput.removePrefix("raven-link://").trim()
+                    String(Base64.decode(encoded, Base64.URL_SAFE or Base64.DEFAULT), Charsets.UTF_8)
+                }
+                else -> {
+                    // Try decoding as Base64 first
+                    try {
+                        val decodedBytes = Base64.decode(cleanInput, Base64.URL_SAFE or Base64.DEFAULT)
+                        val candidate = String(decodedBytes, Charsets.UTF_8)
+                        if (candidate.startsWith("{") && candidate.contains("RAVEN_MESH_v1")) {
+                            candidate
+                        } else {
+                            cleanInput
+                        }
+                    } catch (_: Exception) {
+                        cleanInput
+                    }
+                }
+            }
+
             val json = JSONObject(jsonString)
             val protocol = json.getString("p")
             if (protocol != "RAVEN_MESH_v1") return null
