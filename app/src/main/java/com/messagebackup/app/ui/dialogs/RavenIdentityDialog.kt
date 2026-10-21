@@ -1,8 +1,19 @@
 package com.messagebackup.app.ui.dialogs
 
+import android.Manifest
 import android.app.Activity
+import android.bluetooth.BluetoothAdapter
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Image
@@ -123,6 +134,107 @@ fun RavenIdentityDialog(
 
     // PTT Voice State
     var isPttRecording by remember { mutableStateOf(false) }
+
+    // Runtime Permission Request States
+    var permissionDialogTitle by remember { mutableStateOf<String?>(null) }
+    var permissionDialogMessage by remember { mutableStateOf<String?>(null) }
+    var pendingBleAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var pendingAudioAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    val blePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val allGranted = grants.values.all { it }
+        if (allGranted) {
+            val action = pendingBleAction
+            pendingBleAction = null
+            action?.invoke()
+        } else {
+            pendingBleAction = null
+            permissionDialogTitle = "Bluetooth Permissions Required"
+            permissionDialogMessage = "Raven Mesh off-grid radio beacons require Nearby Devices / Bluetooth permissions to discover and broadcast to peers. Please grant them in App Settings."
+        }
+    }
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val action = pendingAudioAction
+            pendingAudioAction = null
+            action?.invoke()
+        } else {
+            pendingAudioAction = null
+            permissionDialogTitle = "Microphone Permission Required"
+            permissionDialogMessage = "Mind-to-Mind PTT Walkie-Talkie requires Microphone permission to capture encrypted voice packets. Please grant it in App Settings."
+        }
+    }
+
+    val enableBtLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val action = pendingBleAction
+            pendingBleAction = null
+            action?.invoke()
+        } else {
+            pendingBleAction = null
+            Toast.makeText(context, "Bluetooth was not turned on", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun checkAndRequestBlePermissions(action: () -> Unit) {
+        val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            listOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_ADVERTISE,
+                Manifest.permission.BLUETOOTH_CONNECT
+            )
+        } else {
+            listOf(
+                Manifest.permission.BLUETOOTH,
+                Manifest.permission.BLUETOOTH_ADMIN
+            )
+        }
+
+        val missing = requiredPermissions.filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missing.isNotEmpty()) {
+            pendingBleAction = action
+            blePermissionLauncher.launch(missing.toTypedArray())
+            return
+        }
+
+        val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+        val adapter = btManager?.adapter
+        if (adapter == null) {
+            Toast.makeText(context, "Bluetooth hardware is not available on this device", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        if (!adapter.isEnabled) {
+            pendingBleAction = action
+            try {
+                enableBtLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+            } catch (e: Exception) {
+                action()
+            }
+            return
+        }
+
+        action()
+    }
+
+    fun checkAndRequestAudioPermission(action: () -> Unit) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            action()
+        } else {
+            pendingAudioAction = action
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     LaunchedEffect(Unit) {
         socketTransport.startServer()
@@ -653,13 +765,15 @@ fun RavenIdentityDialog(
                                 ) {
                                     Button(
                                         onClick = {
-                                            if (isBleBroadcasting) {
-                                                bleEngine.stopBroadcasting()
-                                                isBleBroadcasting = false
-                                            } else {
-                                                isBleBroadcasting = bleEngine.startBroadcasting(myCallSign)
-                                                if (!isBleBroadcasting) {
-                                                    Toast.makeText(context, "Bluetooth disabled or permission needed", Toast.LENGTH_SHORT).show()
+                                            checkAndRequestBlePermissions {
+                                                if (isBleBroadcasting) {
+                                                    bleEngine.stopBroadcasting()
+                                                    isBleBroadcasting = false
+                                                } else {
+                                                    isBleBroadcasting = bleEngine.startBroadcasting(myCallSign)
+                                                    if (!isBleBroadcasting) {
+                                                        Toast.makeText(context, "Bluetooth disabled or advertising failed", Toast.LENGTH_SHORT).show()
+                                                    }
                                                 }
                                             }
                                         },
@@ -673,13 +787,15 @@ fun RavenIdentityDialog(
 
                                     OutlinedButton(
                                         onClick = {
-                                            if (isBleScanning) {
-                                                bleEngine.stopScanning()
-                                                isBleScanning = false
-                                            } else {
-                                                isBleScanning = bleEngine.startScanning()
-                                                if (!isBleScanning) {
-                                                    Toast.makeText(context, "Bluetooth disabled or scanning failed", Toast.LENGTH_SHORT).show()
+                                            checkAndRequestBlePermissions {
+                                                if (isBleScanning) {
+                                                    bleEngine.stopScanning()
+                                                    isBleScanning = false
+                                                } else {
+                                                    isBleScanning = bleEngine.startScanning()
+                                                    if (!isBleScanning) {
+                                                        Toast.makeText(context, "Bluetooth disabled or scanning failed", Toast.LENGTH_SHORT).show()
+                                                    }
                                                 }
                                             }
                                         },
@@ -791,36 +907,38 @@ fun RavenIdentityDialog(
                             Button(
                                 onClick = {
                                     if (!isPttRecording) {
-                                        isPttRecording = true
-                                        scope.launch(Dispatchers.IO) {
-                                            val started = pttEngine.startRecording()
-                                            if (!started) {
+                                        checkAndRequestAudioPermission {
+                                            isPttRecording = true
+                                            scope.launch(Dispatchers.IO) {
+                                                val started = pttEngine.startRecording()
+                                                if (!started) {
+                                                    withContext(Dispatchers.Main) {
+                                                        isPttRecording = false
+                                                        Toast.makeText(context, "Microphone unavailable. Check permissions.", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                    return@launch
+                                                }
+                                                // Capture 2-second voice blast
+                                                kotlinx.coroutines.delay(2000)
+                                                val snippet = pttEngine.stopRecording()
                                                 withContext(Dispatchers.Main) {
                                                     isPttRecording = false
-                                                    Toast.makeText(context, "Microphone unavailable. Check permissions.", Toast.LENGTH_SHORT).show()
                                                 }
-                                                return@launch
-                                            }
-                                            // Capture 2-second voice blast
-                                            kotlinx.coroutines.delay(2000)
-                                            val snippet = pttEngine.stopRecording()
-                                            withContext(Dispatchers.Main) {
-                                                isPttRecording = false
-                                            }
-                                            if (snippet != null) {
-                                                val res = socketTransport.sendVoiceSnippetToPeer(
-                                                    peer = targetPeer,
-                                                    voiceSnippet = snippet,
-                                                    targetIp = targetIpInput.trim()
-                                                )
-                                                withContext(Dispatchers.Main) {
-                                                    when (res) {
-                                                        is com.messagebackup.app.domain.mesh.RavenSendResult.Success -> {
-                                                            isRavenFlying = true
-                                                            Toast.makeText(context, "🎙️ Walkie-Talkie voice packet delivered!", Toast.LENGTH_SHORT).show()
-                                                        }
-                                                        is com.messagebackup.app.domain.mesh.RavenSendResult.Error -> {
-                                                            Toast.makeText(context, "⚠️ " + res.errorMessage, Toast.LENGTH_LONG).show()
+                                                if (snippet != null) {
+                                                    val res = socketTransport.sendVoiceSnippetToPeer(
+                                                        peer = targetPeer,
+                                                        voiceSnippet = snippet,
+                                                        targetIp = targetIpInput.trim()
+                                                    )
+                                                    withContext(Dispatchers.Main) {
+                                                        when (res) {
+                                                            is com.messagebackup.app.domain.mesh.RavenSendResult.Success -> {
+                                                                isRavenFlying = true
+                                                                Toast.makeText(context, "🎙️ Walkie-Talkie voice packet delivered!", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                            is com.messagebackup.app.domain.mesh.RavenSendResult.Error -> {
+                                                                Toast.makeText(context, "⚠️ " + res.errorMessage, Toast.LENGTH_LONG).show()
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -1051,6 +1169,58 @@ fun RavenIdentityDialog(
                 }
             )
         }
+    }
+
+    // Permission Explanation & Direct Settings Launcher Dialog
+    if (permissionDialogTitle != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { permissionDialogTitle = null },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = permissionDialogTitle!!,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = permissionDialogMessage ?: "Please grant the necessary permission in Android Settings to continue.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        permissionDialogTitle = null
+                        try {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Please open Android Settings > Apps > MUNINN > Permissions", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                ) {
+                    Text("Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { permissionDialogTitle = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     // Overlay animation: Soaring raven flight upon transmission
