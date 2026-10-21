@@ -114,7 +114,7 @@ fun RavenIdentityDialog(
     val cryptoEngine = remember { RavenCryptoEngine(context) }
     val qrManager = remember { RavenQrManager(context) }
     val dbHelper = remember { RavenDatabaseHelper(context) }
-    val socketTransport = remember { com.messagebackup.app.domain.mesh.RavenSocketTransport(context, scope) }
+    val socketTransport = remember { com.messagebackup.app.domain.mesh.RavenSocketTransport.getInstance(context, scope) }
     val pttEngine = remember { com.messagebackup.app.domain.mesh.RavenVoicePttEngine(context) }
     val bleEngine = remember { com.messagebackup.app.domain.mesh.RavenBleMeshEngine(context, scope) }
 
@@ -504,13 +504,15 @@ fun RavenIdentityDialog(
                                                 )
                                                 dbHelper.upsertPeer(newPeer)
 
-                                                // Instantly establish 2-way mutual link with the scanned phone over socket!
+                                                // Instantly establish 2-way mutual link with the scanned phone over socket and cellular relay!
                                                 var mutualConfirmed = false
-                                                if (!handshake.localIp.isNullOrBlank()) {
-                                                    val res = socketTransport.sendMutualHandshake(handshake.localIp)
-                                                    if (res.isSuccess) {
-                                                        mutualConfirmed = true
-                                                    }
+                                                val res = socketTransport.sendMutualHandshake(
+                                                    targetIp = handshake.localIp ?: "",
+                                                    targetPeerId = handshake.callsign,
+                                                    targetPublicKey = handshake.publicKeyBase64
+                                                )
+                                                if (res.isSuccess) {
+                                                    mutualConfirmed = true
                                                 }
 
                                                 withContext(Dispatchers.Main) {
@@ -916,11 +918,13 @@ fun RavenIdentityDialog(
                                                     dbHelper.upsertPeer(newPeer)
 
                                                     var mutualConfirmed = false
-                                                    if (!handshake.localIp.isNullOrBlank()) {
-                                                        val res = socketTransport.sendMutualHandshake(handshake.localIp)
-                                                        if (res.isSuccess) {
-                                                            mutualConfirmed = true
-                                                        }
+                                                    val res = socketTransport.sendMutualHandshake(
+                                                        targetIp = handshake.localIp ?: "",
+                                                        targetPeerId = handshake.callsign,
+                                                        targetPublicKey = handshake.publicKeyBase64
+                                                    )
+                                                    if (res.isSuccess) {
+                                                        mutualConfirmed = true
                                                     }
 
                                                     withContext(Dispatchers.Main) {
@@ -1602,11 +1606,13 @@ fun RavenIdentityDialog(
                                 dbHelper.upsertPeer(newPeer)
 
                                 var mutualConfirmed = false
-                                if (!verified.localIp.isNullOrBlank()) {
-                                    val res = socketTransport.sendMutualHandshake(verified.localIp)
-                                    if (res.isSuccess) {
-                                        mutualConfirmed = true
-                                    }
+                                val res = socketTransport.sendMutualHandshake(
+                                    targetIp = verified.localIp ?: "",
+                                    targetPeerId = verified.callsign,
+                                    targetPublicKey = verified.publicKeyBase64
+                                )
+                                if (res.isSuccess) {
+                                    mutualConfirmed = true
                                 }
 
                                 withContext(Dispatchers.Main) {

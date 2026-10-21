@@ -32,6 +32,9 @@ class MainActivity : ComponentActivity() {
         registerTelephonyObserver()
         handleIntentAction(intent)
 
+        // Keep Raven Mesh & Global Cellular Relay alive across app sessions for instant out-of-state links
+        com.messagebackup.app.domain.mesh.RavenSocketTransport.getInstance(applicationContext, lifecycleScope)
+
         setContent {
             val appTheme by viewModel.prefs.appTheme.collectAsState()
             val isDark = when (appTheme) {

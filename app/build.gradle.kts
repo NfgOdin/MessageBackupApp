@@ -97,6 +97,9 @@ dependencies {
   implementation(libs.androidx.credentials.play.services.auth)
   implementation(libs.googleid)
 
+  // Global Cellular/Internet P2P Transport (OkHttp WebSockets / HTTP)
+  implementation(libs.okhttp)
+
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
