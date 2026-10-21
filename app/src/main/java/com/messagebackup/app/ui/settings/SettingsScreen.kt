@@ -98,6 +98,7 @@ import java.io.File
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
+    onOpenRestoreDialog: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     androidx.activity.compose.BackHandler(onBack = onNavigateBack)
@@ -191,6 +192,20 @@ fun SettingsScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ -> }
 
+    val googleAccountPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        isSigningInGoogle = false
+        if (result.resultCode == Activity.RESULT_OK) {
+            when (val res = googleAuthManager.handleAccountPickerResult(result.data)) {
+                is com.messagebackup.app.domain.auth.GoogleSignInResult.Success -> {
+                    Toast.makeText(context, "Welcome, ${res.user.displayName ?: res.user.email}!", Toast.LENGTH_SHORT).show()
+                }
+                else -> {}
+            }
+        }
+    }
+
     // Export cache size computation (including subdirectories like unzipped viewer files)
     val exportsDir = File(context.cacheDir, "exports")
     var cacheSizeMb by remember {
@@ -246,11 +261,7 @@ fun SettingsScreen(
                     containerColor = if (isAdsRemoved) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
                 ),
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        isProCardExpanded = !isProCardExpanded
-                    }
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -444,9 +455,7 @@ fun SettingsScreen(
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isSaveLocationExpanded = !isSaveLocationExpanded }
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(
@@ -684,9 +693,7 @@ fun SettingsScreen(
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isPaginationExpanded = !isPaginationExpanded }
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(
@@ -815,9 +822,7 @@ fun SettingsScreen(
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isFormatPickerExpanded = !isFormatPickerExpanded }
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(
@@ -998,14 +1003,59 @@ fun SettingsScreen(
                 context = context
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 7b. Restore Messages & Phone Migration (Backup Settings Section)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Restore Messages",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Restore Messages",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Import from .json / .xml backup or QR phone migration",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onOpenRestoreDialog,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Restore")
+                    }
+                }
+            }
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             // 8. O.D.I.N. AI Configuration (Collapsible Dropdown Card)
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isOdinExpanded = !isOdinExpanded }
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -1138,16 +1188,25 @@ fun SettingsScreen(
                                             scope.launch {
                                                 isSigningInGoogle = true
                                                 val res = googleAuthManager.signIn(context)
-                                                isSigningInGoogle = false
                                                 when (res) {
                                                     is com.messagebackup.app.domain.auth.GoogleSignInResult.Success -> {
+                                                        isSigningInGoogle = false
                                                         android.widget.Toast.makeText(context, "Welcome, ${res.user.displayName ?: res.user.email}!", android.widget.Toast.LENGTH_SHORT).show()
                                                     }
+                                                    is com.messagebackup.app.domain.auth.GoogleSignInResult.FallbackPickerNeeded -> {
+                                                        try {
+                                                            googleAccountPickerLauncher.launch(res.pickerIntent)
+                                                        } catch (e: Exception) {
+                                                            isSigningInGoogle = false
+                                                            android.widget.Toast.makeText(context, "Unable to open Google account selector", android.widget.Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
                                                     is com.messagebackup.app.domain.auth.GoogleSignInResult.Error -> {
+                                                        isSigningInGoogle = false
                                                         android.widget.Toast.makeText(context, res.errorMessage, android.widget.Toast.LENGTH_LONG).show()
                                                     }
                                                     is com.messagebackup.app.domain.auth.GoogleSignInResult.Cancelled -> {
-                                                        // User dismissed sign-in sheet
+                                                        isSigningInGoogle = false
                                                     }
                                                 }
                                             }
@@ -1698,18 +1757,16 @@ fun SettingsScreen(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { isAdvancedOdinExpanded = !isAdvancedOdinExpanded }
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                                 Icon(
                                     imageVector = Icons.Default.Tune,
                                     contentDescription = null,
@@ -1724,17 +1781,19 @@ fun SettingsScreen(
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = if (isAdvancedOdinExpanded) "Tap to collapse" else "Temperature, Context Window & Prompt rules",
+                                        text = if (isAdvancedOdinExpanded) "Use arrow to collapse" else "Temperature, Context Window & Prompt rules",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
-                            Icon(
-                                imageVector = if (isAdvancedOdinExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            IconButton(onClick = { isAdvancedOdinExpanded = !isAdvancedOdinExpanded }) {
+                                Icon(
+                                    imageVector = if (isAdvancedOdinExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (isAdvancedOdinExpanded) "Collapse" else "Expand",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
 
@@ -1839,6 +1898,22 @@ fun SettingsScreen(
                             )
 
                             // Quick Prompt Preset Chips
+                            val concisePreset = """You are O.D.I.N. Concise Assistant.
+Rules:
+1. Answer strictly based on facts and dates in the message transcript.
+2. Provide answers in 1-2 direct bullet points.
+3. No filler, greetings, or conversational preamble. State the facts immediately."""
+                            val forensicPreset = """You are O.D.I.N. Forensic Archivist.
+Rules:
+1. Ground answers 100% on verifiable text in the message transcript.
+2. Quote relevant messages verbatim with ISO/exact timestamps and verified sender phone numbers/handles.
+3. Highlight discrepancies, omissions, or unverified claims with evidentiary objectivity."""
+
+                            val trimmedPrompt = promptEditText.trim()
+                            val isConciseSelected = trimmedPrompt == concisePreset.trim() || trimmedPrompt.startsWith("You are O.D.I.N. Concise Assistant")
+                            val isForensicSelected = trimmedPrompt == forensicPreset.trim() || trimmedPrompt.startsWith("You are O.D.I.N. Forensic Archivist")
+                            val isAllfatherSelected = trimmedPrompt.isBlank() || (!isConciseSelected && !isForensicSelected)
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1851,40 +1926,56 @@ fun SettingsScreen(
                                         promptEditText = ""
                                         Toast.makeText(context, "Activated Allfather Signature Persona!", Toast.LENGTH_SHORT).show()
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isAllfatherSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    border = if (isAllfatherSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Text("👑 Allfather", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                    Text(
+                                        text = "👑 Allfather",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = if (isAllfatherSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isAllfatherSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                                 Button(
                                     onClick = {
-                                        val concise = """You are O.D.I.N. Concise Assistant.
-Rules:
-1. Answer strictly based on facts and dates in the message transcript.
-2. Provide answers in 1-2 direct bullet points.
-3. No filler, greetings, or conversational preamble. State the facts immediately."""
-                                        promptEditText = concise
-                                        prefs.setOdinCustomSystemPrompt(concise)
+                                        promptEditText = concisePreset
+                                        prefs.setOdinCustomSystemPrompt(concisePreset)
+                                        Toast.makeText(context, "Activated Concise Persona!", Toast.LENGTH_SHORT).show()
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isConciseSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    border = if (isConciseSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Text("⚡ Concise", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        text = "⚡ Concise",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = if (isConciseSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isConciseSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                                 Button(
                                     onClick = {
-                                        val forensic = """You are O.D.I.N. Forensic Archivist.
-Rules:
-1. Ground answers 100% on verifiable text in the message transcript.
-2. Quote relevant messages verbatim with ISO/exact timestamps and verified sender phone numbers/handles.
-3. Highlight discrepancies, omissions, or unverified claims with evidentiary objectivity."""
-                                        promptEditText = forensic
-                                        prefs.setOdinCustomSystemPrompt(forensic)
+                                        promptEditText = forensicPreset
+                                        prefs.setOdinCustomSystemPrompt(forensicPreset)
+                                        Toast.makeText(context, "Activated Forensic Archivist Persona!", Toast.LENGTH_SHORT).show()
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isForensicSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    border = if (isForensicSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Text("⚖️ Forensic", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        text = "⚖️ Forensic",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = if (isForensicSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isForensicSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
 
@@ -2090,9 +2181,7 @@ Rules:
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isPerformanceExpanded = !isPerformanceExpanded }
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(

@@ -442,15 +442,17 @@ class RavenGlobalRelayTransport(
             if (packetType == "PTT_VOICE") {
                 val audioBase64 = innerMsg.getString("audio_base64")
                 val durationMs = innerMsg.optLong("duration_ms", 0L)
+                val durationSec = String.format(java.util.Locale.US, "%.1fs", durationMs / 1000f)
 
                 val chatMsg = com.messagebackup.app.data.local.RavenChatMessage(
                     peerId = senderPeer.peerId,
                     senderCallsign = senderCallSign,
                     senderDisplayName = senderPeer.displayName,
                     isOutbound = false,
-                    messageText = "🎙️ PTT Voice Note (${durationMs}ms)",
+                    messageText = "🎙️ Voice Note ($durationSec)",
                     messageType = "VOICE",
-                    timestamp = timestamp
+                    timestamp = timestamp,
+                    audioBase64 = audioBase64
                 )
                 dbHelper.insertMessage(chatMsg)
 

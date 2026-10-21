@@ -98,6 +98,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -156,8 +157,8 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     var showMenu by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
-    var isMessageSelectionMode by remember { mutableStateOf(false) }
-    var showRewardArcade by remember { mutableStateOf(false) }
+    var isMessageSelectionMode by rememberSaveable { mutableStateOf(false) }
+    var showRewardArcade by rememberSaveable { mutableStateOf(false) }
     val viewModelShowRewardArcade = uiState.showRewardArcade
     LaunchedEffect(viewModelShowRewardArcade) {
         if (viewModelShowRewardArcade) {
@@ -165,9 +166,9 @@ fun MainScreen(
             viewModel.setShowRewardArcade(false)
         }
     }
-    var showRavenMeshDialog by remember { mutableStateOf(false) }
-    var showOnboarding by remember { mutableStateOf(!isOnboardingCompleted) }
-    var isAppSessionUnlocked by remember { mutableStateOf(false) }
+    var showRavenMeshDialog by rememberSaveable { mutableStateOf(false) }
+    var showOnboarding by rememberSaveable { mutableStateOf(!isOnboardingCompleted) }
+    var isAppSessionUnlocked by rememberSaveable { mutableStateOf(false) }
     var pendingProtectedAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val previewLazyListState = rememberLazyListState()
 
@@ -268,6 +269,10 @@ fun MainScreen(
     if (uiState.isSettingsOpen) {
         SettingsScreen(
             onNavigateBack = { viewModel.setSettingsOpen(false) },
+            onOpenRestoreDialog = {
+                viewModel.setSettingsOpen(false)
+                viewModel.setShowRestoreDialog(true)
+            },
             modifier = modifier
         )
         return
@@ -771,9 +776,13 @@ fun MainScreen(
                             DropdownMenuItem(
                                 text = {
                                     Column {
-                                        Text("Raven Mesh Identity")
                                         Text(
-                                            "Decentralized E2EE Peer Network & Sigil",
+                                            text = "Raven Mesh Identity",
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "Decentralized E2EE Peer Network & Sigil",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )
@@ -789,11 +798,15 @@ fun MainScreen(
                             DropdownMenuItem(
                                 text = {
                                     Column {
-                                        Text("Media Vault & Gallery")
                                         Text(
-                                            "Browse photos, videos & audio attachments",
+                                            text = "Media Vault & Gallery",
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "Browse photos, videos & audio attachments",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 },
@@ -805,8 +818,21 @@ fun MainScreen(
                             )
 
                             DropdownMenuItem(
-                                text = { Text("Conversation Insights") },
-                                leadingIcon = { Icon(Icons.Default.Insights, contentDescription = null) },
+                                text = {
+                                    Column {
+                                        Text(
+                                            text = "Conversation Insights",
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "Analytics, top contacts & activity trends",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                },
+                                leadingIcon = { Icon(Icons.Default.Insights, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                                 onClick = {
                                     showMenu = false
                                     viewModel.loadStatistics()
@@ -819,30 +845,17 @@ fun MainScreen(
                                     )
                                 }
                             )
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text("Restore Messages")
-                                        Text(
-                                            "Import from .json or .xml backup",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                },
-                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                onClick = {
-                                    showMenu = false
-                                    viewModel.setShowRestoreDialog(true)
-                                }
-                            )
 
                             DropdownMenuItem(
                                 text = {
                                     Column {
-                                        Text("Reward Arcade")
                                         Text(
-                                            if (isAdsRemoved) "PRO License Active" else "ᛟ $aiCredits • ᚫ $ansuzCredits • ᛃ $autoBackupCredits Runes",
+                                            text = "Arcade & Bazaar",
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = if (isAdsRemoved) "PRO License Active" else "ᛟ $aiCredits • ᚫ $ansuzCredits • ᛃ $autoBackupCredits Runes",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )
@@ -856,8 +869,21 @@ fun MainScreen(
                             )
 
                             DropdownMenuItem(
-                                text = { Text("Settings") },
-                                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                text = {
+                                    Column {
+                                        Text(
+                                            text = "Settings",
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "Backup, restore, O.D.I.N. AI & vault security",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                },
+                                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                                 onClick = {
                                     showMenu = false
                                     viewModel.setSettingsOpen(true)

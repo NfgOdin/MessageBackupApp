@@ -13,7 +13,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
 
     companion object {
         private const val DATABASE_NAME = "raven_mesh.db"
-        private const val DATABASE_VERSION = 3
+        private const val DATABASE_VERSION = 4
 
         const val TABLE_PEERS = "raven_peers"
         const val COL_PEER_ID = "peer_id"               // e.g. "raven://valkyrie-7a3f"
@@ -34,6 +34,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
         const val COL_MSG_TEXT = "message_text"
         const val COL_MSG_TYPE = "message_type"
         const val COL_MSG_TIMESTAMP = "timestamp"
+        const val COL_MSG_AUDIO_BASE64 = "audio_base64"
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -61,7 +62,8 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
                 $COL_MSG_IS_OUTBOUND INTEGER NOT NULL,
                 $COL_MSG_TEXT TEXT NOT NULL,
                 $COL_MSG_TYPE TEXT DEFAULT 'TEXT',
-                $COL_MSG_TIMESTAMP INTEGER NOT NULL
+                $COL_MSG_TIMESTAMP INTEGER NOT NULL,
+                $COL_MSG_AUDIO_BASE64 TEXT
             )
             """.trimIndent()
         )
@@ -86,10 +88,17 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
                         $COL_MSG_IS_OUTBOUND INTEGER NOT NULL,
                         $COL_MSG_TEXT TEXT NOT NULL,
                         $COL_MSG_TYPE TEXT DEFAULT 'TEXT',
-                        $COL_MSG_TIMESTAMP INTEGER NOT NULL
+                        $COL_MSG_TIMESTAMP INTEGER NOT NULL,
+                        $COL_MSG_AUDIO_BASE64 TEXT
                     )
                     """.trimIndent()
                 )
+            } catch (_: Exception) {
+            }
+        }
+        if (oldVersion < 4) {
+            try {
+                db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $COL_MSG_AUDIO_BASE64 TEXT")
             } catch (_: Exception) {
             }
         }
@@ -175,6 +184,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
             put(COL_MSG_TEXT, msg.messageText)
             put(COL_MSG_TYPE, msg.messageType)
             put(COL_MSG_TIMESTAMP, msg.timestamp)
+            put(COL_MSG_AUDIO_BASE64, msg.audioBase64)
         }
         return db.insert(TABLE_MESSAGES, null, values)
     }
@@ -204,8 +214,10 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
             val idxText = c.getColumnIndexOrThrow(COL_MSG_TEXT)
             val idxType = c.getColumnIndexOrThrow(COL_MSG_TYPE)
             val idxTs = c.getColumnIndexOrThrow(COL_MSG_TIMESTAMP)
+            val idxAudio = c.getColumnIndex(COL_MSG_AUDIO_BASE64)
 
             while (c.moveToNext()) {
+                val audioB64 = if (idxAudio != -1 && !c.isNull(idxAudio)) c.getString(idxAudio) else null
                 messages.add(
                     RavenChatMessage(
                         id = c.getLong(idxId),
@@ -215,7 +227,8 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
                         isOutbound = c.getInt(idxOutbound) == 1,
                         messageText = c.getString(idxText),
                         messageType = c.getString(idxType) ?: "TEXT",
-                        timestamp = c.getLong(idxTs)
+                        timestamp = c.getLong(idxTs),
+                        audioBase64 = audioB64
                     )
                 )
             }
@@ -246,5 +259,6 @@ data class RavenChatMessage(
     val isOutbound: Boolean,
     val messageText: String,
     val messageType: String = "TEXT",
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val audioBase64: String? = null
 )

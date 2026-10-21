@@ -1,5 +1,8 @@
 package com.messagebackup.app.ui.components
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,10 +11,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -19,6 +25,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -27,14 +34,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.messagebackup.app.MessageBackupApp
 import com.messagebackup.app.model.DateRangeFilter
 import com.messagebackup.app.model.ExportFormat
 import com.messagebackup.app.model.ExportOptions
@@ -79,6 +89,26 @@ fun ExportConfigDialog(
     var legalEvidenceMode by remember { mutableStateOf(false) }
     var enableWatermark by remember { mutableStateOf(false) }
     var watermarkText by remember { mutableStateOf("CONFIDENTIAL RECORD") }
+
+    val context = LocalContext.current
+    val prefs = remember { MessageBackupApp.instance.appPreferences }
+    val safFolderDisplay by prefs.safDirectoryDisplay.collectAsState()
+    val safTreeUri by prefs.safDirectoryUri.collectAsState()
+
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri: Uri? ->
+        if (treeUri != null) {
+            try {
+                val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(treeUri, takeFlags)
+                val folderName = treeUri.lastPathSegment?.substringAfterLast(':') ?: "Selected Folder"
+                prefs.setSafDirectory(treeUri, folderName)
+                destination = OutputDestination.PERSISTENT_DIRECTORY
+            } catch (_: Exception) {}
+        }
+    }
 
     val scrollState = rememberScrollState()
     val dateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy").withZone(ZoneId.systemDefault())
@@ -449,6 +479,7 @@ fun ExportConfigDialog(
                 )
                 val destinationChoices = listOf(
                     OutputDestination.SHARE_SHEET to "Android Share / Save Sheet",
+                    OutputDestination.PERSISTENT_DIRECTORY to "Save to Custom Folder (SD / Device)",
                     OutputDestination.GOOGLE_DRIVE to "Google Drive",
                     OutputDestination.ONEDRIVE to "Microsoft OneDrive",
                     OutputDestination.DROPBOX to "Dropbox",
@@ -458,16 +489,49 @@ fun ExportConfigDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { destination = destOption }
+                            .clickable {
+                                if (destOption == OutputDestination.PERSISTENT_DIRECTORY && safTreeUri.isNullOrBlank()) {
+                                    folderPickerLauncher.launch(null)
+                                } else {
+                                    destination = destOption
+                                }
+                            }
                             .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
                             selected = (destination == destOption),
-                            onClick = { destination = destOption }
+                            onClick = {
+                                if (destOption == OutputDestination.PERSISTENT_DIRECTORY && safTreeUri.isNullOrBlank()) {
+                                    folderPickerLauncher.launch(null)
+                                } else {
+                                    destination = destOption
+                                }
+                            }
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = label, style = MaterialTheme.typography.bodyMedium)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = label, style = MaterialTheme.typography.bodyMedium)
+                            if (destOption == OutputDestination.PERSISTENT_DIRECTORY) {
+                                Text(
+                                    text = "Folder: $safFolderDisplay",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        if (destOption == OutputDestination.PERSISTENT_DIRECTORY) {
+                            TextButton(onClick = { folderPickerLauncher.launch(null) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Folder,
+                                    contentDescription = "Choose Folder",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Browse", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                     }
                 }
 

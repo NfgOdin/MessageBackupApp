@@ -20,6 +20,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,6 +80,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -142,6 +144,62 @@ fun RavenIdentityDialog(
 
     // PTT Voice State
     var isPttRecording by remember { mutableStateOf(false) }
+    var pttTargetPeer by remember { mutableStateOf<RavenPeer?>(null) }
+    var pttElapsedMs by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(isPttRecording) {
+        if (isPttRecording) {
+            val startTs = System.currentTimeMillis()
+            while (isPttRecording) {
+                pttElapsedMs = System.currentTimeMillis() - startTs
+                kotlinx.coroutines.delay(100)
+            }
+        } else {
+            pttElapsedMs = 0L
+        }
+    }
+
+    fun startCardPtt(peer: RavenPeer) {
+        if (isPttRecording) return
+        val started = pttEngine.startRecording()
+        if (started) {
+            pttTargetPeer = peer
+            isPttRecording = true
+        } else {
+            Toast.makeText(context, "Microphone unavailable. Check permissions.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun stopAndSendCardPtt() {
+        val target = pttTargetPeer ?: return
+        if (!isPttRecording) return
+        isPttRecording = false
+        pttTargetPeer = null
+        scope.launch(Dispatchers.IO) {
+            val snippet = pttEngine.stopRecording()
+            if (snippet != null) {
+                val res = socketTransport.sendVoiceSnippetToPeer(
+                    peer = target,
+                    voiceSnippet = snippet
+                )
+                withContext(Dispatchers.Main) {
+                    when (res) {
+                        is com.messagebackup.app.domain.mesh.RavenSendResult.Success -> {
+                            isRavenFlying = true
+                            Toast.makeText(context, "🎙️ Walkie-Talkie voice delivered to ${target.displayName}!", Toast.LENGTH_SHORT).show()
+                        }
+                        is com.messagebackup.app.domain.mesh.RavenSendResult.Error -> {
+                            Toast.makeText(context, "⚠️ " + res.errorMessage, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Hold or speak longer to send a voice note", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     // Runtime Permission Request States
     var permissionDialogTitle by remember { mutableStateOf<String?>(null) }
@@ -826,57 +884,58 @@ fun RavenIdentityDialog(
                                                 }
                                             } else {
                                                 // Direct Instant Actions: Walkie-Talkie Talk & Message
+                                                val isThisPeerRecording = isPttRecording && pttTargetPeer?.peerId == peer.peerId
+                                                val elapsedSec = String.format(java.util.Locale.US, "%.1fs", pttElapsedMs / 1000f)
                                                 Row(
                                                     modifier = Modifier.fillMaxWidth(),
                                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                                 ) {
-                                                    Button(
-                                                        onClick = {
-                                                            checkAndRequestAudioPermission {
-                                                                isPttRecording = true
-                                                                scope.launch(Dispatchers.IO) {
-                                                                    val started = pttEngine.startRecording()
-                                                                    if (!started) {
-                                                                        withContext(Dispatchers.Main) {
-                                                                            isPttRecording = false
-                                                                            Toast.makeText(context, "Microphone unavailable. Check permissions.", Toast.LENGTH_SHORT).show()
+                                                    Surface(
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        color = if (isThisPeerRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .height(40.dp)
+                                                            .pointerInput(peer.peerId) {
+                                                                detectTapGestures(
+                                                                    onPress = {
+                                                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                                                                            checkAndRequestAudioPermission {}
+                                                                            return@detectTapGestures
                                                                         }
-                                                                        return@launch
-                                                                    }
-                                                                    kotlinx.coroutines.delay(2000)
-                                                                    val snippet = pttEngine.stopRecording()
-                                                                    withContext(Dispatchers.Main) {
-                                                                        isPttRecording = false
-                                                                    }
-                                                                    if (snippet != null) {
-                                                                        val res = socketTransport.sendVoiceSnippetToPeer(
-                                                                            peer = peer,
-                                                                            voiceSnippet = snippet
-                                                                        )
-                                                                        withContext(Dispatchers.Main) {
-                                                                            when (res) {
-                                                                                is com.messagebackup.app.domain.mesh.RavenSendResult.Success -> {
-                                                                                    isRavenFlying = true
-                                                                                    Toast.makeText(context, "🎙️ Walkie-Talkie voice delivered to ${peer.displayName}!", Toast.LENGTH_SHORT).show()
-                                                                                }
-                                                                                is com.messagebackup.app.domain.mesh.RavenSendResult.Error -> {
-                                                                                    Toast.makeText(context, "⚠️ " + res.errorMessage, Toast.LENGTH_LONG).show()
-                                                                                }
+                                                                        if (isThisPeerRecording) {
+                                                                            stopAndSendCardPtt()
+                                                                        } else {
+                                                                            val pressStart = System.currentTimeMillis()
+                                                                            startCardPtt(peer)
+                                                                            val released = tryAwaitRelease()
+                                                                            val heldDuration = System.currentTimeMillis() - pressStart
+                                                                            if (released && heldDuration >= 400L && isPttRecording) {
+                                                                                stopAndSendCardPtt()
                                                                             }
                                                                         }
                                                                     }
-                                                                }
+                                                                )
                                                             }
-                                                        },
-                                                        shape = RoundedCornerShape(10.dp),
-                                                        modifier = Modifier.weight(1f),
-                                                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                                            containerColor = if (isPttRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                                                        )
                                                     ) {
-                                                        Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Text(if (isPttRecording) "Speaking..." else "Talk (PTT)")
+                                                        Row(
+                                                            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.Center
+                                                        ) {
+                                                            Icon(
+                                                                Icons.Default.Mic,
+                                                                contentDescription = null,
+                                                                tint = if (isThisPeerRecording) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary,
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                            Spacer(modifier = Modifier.width(6.dp))
+                                                            Text(
+                                                                text = if (isThisPeerRecording) "Send ($elapsedSec)" else "Hold / Tap PTT",
+                                                                style = MaterialTheme.typography.labelLarge,
+                                                                color = if (isThisPeerRecording) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary
+                                                            )
+                                                        }
                                                     }
 
                                                     OutlinedButton(

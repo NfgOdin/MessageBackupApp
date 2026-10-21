@@ -94,9 +94,7 @@ fun AutoBackupConfigSection(
             containerColor = if (isUnlocked || credits > 0) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ),
         shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { isExpanded = !isExpanded }
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Header Row: Icon, Title, Status Bubble, and Expand/Collapse Chevron

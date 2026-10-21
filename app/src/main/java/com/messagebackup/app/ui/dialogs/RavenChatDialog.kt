@@ -7,9 +7,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,17 +32,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,6 +57,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -100,9 +111,72 @@ fun RavenChatDialog(
     var inputText by remember { mutableStateOf("") }
     var isSending by remember { mutableStateOf(false) }
     var isRecordingPtt by remember { mutableStateOf(false) }
+    var recordingElapsedMs by remember { mutableLongStateOf(0L) }
+    var playingMessageId by remember { mutableStateOf<Long?>(null) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
+
+    fun loadMessages() {
+        scope.launch(Dispatchers.IO) {
+            val msgs = dbHelper.getMessagesForPeer(peer.peerId)
+            withContext(Dispatchers.Main) {
+                messagesList = msgs
+            }
+        }
+    }
+
+    LaunchedEffect(isRecordingPtt) {
+        if (isRecordingPtt) {
+            val startTs = System.currentTimeMillis()
+            while (isRecordingPtt) {
+                recordingElapsedMs = System.currentTimeMillis() - startTs
+                delay(100)
+            }
+        } else {
+            recordingElapsedMs = 0L
+        }
+    }
+
+    fun startVoiceRecording() {
+        if (isRecordingPtt) return
+        val started = pttEngine.startRecording()
+        if (started) {
+            isRecordingPtt = true
+        } else {
+            Toast.makeText(context, "Microphone unavailable", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun stopAndSendVoiceRecording() {
+        if (!isRecordingPtt) return
+        isRecordingPtt = false
+        scope.launch(Dispatchers.IO) {
+            val snippet = pttEngine.stopRecording()
+            if (snippet != null) {
+                val res = socketTransport.sendVoiceSnippetToPeer(peer, snippet)
+                withContext(Dispatchers.Main) {
+                    if (res is RavenSendResult.Success) {
+                        loadMessages()
+                        Toast.makeText(context, "🎙️ Voice note delivered!", Toast.LENGTH_SHORT).show()
+                    } else if (res is RavenSendResult.Error) {
+                        Toast.makeText(context, "⚠️ " + res.errorMessage, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Voice note too short (hold or speak longer)", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun cancelVoiceRecording() {
+        if (!isRecordingPtt) return
+        isRecordingPtt = false
+        pttEngine.cancelRecording()
+        Toast.makeText(context, "Recording cancelled", Toast.LENGTH_SHORT).show()
+    }
 
     val audioPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -111,15 +185,6 @@ fun RavenChatDialog(
             Toast.makeText(context, "Microphone enabled for PTT", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(context, "Microphone permission required for PTT", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    fun loadMessages() {
-        scope.launch(Dispatchers.IO) {
-            val msgs = dbHelper.getMessagesForPeer(peer.peerId)
-            withContext(Dispatchers.Main) {
-                messagesList = msgs
-            }
         }
     }
 
@@ -296,7 +361,20 @@ fun RavenChatDialog(
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
                             items(messagesList, key = { it.id }) { msg ->
-                                RavenMessageBubble(msg = msg)
+                                RavenMessageBubble(
+                                    msg = msg,
+                                    isPlaying = playingMessageId == msg.id,
+                                    onPlayAudio = { audioB64 ->
+                                        if (playingMessageId == msg.id) return@RavenMessageBubble
+                                        playingMessageId = msg.id
+                                        scope.launch(Dispatchers.IO) {
+                                            pttEngine.playInboundVoice(audioB64)
+                                            withContext(Dispatchers.Main) {
+                                                playingMessageId = null
+                                            }
+                                        }
+                                    }
+                                )
                             }
                             item {
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -305,28 +383,70 @@ fun RavenChatDialog(
                     }
                 }
 
-                // Recording Status Bar
+                // Recording Status Bar with Live Timer & Stop/Send + Cancel Controls
                 AnimatedVisibility(visible = isRecordingPtt) {
                     Surface(
                         color = MaterialTheme.colorScheme.errorContainer,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.error)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Recording walkie-talkie voice note (release or wait 2s)...",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.error)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                val sec = String.format(Locale.US, "%.1fs", recordingElapsedMs / 1000f)
+                                Text(
+                                    text = "Recording $sec • Release or tap Send",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                TextButton(
+                                    onClick = { cancelVoiceRecording() },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Cancel",
+                                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("Cancel", fontSize = 12.sp, color = MaterialTheme.colorScheme.onErrorContainer)
+                                }
+
+                                Button(
+                                    onClick = { stopAndSendVoiceRecording() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Stop,
+                                        contentDescription = "Stop and Send",
+                                        tint = MaterialTheme.colorScheme.onError,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Send", fontSize = 12.sp, color = MaterialTheme.colorScheme.onError)
+                                }
+                            }
                         }
                     }
                 }
@@ -344,51 +464,49 @@ fun RavenChatDialog(
                             .padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // PTT Mic Button
-                        IconButton(
-                            onClick = {
-                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                                    audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                    return@IconButton
-                                }
-                                if (isRecordingPtt) return@IconButton
-                                isRecordingPtt = true
-                                scope.launch(Dispatchers.IO) {
-                                    val started = pttEngine.startRecording()
-                                    if (!started) {
-                                        withContext(Dispatchers.Main) {
-                                            isRecordingPtt = false
-                                            Toast.makeText(context, "Microphone unavailable", Toast.LENGTH_SHORT).show()
-                                        }
-                                        return@launch
-                                    }
-                                    delay(2000)
-                                    val snippet = pttEngine.stopRecording()
-                                    withContext(Dispatchers.Main) {
-                                        isRecordingPtt = false
-                                    }
-                                    if (snippet != null) {
-                                        val res = socketTransport.sendVoiceSnippetToPeer(peer, snippet)
-                                        withContext(Dispatchers.Main) {
-                                            if (res is RavenSendResult.Success) {
-                                                loadMessages()
-                                                Toast.makeText(context, "🎙️ Voice note delivered!", Toast.LENGTH_SHORT).show()
-                                            } else if (res is RavenSendResult.Error) {
-                                                Toast.makeText(context, "⚠️ " + res.errorMessage, Toast.LENGTH_SHORT).show()
+                        // PTT Mic Button (Supports both Hold-to-Talk AND Tap-to-Toggle!)
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isRecordingPtt) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.surfaceVariant
+                                )
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onPress = {
+                                            if (ContextCompat.checkSelfPermission(
+                                                    context,
+                                                    Manifest.permission.RECORD_AUDIO
+                                                ) != PackageManager.PERMISSION_GRANTED
+                                            ) {
+                                                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                                return@detectTapGestures
+                                            }
+                                            if (isRecordingPtt) {
+                                                // Already recording in toggle mode -> tap stops & sends
+                                                stopAndSendVoiceRecording()
+                                            } else {
+                                                val pressStart = System.currentTimeMillis()
+                                                startVoiceRecording()
+                                                val released = tryAwaitRelease()
+                                                val heldDuration = System.currentTimeMillis() - pressStart
+                                                // If user held the button for > 400ms, treat as press-and-hold and send on release!
+                                                // If it was a quick tap (< 400ms), stay recording in hands-free toggle mode until they tap again or hit Send.
+                                                if (released && heldDuration >= 400L && isRecordingPtt) {
+                                                    stopAndSendVoiceRecording()
+                                                }
                                             }
                                         }
-                                    }
+                                    )
                                 }
-                            },
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(if (isRecordingPtt) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Icon(
-                                Icons.Default.Mic,
-                                contentDescription = "Hold / Tap PTT",
-                                tint = if (isRecordingPtt) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                imageVector = if (isRecordingPtt) Icons.Default.Stop else Icons.Default.Mic,
+                                contentDescription = "Hold or Tap PTT",
+                                tint = if (isRecordingPtt) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.primary
                             )
                         }
 
@@ -492,7 +610,11 @@ fun RavenChatDialog(
 }
 
 @Composable
-fun RavenMessageBubble(msg: RavenChatMessage) {
+fun RavenMessageBubble(
+    msg: RavenChatMessage,
+    isPlaying: Boolean = false,
+    onPlayAudio: (String) -> Unit = {}
+) {
     val isOutbound = msg.isOutbound
     val alignment = if (isOutbound) Alignment.End else Alignment.Start
     val bubbleColor = if (isOutbound) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
@@ -514,7 +636,7 @@ fun RavenMessageBubble(msg: RavenChatMessage) {
         Surface(
             shape = bubbleShape,
             color = bubbleColor,
-            modifier = Modifier.widthIn(min = 60.dp, max = 280.dp),
+            modifier = Modifier.widthIn(min = 60.dp, max = 290.dp),
             tonalElevation = 1.dp
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -529,20 +651,53 @@ fun RavenMessageBubble(msg: RavenChatMessage) {
                 }
 
                 if (msg.messageType == "VOICE") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.VolumeUp,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = msg.messageText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = textColor
-                        )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable(enabled = !msg.audioBase64.isNullOrBlank()) {
+                                msg.audioBase64?.let { onPlayAudio(it) }
+                            }
+                            .padding(vertical = 2.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                if (isPlaying) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Play Voice Note",
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = msg.messageText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = textColor
+                            )
+                            Text(
+                                text = if (isPlaying) "🔊 Playing audio..."
+                                else if (!msg.audioBase64.isNullOrBlank()) "Tap to play voice message"
+                                else "Voice transmission",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 } else {
                     Text(
