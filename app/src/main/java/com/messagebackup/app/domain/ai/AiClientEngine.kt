@@ -357,8 +357,8 @@ class AiClientEngine {
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("User-Agent", "MuninnMessageVault/1.0")
-                connectTimeout = 10000
-                readTimeout = 22000
+                connectTimeout = 5000
+                readTimeout = 8500
                 doOutput = true
             }
 
@@ -384,19 +384,35 @@ class AiClientEngine {
             val code = conn.responseCode
             if (code in 200..299) {
                 val responseText = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }.trim()
+                var cloudAnswer: String? = null
                 if (responseText.startsWith("{")) {
                     val root = JSONObject(responseText)
                     val choices = root.optJSONArray("choices")
                     if (choices != null && choices.length() > 0) {
                         val firstChoice = choices.getJSONObject(0)
                         val message = firstChoice.optJSONObject("message")
-                        val answer = message?.optString("content", "")?.trim()
-                        if (!answer.isNullOrBlank()) {
-                            return AiQueryResult.Success(answer)
+                        val ans = message?.optString("content", "")?.trim()
+                        if (!ans.isNullOrBlank()) {
+                            cloudAnswer = ans
                         }
                     }
                 } else if (responseText.isNotBlank() && !responseText.startsWith("<")) {
-                    return AiQueryResult.Success(responseText)
+                    cloudAnswer = responseText
+                }
+
+                if (!cloudAnswer.isNullOrBlank()) {
+                    val finalOutput = if (forensicReport.hasMatches && !forensicReport.isSummaryOrDraft) {
+                        buildString {
+                            appendLine(cloudAnswer)
+                            appendLine()
+                            appendLine("---")
+                            appendLine("📋 **Verified Archive Records (${messages.size} msgs scanned):**")
+                            appendLine(forensicReport.rawSummaryForPrompt)
+                        }.trim()
+                    } else {
+                        cloudAnswer
+                    }
+                    return AiQueryResult.Success(finalOutput)
                 }
             }
         } catch (_: Exception) {
@@ -630,59 +646,64 @@ class AiClientEngine {
         if (context != null && isOnDeviceNanoSupported(context)) {
             var generativeModel: com.google.mlkit.genai.prompt.GenerativeModel? = null
             try {
-                generativeModel = Generation.getClient()
-                val status = withTimeoutOrNull(2000L) {
-                    generativeModel.checkStatus()
+                val client = withTimeoutOrNull(1500L) {
+                    Generation.getClient()
                 }
-
-                if (status == FeatureStatus.DOWNLOADABLE) {
-                    // Never block the user's query waiting for a multi-gigabyte background AICore download!
-                    // Warm up the model asynchronously in the background and immediately serve the forensic answer.
-                    triggerBackgroundNanoDownload()
-                } else if (status == FeatureStatus.AVAILABLE) {
-                    val targetScope = if (targetContactName == "All Conversations" || targetContactName.isBlank()) {
-                        "all conversations"
-                    } else {
-                        "messages with '$targetContactName'"
+                if (client != null) {
+                    generativeModel = client
+                    val status = withTimeoutOrNull(2000L) {
+                        client.checkStatus()
                     }
 
-                    val nanoPrompt = buildString {
-                        appendLine("You are O.D.I.N., an intelligent message archivist analyzing $targetScope.")
-                        appendLine("Answer the user's question accurately using ONLY the dates, facts, and quotes below.")
-                        if (forensicReport.hasMatches) {
-                            appendLine()
-                            appendLine("=== VERIFIED MATCHES FROM ARCHIVE ===")
-                            appendLine(forensicReport.rawSummaryForPrompt.take(1200))
-                            appendLine("=== END VERIFIED MATCHES ===")
-                        }
-                        appendLine()
-                        appendLine("=== MESSAGE TRANSCRIPT ===")
-                        appendLine(nanoContext)
-                        appendLine("=== END TRANSCRIPT ===")
-                        appendLine()
-                        appendLine("Question: $userPrompt")
-                        appendLine("Answer:")
-                    }
-
-                    val generatedText = withTimeoutOrNull(7500L) {
-                        val response = generativeModel.generateContent(nanoPrompt)
-                        response.candidates.firstOrNull()?.text?.trim()
-                    }
-
-                    if (!generatedText.isNullOrBlank()) {
-                        // Combine Gemini Nano's natural language synthesis with verified archive excerpts if Nano omitted details
-                        val finalOutput = if (forensicReport.hasMatches && !forensicReport.isSummaryOrDraft) {
-                            buildString {
-                                appendLine(generatedText)
-                                appendLine()
-                                appendLine("---")
-                                appendLine("📋 **Verified Archive Records (${messages.size} msgs scanned):**")
-                                appendLine(forensicReport.rawSummaryForPrompt)
-                            }.trim()
+                    if (status == FeatureStatus.DOWNLOADABLE) {
+                        // Never block the user's query waiting for a multi-gigabyte background AICore download!
+                        // Warm up the model asynchronously in the background and immediately serve the forensic answer.
+                        triggerBackgroundNanoDownload()
+                    } else if (status == FeatureStatus.AVAILABLE) {
+                        val targetScope = if (targetContactName == "All Conversations" || targetContactName.isBlank()) {
+                            "all conversations"
                         } else {
-                            generatedText
+                            "messages with '$targetContactName'"
                         }
-                        return@withContext AiQueryResult.Success(finalOutput)
+
+                        val nanoPrompt = buildString {
+                            appendLine("You are O.D.I.N., an intelligent message archivist analyzing $targetScope.")
+                            appendLine("Answer the user's question accurately using ONLY the dates, facts, and quotes below.")
+                            if (forensicReport.hasMatches) {
+                                appendLine()
+                                appendLine("=== VERIFIED MATCHES FROM ARCHIVE ===")
+                                appendLine(forensicReport.rawSummaryForPrompt.take(1200))
+                                appendLine("=== END VERIFIED MATCHES ===")
+                            }
+                            appendLine()
+                            appendLine("=== MESSAGE TRANSCRIPT ===")
+                            appendLine(nanoContext)
+                            appendLine("=== END TRANSCRIPT ===")
+                            appendLine()
+                            appendLine("Question: $userPrompt")
+                            appendLine("Answer:")
+                        }
+
+                        val generatedText = withTimeoutOrNull(6500L) {
+                            val response = client.generateContent(nanoPrompt)
+                            response.candidates.firstOrNull()?.text?.trim()
+                        }
+
+                        if (!generatedText.isNullOrBlank()) {
+                            // Combine Gemini Nano's natural language synthesis with verified archive excerpts if Nano omitted details
+                            val finalOutput = if (forensicReport.hasMatches && !forensicReport.isSummaryOrDraft) {
+                                buildString {
+                                    appendLine(generatedText)
+                                    appendLine()
+                                    appendLine("---")
+                                    appendLine("📋 **Verified Archive Records (${messages.size} msgs scanned):**")
+                                    appendLine(forensicReport.rawSummaryForPrompt)
+                                }.trim()
+                            } else {
+                                generatedText
+                            }
+                            return@withContext AiQueryResult.Success(finalOutput)
+                        }
                     }
                 }
             } catch (_: Throwable) {
@@ -803,7 +824,18 @@ class AiClientEngine {
         for (msg in orderedForPacking) {
             val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
             val sender = if (msg.direction == MessageDirection.OUTGOING) "Me" else msg.sender
-            val cleanBody = msg.body.replace("\n", " ").trim()
+            val mediaTag = if (msg.attachments.isNotEmpty()) {
+                val descs = msg.attachments.map {
+                    when {
+                        it.contentType.startsWith("image/") -> "photo"
+                        it.contentType.startsWith("audio/") -> "voice message"
+                        it.contentType.startsWith("video/") -> "video"
+                        else -> "attachment"
+                    }
+                }
+                " [📎 ${descs.size} ${descs.first()}${if (descs.size > 1) "s" else ""}]"
+            } else ""
+            val cleanBody = (msg.body.replace("\n", " ").trim() + mediaTag).trim().ifBlank { "[attachment]" }
             val estLen = dateStr.length + sender.length + cleanBody.length + 8
             if (currentChars + estLen > maxChars) continue
             packedMsgs.add(msg)
@@ -813,7 +845,18 @@ class AiClientEngine {
         for (msg in packedMsgs.sortedBy { it.timestamp }) {
             val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
             val sender = if (msg.direction == MessageDirection.OUTGOING) "Me" else msg.sender
-            val cleanBody = msg.body.replace("\n", " ").trim()
+            val mediaTag = if (msg.attachments.isNotEmpty()) {
+                val descs = msg.attachments.map {
+                    when {
+                        it.contentType.startsWith("image/") -> "photo"
+                        it.contentType.startsWith("audio/") -> "voice message"
+                        it.contentType.startsWith("video/") -> "video"
+                        else -> "attachment"
+                    }
+                }
+                " [📎 ${descs.size} ${descs.first()}${if (descs.size > 1) "s" else ""}]"
+            } else ""
+            val cleanBody = (msg.body.replace("\n", " ").trim() + mediaTag).trim().ifBlank { "[attachment]" }
             lines.add("[$dateStr] $sender: $cleanBody\n")
         }
 
@@ -862,13 +905,30 @@ class AiClientEngine {
         val isDraftReplyQuery = lowerPrompt.contains("draft") || lowerPrompt.contains("reply") ||
             lowerPrompt.contains("follow-up") || lowerPrompt.contains("follow up") || lowerPrompt.contains("respond")
 
+        val isMediaAttachmentQuery = lowerPrompt.contains("photo") || lowerPrompt.contains("picture") ||
+            lowerPrompt.contains("image") || lowerPrompt.contains("video") || lowerPrompt.contains("audio") ||
+            lowerPrompt.contains("voice") || lowerPrompt.contains("recording") || lowerPrompt.contains("attachment") ||
+            lowerPrompt.contains("file") || lowerPrompt.contains("media")
+
         val matchedEntries = LinkedHashSet<String>()
 
         fun formatMsg(msg: MessageItem, prefixNote: String = ""): String {
             val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
             val sender = if (msg.direction == MessageDirection.OUTGOING) "Me" else msg.sender.ifBlank { contactLabel }
             val note = if (prefixNote.isNotBlank()) " *($prefixNote)*" else ""
-            return "• **[$dateStr] $sender:** \"${msg.body.trim()}\"$note"
+            val bodyText = if (msg.body.isNotBlank()) "\"${msg.body.trim()}\"" else "[Media Message]"
+            val attachmentText = if (msg.attachments.isNotEmpty()) {
+                val descs = msg.attachments.joinToString(", ") { att ->
+                    when {
+                        att.contentType.startsWith("image/") -> "Photo"
+                        att.contentType.startsWith("audio/") -> "Voice Memo"
+                        att.contentType.startsWith("video/") -> "Video"
+                        else -> "File"
+                    }
+                }
+                " [📎 $descs]"
+            } else ""
+            return "• **[$dateStr] $sender:** $bodyText$attachmentText$note"
         }
 
         if (isAddressQuery) {
@@ -969,6 +1029,14 @@ class AiClientEngine {
                     }
                 }
             }
+        } else if (isMediaAttachmentQuery) {
+            for (i in messages.indices.reversed()) {
+                val msg = messages[i]
+                if (msg.attachments.isNotEmpty()) {
+                    matchedEntries.add(formatMsg(msg))
+                    if (matchedEntries.size >= 14) break
+                }
+            }
         } else if (isSummaryQuery) {
             val totalCount = messages.size
             val incomingCount = messages.count { it.direction == MessageDirection.INCOMING }
@@ -1065,6 +1133,7 @@ class AiClientEngine {
             isCodeQuery -> "Gate, Door, Wi-Fi & Security Codes"
             isFlightQuery -> "Flights, Bookings & Reservations"
             isDateCommitmentQuery -> "Dates, Deadlines & Commitments"
+            isMediaAttachmentQuery -> "Photos & Media Attachments"
             else -> "Matching Archive Records"
         }
 

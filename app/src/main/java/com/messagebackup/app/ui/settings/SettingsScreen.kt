@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -1446,109 +1447,172 @@ fun SettingsScreen(
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                OutlinedTextField(
-                                    value = geminiApiKey,
-                                    onValueChange = { prefs.setGeminiApiKey(it) },
-                                    label = { Text("Optional: Custom Gemini API Key (BYOK)") },
-                                    placeholder = { Text("Leave blank for automatic 1-Tap AI access") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
+                                var isGeminiByokExpanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(geminiApiKey.isNotBlank()) }
 
-                                // Gemini Model Dropdown / Selector
-                                Box(modifier = Modifier.fillMaxWidth()) {
-                                    OutlinedTextField(
-                                        value = geminiModel,
-                                        onValueChange = { prefs.setGeminiModel(it) },
-                                        label = {
-                                            Text(
-                                                if (detectedGeminiModels.isNotEmpty()) {
-                                                    "Gemini Model (${detectedGeminiModels.size} available — tap arrow)"
-                                                } else {
-                                                    "Gemini Model Name (★ gemini-flash-lite-latest)"
-                                                }
-                                            )
-                                        },
-                                        placeholder = { Text("gemini-flash-lite-latest") },
-                                        singleLine = true,
-                                        trailingIcon = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                if (isFetchingGeminiModels) {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier
-                                                            .size(20.dp)
-                                                            .padding(end = 4.dp),
-                                                        strokeWidth = 2.dp
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { isGeminiByokExpanded = !isGeminiByokExpanded }
+                                        .padding(vertical = 6.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Tune,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (geminiApiKey.isBlank()) "Advanced: Custom AI Studio Key (Optional)" else "Custom AI Studio Key Active",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = if (isGeminiByokExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                if (isGeminiByokExpanded) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Bring your own Google AI key:",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        TextButton(
+                                            onClick = {
+                                                try {
+                                                    val intent = android.content.Intent(
+                                                        android.content.Intent.ACTION_VIEW,
+                                                        android.net.Uri.parse("https://aistudio.google.com/app/apikey")
                                                     )
-                                                } else {
-                                                    IconButton(
-                                                        onClick = {
-                                                            if (geminiApiKey.isBlank()) {
-                                                                Toast.makeText(context, "Using 1-Tap Cloud AI automatically (enter a custom BYOK key only if you want to browse custom AI Studio models)", Toast.LENGTH_LONG).show()
-                                                            } else {
-                                                                isFetchingGeminiModels = true
-                                                                scope.launch {
-                                                                    val res = aiEngine.fetchGeminiModels(geminiApiKey)
-                                                                    isFetchingGeminiModels = false
-                                                                    res.onSuccess { models ->
-                                                                        detectedGeminiModels = models
-                                                                        showGeminiDropdown = true
-                                                                    }.onFailure { err ->
-                                                                        Toast.makeText(context, err.message ?: "Failed to fetch models", Toast.LENGTH_LONG).show()
+                                                    context.startActivity(intent)
+                                                } catch (e: Exception) {
+                                                    Toast.makeText(context, "Visit https://aistudio.google.com/app/apikey", Toast.LENGTH_LONG).show()
+                                                }
+                                            }
+                                        ) {
+                                            Text("Get Free API Key ↗", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+
+                                    OutlinedTextField(
+                                        value = geminiApiKey,
+                                        onValueChange = { prefs.setGeminiApiKey(it) },
+                                        label = { Text("Custom Gemini API Key (BYOK)") },
+                                        placeholder = { Text("Paste AI Studio key, or clear for 1-Tap AI") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    // Gemini Model Dropdown / Selector
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        OutlinedTextField(
+                                            value = geminiModel,
+                                            onValueChange = { prefs.setGeminiModel(it) },
+                                            label = {
+                                                Text(
+                                                    if (detectedGeminiModels.isNotEmpty()) {
+                                                        "Gemini Model (${detectedGeminiModels.size} available — tap arrow)"
+                                                    } else {
+                                                        "Gemini Model Name (★ gemini-flash-lite-latest)"
+                                                    }
+                                                )
+                                            },
+                                            placeholder = { Text("gemini-flash-lite-latest") },
+                                            singleLine = true,
+                                            trailingIcon = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    if (isFetchingGeminiModels) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier
+                                                                .size(20.dp)
+                                                                .padding(end = 4.dp),
+                                                            strokeWidth = 2.dp
+                                                        )
+                                                    } else {
+                                                        IconButton(
+                                                            onClick = {
+                                                                if (geminiApiKey.isBlank()) {
+                                                                    Toast.makeText(context, "Enter a custom BYOK key above to fetch models from your Google AI Studio project", Toast.LENGTH_LONG).show()
+                                                                } else {
+                                                                    isFetchingGeminiModels = true
+                                                                    scope.launch {
+                                                                        val res = aiEngine.fetchGeminiModels(geminiApiKey)
+                                                                        isFetchingGeminiModels = false
+                                                                        res.onSuccess { models ->
+                                                                            detectedGeminiModels = models
+                                                                            showGeminiDropdown = true
+                                                                        }.onFailure { err ->
+                                                                            Toast.makeText(context, err.message ?: "Failed to fetch models", Toast.LENGTH_LONG).show()
+                                                                        }
                                                                     }
                                                                 }
                                                             }
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = if (detectedGeminiModels.isNotEmpty()) Icons.Default.ArrowDropDown else Icons.Default.Refresh,
+                                                                contentDescription = "Fetch or select Gemini model",
+                                                                tint = MaterialTheme.colorScheme.primary
+                                                            )
                                                         }
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = if (detectedGeminiModels.isNotEmpty()) Icons.Default.ArrowDropDown else Icons.Default.Refresh,
-                                                            contentDescription = "Fetch or select Gemini model",
-                                                            tint = MaterialTheme.colorScheme.primary
-                                                        )
                                                     }
                                                 }
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
 
-                                    DropdownMenu(
-                                        expanded = showGeminiDropdown && detectedGeminiModels.isNotEmpty(),
-                                        onDismissRequest = { showGeminiDropdown = false },
-                                        modifier = Modifier.fillMaxWidth(0.85f)
-                                    ) {
-                                        detectedGeminiModels.forEach { modelName ->
-                                            val isSelected = modelName.equals(geminiModel, ignoreCase = true)
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Column {
-                                                        Text(
-                                                            text = modelName,
-                                                            style = MaterialTheme.typography.bodyMedium,
-                                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                                        )
+                                        DropdownMenu(
+                                            expanded = showGeminiDropdown && detectedGeminiModels.isNotEmpty(),
+                                            onDismissRequest = { showGeminiDropdown = false },
+                                            modifier = Modifier.fillMaxWidth(0.85f)
+                                        ) {
+                                            detectedGeminiModels.forEach { modelName ->
+                                                val isSelected = modelName.equals(geminiModel, ignoreCase = true)
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Column {
+                                                            Text(
+                                                                text = modelName,
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                                            )
+                                                        }
+                                                    },
+                                                    leadingIcon = if (isSelected) {
+                                                        { Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+                                                    } else null,
+                                                    onClick = {
+                                                        prefs.setGeminiModel(modelName)
+                                                        showGeminiDropdown = false
                                                     }
-                                                },
-                                                leadingIcon = if (isSelected) {
-                                                    { Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
-                                                } else null,
-                                                onClick = {
-                                                    prefs.setGeminiModel(modelName)
-                                                    showGeminiDropdown = false
-                                                }
-                                            )
+                                                )
+                                            }
                                         }
                                     }
-                                }
 
-                                Text(
-                                    text = if (geminiApiKey.isBlank()) "1-Tap Cloud AI is active automatically. Custom API key is optional." else if (detectedGeminiModels.isNotEmpty()) "Tap arrow to switch models. Recommended: Gemini Flash-Lite Latest." else "Tap refresh icon to fetch all active models available on your custom API key.",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
+                                    Text(
+                                        text = if (geminiApiKey.isBlank()) "1-Tap Cloud AI is active automatically. Custom API key is optional." else if (detectedGeminiModels.isNotEmpty()) "Tap arrow to switch models. Recommended: Gemini Flash-Lite Latest." else "Tap refresh icon to fetch all active models available on your custom API key.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                }
                             }
 
                             "OPENAI" -> {
@@ -1958,10 +2022,11 @@ Rules:
 2. Quote relevant messages verbatim with ISO/exact timestamps and verified sender phone numbers/handles.
 3. Highlight discrepancies, omissions, or unverified claims with evidentiary objectivity."""
 
-                            val trimmedPrompt = promptEditText.trim()
-                            val isConciseSelected = trimmedPrompt == concisePreset.trim() || trimmedPrompt.startsWith("You are O.D.I.N. Concise Assistant")
-                            val isForensicSelected = trimmedPrompt == forensicPreset.trim() || trimmedPrompt.startsWith("You are O.D.I.N. Forensic Archivist")
-                            val isAllfatherSelected = trimmedPrompt.isBlank() || (!isConciseSelected && !isForensicSelected)
+                            val normalizedPrompt = promptEditText.trim().replace("\r\n", "\n")
+                            val isConciseSelected = normalizedPrompt.startsWith("You are O.D.I.N. Concise")
+                            val isForensicSelected = normalizedPrompt.startsWith("You are O.D.I.N. Forensic")
+                            val isAllfatherSelected = normalizedPrompt.isBlank() || normalizedPrompt.startsWith("You are O.D.I.N. (Omniscient")
+                            val isCustomActive = !isAllfatherSelected && !isConciseSelected && !isForensicSelected
 
                             Row(
                                 modifier = Modifier
@@ -1976,16 +2041,19 @@ Rules:
                                         Toast.makeText(context, "Activated Allfather Signature Persona!", Toast.LENGTH_SHORT).show()
                                     },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isAllfatherSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                        containerColor = if (isAllfatherSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (isAllfatherSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
-                                    border = if (isAllfatherSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        width = if (isAllfatherSelected) 2.dp else 1.dp,
+                                        color = if (isAllfatherSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                    ),
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Text(
                                         text = "👑 Allfather",
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = if (isAllfatherSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isAllfatherSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                        fontWeight = if (isAllfatherSelected) FontWeight.ExtraBold else FontWeight.Medium
                                     )
                                 }
                                 Button(
@@ -1995,16 +2063,19 @@ Rules:
                                         Toast.makeText(context, "Activated Concise Persona!", Toast.LENGTH_SHORT).show()
                                     },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isConciseSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                        containerColor = if (isConciseSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (isConciseSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
-                                    border = if (isConciseSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        width = if (isConciseSelected) 2.dp else 1.dp,
+                                        color = if (isConciseSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                    ),
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Text(
                                         text = "⚡ Concise",
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = if (isConciseSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isConciseSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                        fontWeight = if (isConciseSelected) FontWeight.ExtraBold else FontWeight.Medium
                                     )
                                 }
                                 Button(
@@ -2014,18 +2085,30 @@ Rules:
                                         Toast.makeText(context, "Activated Forensic Archivist Persona!", Toast.LENGTH_SHORT).show()
                                     },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isForensicSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                        containerColor = if (isForensicSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (isForensicSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
-                                    border = if (isForensicSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        width = if (isForensicSelected) 2.dp else 1.dp,
+                                        color = if (isForensicSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                    ),
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Text(
                                         text = "⚖️ Forensic",
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = if (isForensicSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isForensicSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                        fontWeight = if (isForensicSelected) FontWeight.ExtraBold else FontWeight.Medium
                                     )
                                 }
+                            }
+
+                            if (isCustomActive) {
+                                Text(
+                                    text = "✏️ Custom System Prompt Active",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
                             }
 
                             OutlinedTextField(

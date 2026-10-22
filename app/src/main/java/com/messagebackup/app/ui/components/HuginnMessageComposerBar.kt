@@ -126,26 +126,35 @@ fun HuginnMessageComposerBar(
         }
 
         scope.launch(Dispatchers.IO) {
-            val result = aiEngine.queryOdin(
-                userPrompt = prompt,
-                messages = recentMessages.takeLast(15),
-                targetContactName = thread.displayName,
-                providerType = provider,
-                geminiApiKey = prefs.geminiApiKey.value,
-                geminiModel = prefs.geminiModel.value,
-                openaiApiKey = prefs.openaiApiKey.value,
-                openaiModel = prefs.openaiModel.value,
-                ollamaEndpoint = prefs.ollamaEndpoint.value,
-                ollamaModel = prefs.ollamaModel.value,
-                temperature = prefs.odinTemperature.value,
-                topP = prefs.odinTopP.value,
-                numCtx = prefs.odinNumCtx.value,
-                customSystemPrompt = prefs.odinCustomSystemPrompt.value,
-                context = context
-            )
+            val result = try {
+                kotlinx.coroutines.withTimeoutOrNull(25_000L) {
+                    aiEngine.queryOdin(
+                        userPrompt = prompt,
+                        messages = recentMessages.takeLast(25),
+                        targetContactName = thread.displayName,
+                        providerType = provider,
+                        geminiApiKey = prefs.geminiApiKey.value,
+                        geminiModel = prefs.geminiModel.value,
+                        openaiApiKey = prefs.openaiApiKey.value,
+                        openaiModel = prefs.openaiModel.value,
+                        ollamaEndpoint = prefs.ollamaEndpoint.value,
+                        ollamaModel = prefs.ollamaModel.value,
+                        temperature = prefs.odinTemperature.value,
+                        topP = prefs.odinTopP.value,
+                        numCtx = prefs.odinNumCtx.value,
+                        customSystemPrompt = prefs.odinCustomSystemPrompt.value,
+                        context = context
+                    )
+                } ?: AiQueryResult.Error("O.D.I.N. draft suggestion timed out.")
+            } catch (e: Exception) {
+                AiQueryResult.Error("O.D.I.N. encountered an error: ${e.localizedMessage ?: "Unknown error"}")
+            } finally {
+                withContext(Dispatchers.Main) {
+                    isThinking = false
+                }
+            }
 
             withContext(Dispatchers.Main) {
-                isThinking = false
                 when (result) {
                     is AiQueryResult.Success -> {
                         if (!isAdsRemoved) {
