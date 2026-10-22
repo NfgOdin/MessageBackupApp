@@ -136,6 +136,34 @@ fun MessageCopilotScreen(
     val odinNumCtx by prefs.odinNumCtx.collectAsState()
     val customSystemPrompt by prefs.odinCustomSystemPrompt.collectAsState()
     val odinSaveHistory by prefs.odinSaveHistory.collectAsState()
+    val googleAccountEmail by prefs.googleAccountEmail.collectAsState()
+
+    val targetThread = remember(threads, targetContactName) {
+        if (targetContactName == "All Conversations" || targetContactName.isBlank()) null
+        else threads.firstOrNull { it.displayName == targetContactName || it.address == targetContactName }
+    }
+
+    var fullThreadMessages by remember(targetThread?.threadId) { mutableStateOf<List<MessageItem>>(emptyList()) }
+
+    LaunchedEffect(targetThread?.threadId) {
+        val tid = targetThread?.threadId ?: return@LaunchedEffect
+        val loaded = withContext(Dispatchers.IO) {
+            try {
+                com.messagebackup.app.MessageBackupApp.instance.currentTelephonyRepository.getMessagesForThread(
+                    threadId = tid,
+                    resolveContacts = false,
+                    limit = null
+                )
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+        if (loaded.isNotEmpty()) {
+            fullThreadMessages = loaded
+        }
+    }
+
+    val effectiveMessages = if (fullThreadMessages.size > currentMessages.size) fullThreadMessages else currentMessages
 
     val threadKey = remember(targetContactName) {
         if (targetContactName == "All Conversations" || targetContactName.isBlank()) {
@@ -162,6 +190,7 @@ fun MessageCopilotScreen(
     var showGuideDialog by remember { mutableStateOf(false) }
     var showArcadeDialog by remember { mutableStateOf(false) }
     var showRadarDialog by remember { mutableStateOf(false) }
+    var showProviderQuickMenu by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
     var isThinking by remember { mutableStateOf(false) }
 
@@ -222,25 +251,49 @@ fun MessageCopilotScreen(
         isThinking = true
 
         scope.launch {
-            val result = aiEngine.queryOdin(
-                userPrompt = trimmed,
-                messages = currentMessages,
-                targetContactName = targetContactName,
-                providerType = currentProvider,
-                geminiApiKey = geminiKey,
-                geminiModel = geminiModel,
-                openaiApiKey = openaiKey,
-                openaiModel = openaiModel,
-                ollamaEndpoint = ollamaUrl,
-                ollamaModel = ollamaModel,
-                temperature = odinTemperature,
-                topP = odinTopP,
-                numCtx = odinNumCtx,
-                customSystemPrompt = customSystemPrompt,
-                context = context
-            )
+            val result = try {
+                // Ensure messages are loaded if the user tapped a prompt while background indexing was still running
+                val messagesToAnalyze = if (effectiveMessages.isNotEmpty()) {
+                    effectiveMessages
+                } else {
+                    withContext(Dispatchers.IO) {
+                        val repo = com.messagebackup.app.MessageBackupApp.instance.currentTelephonyRepository
+                        if (targetThread != null) {
+                            repo.getMessagesForThread(targetThread.threadId, resolveContacts = false, limit = null)
+                        } else {
+                            repo.getRecentMessagesAcrossConversations(
+                                maxMessages = 400,
+                                resolveContacts = prefs.resolveContacts.value
+                            )
+                        }
+                    }
+                }
 
-            isThinking = false
+                kotlinx.coroutines.withTimeoutOrNull(32_000L) {
+                    aiEngine.queryOdin(
+                        userPrompt = trimmed,
+                        messages = messagesToAnalyze,
+                        targetContactName = targetContactName,
+                        providerType = currentProvider,
+                        geminiApiKey = geminiKey,
+                        geminiModel = geminiModel,
+                        openaiApiKey = openaiKey,
+                        openaiModel = openaiModel,
+                        ollamaEndpoint = ollamaUrl,
+                        ollamaModel = ollamaModel,
+                        temperature = odinTemperature,
+                        topP = odinTopP,
+                        numCtx = odinNumCtx,
+                        customSystemPrompt = customSystemPrompt,
+                        context = context
+                    )
+                } ?: AiQueryResult.Error("O.D.I.N. query timed out. Please try again or switch AI mode in the top bar.")
+            } catch (e: Exception) {
+                AiQueryResult.Error("O.D.I.N. encountered an unexpected error: ${e.localizedMessage ?: "Unknown error"}")
+            } finally {
+                isThinking = false
+            }
+
             when (result) {
                 is AiQueryResult.Success -> {
                     // Only consume the credit when a successful answer is actually delivered!
@@ -269,16 +322,6 @@ fun MessageCopilotScreen(
         val trimmed = promptText.trim()
         if (trimmed.isBlank() || isThinking) return
 
-        if (isLoadingMessages) {
-            Toast.makeText(context, "Indexing conversations, please wait a moment...", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (currentMessages.isEmpty()) {
-            Toast.makeText(context, "No messages available to analyze in this conversation archive.", Toast.LENGTH_LONG).show()
-            return
-        }
-
         // Credit check for free users
         if (!isOdinUnlimited && aiCredits <= 0) {
             Toast.makeText(context, "Out of Othala AI credits! Watch an ad or sacrifice an eye for knowledge.", Toast.LENGTH_SHORT).show()
@@ -305,8 +348,8 @@ fun MessageCopilotScreen(
 
     var initialPromptHandled by remember { mutableStateOf(false) }
 
-    LaunchedEffect(initialPrompt, isLoadingMessages, currentMessages.size) {
-        if (!initialPrompt.isNullOrBlank() && !initialPromptHandled && !isLoadingMessages && currentMessages.isNotEmpty()) {
+    LaunchedEffect(initialPrompt, isLoadingMessages, effectiveMessages.size) {
+        if (!initialPrompt.isNullOrBlank() && !initialPromptHandled && !isLoadingMessages && effectiveMessages.isNotEmpty()) {
             initialPromptHandled = true
             sendPrompt(initialPrompt)
         }
@@ -328,26 +371,82 @@ fun MessageCopilotScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = when (currentProvider) {
-                                        AiProviderType.ON_DEVICE_NANO -> "NANO (ON-DEVICE)"
-                                        AiProviderType.OPENAI -> "OPENAI"
-                                        AiProviderType.OLLAMA -> "OLLAMA"
-                                        AiProviderType.GEMINI -> "GEMINI"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    fontWeight = FontWeight.Bold,
-                                    softWrap = false,
-                                    maxLines = 1,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
+                            Box {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(4.dp),
+                                    modifier = Modifier.clickable { showProviderQuickMenu = true }
+                                ) {
+                                    Text(
+                                        text = when (currentProvider) {
+                                            AiProviderType.ON_DEVICE_NANO -> "⚡ ON-DEVICE AI ▾"
+                                            AiProviderType.OPENAI -> "☁️ OPENAI ▾"
+                                            AiProviderType.OLLAMA -> "🔒 OLLAMA ▾"
+                                            AiProviderType.GEMINI -> if (geminiKey.isBlank()) "☁️ GEMINI (1-TAP) ▾" else "☁️ GEMINI (BYOK) ▾"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        fontWeight = FontWeight.Bold,
+                                        softWrap = false,
+                                        maxLines = 1,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showProviderQuickMenu,
+                                    onDismissRequest = { showProviderQuickMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text("☁️ Google Gemini (1-Tap Cloud AI)", fontWeight = FontWeight.Bold)
+                                                Text("Works immediately • No API key needed", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        },
+                                        onClick = {
+                                            prefs.setAiProvider("GEMINI")
+                                            showProviderQuickMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text("⚡ On-Device AI (Gemini Nano / Local)", fontWeight = FontWeight.Bold)
+                                                Text("100% Private on-device • Works offline", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        },
+                                        onClick = {
+                                            prefs.setAiProvider("ON_DEVICE_NANO")
+                                            showProviderQuickMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text("🧠 OpenAI ChatGPT (BYOK)", fontWeight = FontWeight.Bold)
+                                                Text("Uses personal OpenAI API key", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        },
+                                        onClick = {
+                                            prefs.setAiProvider("OPENAI")
+                                            showProviderQuickMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text("🔒 Local / Self-Hosted (Ollama)", fontWeight = FontWeight.Bold)
+                                                Text("Private LAN / Tailscale host", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        },
+                                        onClick = {
+                                            prefs.setAiProvider("OLLAMA")
+                                            showProviderQuickMenu = false
+                                        }
+                                    )
+                                }
                             }
-                            if (isLoadingMessages) {
+                            if (isLoadingMessages && effectiveMessages.isEmpty()) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(12.dp),
                                     strokeWidth = 1.5.dp,
@@ -362,7 +461,7 @@ fun MessageCopilotScreen(
                                 )
                             } else {
                                 Text(
-                                    text = "• $targetContactName (${currentMessages.size} msgs)",
+                                    text = "• $targetContactName (${effectiveMessages.size} msgs)",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -538,10 +637,16 @@ fun MessageCopilotScreen(
             ) {
                 Text(
                     text = when (currentProvider) {
-                        AiProviderType.ON_DEVICE_NANO -> "⚡ On-Device NPU Mode: 100% Private, hardware accelerated, zero data leaves this device"
+                        AiProviderType.ON_DEVICE_NANO -> "⚡ On-Device AI Mode: 100% Private, hardware-accelerated & instant, zero data leaves this device"
                         AiProviderType.OLLAMA -> "🔒 Local Privacy Mode: Queries stay on your private local network ($ollamaUrl)"
                         AiProviderType.OPENAI -> "☁️ OpenAI ChatGPT Mode (BYOK): Queries use your personal API key ($openaiModel)"
-                        AiProviderType.GEMINI -> "☁️ Google Gemini Mode (BYOK): Queries use your personal API key ($geminiModel)"
+                        AiProviderType.GEMINI -> if (geminiKey.isBlank() && googleAccountEmail.isNotBlank()) {
+                            "✅ Google Account Linked ($googleAccountEmail): 1-Tap Cloud AI Active (No API Key Needed)"
+                        } else if (geminiKey.isBlank()) {
+                            "☁️ 1-Tap Cloud AI Active: Ready to answer (Sign in with Google or add optional BYOK key in Settings)"
+                        } else {
+                            "☁️ Google Gemini Mode (BYOK): Queries use your personal API key ($geminiModel)"
+                        }
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -549,7 +654,7 @@ fun MessageCopilotScreen(
                 )
             }
 
-            if (isLoadingMessages) {
+            if (isLoadingMessages && effectiveMessages.isEmpty()) {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -672,7 +777,7 @@ fun MessageCopilotScreen(
 
     if (showRadarDialog) {
         com.messagebackup.app.ui.dialogs.CommitmentRadarDialog(
-            messages = currentMessages,
+            messages = effectiveMessages,
             contactName = targetContactName,
             onDismiss = { showRadarDialog = false }
         )

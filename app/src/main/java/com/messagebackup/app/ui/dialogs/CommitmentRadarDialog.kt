@@ -97,13 +97,15 @@ fun CommitmentRadarDialog(
     val context = LocalContext.current
     val radarEngine = remember { CommitmentRadarEngine() }
     val commitments = remember { mutableStateListOf<DetectedCommitment>() }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: By Me, 1: By Them, 2: Completed
+    var selectedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) } // 0: By Me, 1: By Them, 2: Completed
     var selectedCategory by remember { mutableStateOf<CommitmentCategory?>(null) }
     var isScanning by remember { mutableStateOf(true) }
 
     LaunchedEffect(messages.size) {
         isScanning = true
-        val detected = radarEngine.scanLocalCommitments(messages, contactName)
+        val detected = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            radarEngine.scanLocalCommitments(messages, contactName)
+        }
         commitments.clear()
         commitments.addAll(detected)
         isScanning = false

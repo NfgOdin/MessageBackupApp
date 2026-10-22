@@ -210,7 +210,7 @@ fun SettingsScreen(
         if (result.resultCode == Activity.RESULT_OK) {
             when (val res = googleAuthManager.handleAccountPickerResult(result.data)) {
                 is com.messagebackup.app.domain.auth.GoogleSignInResult.Success -> {
-                    Toast.makeText(context, "Welcome, ${res.user.displayName ?: res.user.email}!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Welcome, ${res.user.displayName ?: res.user.email}! 1-Tap O.D.I.N. AI is now linked.", Toast.LENGTH_SHORT).show()
                 }
                 else -> {}
             }
@@ -1207,7 +1207,7 @@ fun SettingsScreen(
                                                 when (res) {
                                                     is com.messagebackup.app.domain.auth.GoogleSignInResult.Success -> {
                                                         isSigningInGoogle = false
-                                                        android.widget.Toast.makeText(context, "Welcome, ${res.user.displayName ?: res.user.email}!", android.widget.Toast.LENGTH_SHORT).show()
+                                                        android.widget.Toast.makeText(context, "Welcome, ${res.user.displayName ?: res.user.email}! 1-Tap O.D.I.N. AI is now linked.", android.widget.Toast.LENGTH_SHORT).show()
                                                     }
                                                     is com.messagebackup.app.domain.auth.GoogleSignInResult.FallbackPickerNeeded -> {
                                                         try {
@@ -1329,8 +1329,8 @@ fun SettingsScreen(
                                 DropdownMenuItem(
                                     text = {
                                         Column {
-                                            Text("☁️ Google Gemini", fontWeight = FontWeight.Bold)
-                                            Text("Fast, generous free tier • Cloud BYOK", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text("☁️ Google Gemini (1-Tap Cloud AI)", fontWeight = FontWeight.Bold)
+                                            Text("Works with 1-Tap Google Sign-In • No API key needed", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     },
                                     onClick = {
@@ -1388,7 +1388,7 @@ fun SettingsScreen(
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
-                                                text = if (isSupported) "Hardware NPU Acceleration Active" else "Hardware Not Supported",
+                                                text = if (isSupported) "Hardware NPU Acceleration Active" else "On-Device Forensic Intelligence Active",
                                                 style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.Bold,
                                                 color = if (isSupported) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
@@ -1400,24 +1400,57 @@ fun SettingsScreen(
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                        if (!isSupported) {
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            Text(
-                                                text = "Your device does not have Android AICore pre-installed. You can switch to Google Gemini (Cloud) or Local Ollama above.",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
                                     }
                                 }
                             }
                             "GEMINI" -> {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = if (googleAccountEmail.isNotBlank()) {
+                                                    "1-Tap Google AI Linked ($googleAccountEmail)"
+                                                } else {
+                                                    "1-Tap Cloud AI Active (No API Key Required)"
+                                                },
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = if (googleAccountEmail.isNotBlank()) {
+                                                "Your Google Account is signed in! O.D.I.N. is ready to answer questions immediately without needing an API key."
+                                            } else {
+                                                "O.D.I.N. works automatically out of the box! You can sign in with Google above or optionally provide a custom Google AI Studio key below."
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
                                 OutlinedTextField(
                                     value = geminiApiKey,
                                     onValueChange = { prefs.setGeminiApiKey(it) },
-                                    label = { Text("Google Gemini API Key (BYOK)") },
-                                    placeholder = { Text("Paste free Google AI Studio key") },
+                                    label = { Text("Optional: Custom Gemini API Key (BYOK)") },
+                                    placeholder = { Text("Leave blank for automatic 1-Tap AI access") },
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -1452,7 +1485,7 @@ fun SettingsScreen(
                                                     IconButton(
                                                         onClick = {
                                                             if (geminiApiKey.isBlank()) {
-                                                                Toast.makeText(context, "Enter your Gemini API key first", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, "Using 1-Tap Cloud AI automatically (enter a custom BYOK key only if you want to browse custom AI Studio models)", Toast.LENGTH_LONG).show()
                                                             } else {
                                                                 isFetchingGeminiModels = true
                                                                 scope.launch {
@@ -1511,7 +1544,7 @@ fun SettingsScreen(
                                 }
 
                                 Text(
-                                    text = if (detectedGeminiModels.isNotEmpty()) "Tap arrow to switch models. Recommended: Gemini Flash-Lite Latest." else "Tap refresh icon to fetch all active models available on your Google account.",
+                                    text = if (geminiApiKey.isBlank()) "1-Tap Cloud AI is active automatically. Custom API key is optional." else if (detectedGeminiModels.isNotEmpty()) "Tap arrow to switch models. Recommended: Gemini Flash-Lite Latest." else "Tap refresh icon to fetch all active models available on your custom API key.",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 4.dp)

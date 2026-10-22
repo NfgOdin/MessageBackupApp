@@ -269,7 +269,7 @@ class TelephonyRepositoryImpl(
                 projection,
                 null,
                 null,
-                "${Telephony.Sms.DATE} DESC LIMIT $maxMessages"
+                "${Telephony.Sms.DATE} DESC"
             )?.use { cursor ->
                 val idIdx = cursor.getColumnIndexOrThrow(Telephony.Sms._ID)
                 val threadIdIdx = cursor.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
@@ -278,7 +278,9 @@ class TelephonyRepositoryImpl(
                 val dateIdx = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
                 val typeIdx = cursor.getColumnIndexOrThrow(Telephony.Sms.TYPE)
 
-                while (cursor.moveToNext()) {
+                var count = 0
+                while (cursor.moveToNext() && count < maxMessages) {
+                    count++
                     val msgId = cursor.getLong(idIdx)
                     val tId = cursor.getLong(threadIdIdx)
                     val rawAddress = cursor.getString(addressIdx) ?: ""
@@ -323,20 +325,22 @@ class TelephonyRepositoryImpl(
                 Telephony.Mms.DATE,
                 Telephony.Mms.MESSAGE_BOX
             )
-            val mmsLimit = maxMessages / 2
+            val mmsLimit = minOf(maxMessages / 4, 25).coerceAtLeast(10)
             contentResolver.query(
                 Telephony.Mms.CONTENT_URI,
                 projection,
                 null,
                 null,
-                "${Telephony.Mms.DATE} DESC LIMIT $mmsLimit"
+                "${Telephony.Mms.DATE} DESC"
             )?.use { cursor ->
                 val idIdx = cursor.getColumnIndexOrThrow(Telephony.Mms._ID)
                 val threadIdIdx = cursor.getColumnIndexOrThrow(Telephony.Mms.THREAD_ID)
                 val dateIdx = cursor.getColumnIndexOrThrow(Telephony.Mms.DATE)
                 val msgBoxIdx = cursor.getColumnIndexOrThrow(Telephony.Mms.MESSAGE_BOX)
 
-                while (cursor.moveToNext()) {
+                var count = 0
+                while (cursor.moveToNext() && count < mmsLimit) {
+                    count++
                     val mmsId = cursor.getLong(idIdx)
                     val tId = cursor.getLong(threadIdIdx)
                     val rawDate = cursor.getLong(dateIdx)
@@ -426,7 +430,7 @@ class TelephonyRepositoryImpl(
         }
 
         val sortOrder = if (limit != null) {
-            "${Telephony.Sms.DATE} DESC LIMIT $limit"
+            "${Telephony.Sms.DATE} DESC"
         } else {
             "${Telephony.Sms.DATE} ASC"
         }
@@ -449,7 +453,9 @@ class TelephonyRepositoryImpl(
                 val dateIdx = it.getColumnIndexOrThrow(Telephony.Sms.DATE)
                 val typeIdx = it.getColumnIndexOrThrow(Telephony.Sms.TYPE)
 
-                while (it.moveToNext()) {
+                var count = 0
+                while (it.moveToNext() && (limit == null || count < limit)) {
+                    count++
                     val msgId = it.getLong(idIdx)
                     val tId = it.getLong(threadIdIdx)
                     val rawAddress = it.getString(addressIdx) ?: "Unknown"
@@ -514,7 +520,7 @@ class TelephonyRepositoryImpl(
         }
 
         val sortOrder = if (limit != null) {
-            "${Telephony.Mms.DATE} DESC LIMIT $limit"
+            "${Telephony.Mms.DATE} DESC"
         } else {
             "${Telephony.Mms.DATE} ASC"
         }
@@ -535,7 +541,9 @@ class TelephonyRepositoryImpl(
                 val dateIdx = it.getColumnIndexOrThrow(Telephony.Mms.DATE)
                 val msgBoxIdx = it.getColumnIndexOrThrow(Telephony.Mms.MESSAGE_BOX)
 
-                while (it.moveToNext()) {
+                var count = 0
+                while (it.moveToNext() && (limit == null || count < limit)) {
+                    count++
                     val mmsId = it.getLong(idIdx)
                     val tId = it.getLong(tIdIdx)
                     // Telephony.Mms.DATE is stored in seconds rather than milliseconds
@@ -732,7 +740,7 @@ class TelephonyRepositoryImpl(
                 arrayOf(Telephony.Sms.ADDRESS),
                 "${Telephony.Sms.THREAD_ID} = ?",
                 arrayOf(threadId.toString()),
-                "${Telephony.Sms.DATE} DESC LIMIT 1"
+                "${Telephony.Sms.DATE} DESC"
             )
             if (cursor != null && cursor.moveToFirst()) {
                 val addressIdx = cursor.getColumnIndex(Telephony.Sms.ADDRESS)

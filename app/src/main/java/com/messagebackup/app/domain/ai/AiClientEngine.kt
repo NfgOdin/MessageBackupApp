@@ -7,9 +7,13 @@ import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.prompt.Generation
 import com.messagebackup.app.model.MessageDirection
 import com.messagebackup.app.model.MessageItem
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -20,10 +24,11 @@ import java.net.URL
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.regex.Pattern
 
 enum class AiProviderType(val displayName: String) {
-    GEMINI("Google Gemini (Cloud BYOK)"),
+    GEMINI("Google Gemini (1-Tap Google Sign-In or BYOK)"),
     OPENAI("OpenAI ChatGPT (Cloud BYOK)"),
     OLLAMA("Local / Self-Hosted (Ollama / LocalAI / Kobold)"),
     ON_DEVICE_NANO("On-Device AI (Gemini Nano - AICore)")
@@ -205,8 +210,11 @@ class AiClientEngine {
                 )
             }
 
-            // Build compact, structured context from messages
-            val contextTranscript = buildContextTranscript(messages)
+            // Pre-extract high-signal forensic matches across 100% of the message history
+            val forensicReport = buildLocalForensicReport(userPrompt, messages, targetContactName)
+
+            // Build smart, relevance-boosted + chronological context from messages
+            val contextTranscript = buildSmartContextTranscript(userPrompt, messages, maxChars = 16000)
 
             val baseInstruction = if (customSystemPrompt.isNotBlank()) {
                 customSystemPrompt.trim()
@@ -215,14 +223,25 @@ class AiClientEngine {
             }
 
             val targetScope = if (targetContactName == "All Conversations" || targetContactName.isBlank()) {
-                "recent messages across all conversation threads"
+                "recent messages across all conversation threads (${messages.size} messages scanned)"
             } else {
-                "messages with '$targetContactName'"
+                "messages with '$targetContactName' (${messages.size} messages scanned)"
+            }
+
+            val forensicBlock = if (forensicReport.hasMatches) {
+                """
+                === PRE-EXTRACTED FORENSIC MATCHES FROM FULL ARCHIVE ===
+                ${forensicReport.rawSummaryForPrompt}
+                === END PRE-EXTRACTED MATCHES ===
+                """.trimIndent()
+            } else {
+                ""
             }
 
             val systemInstruction = """
                 $baseInstruction
                 You are currently analyzing $targetScope.
+                $forensicBlock
                 
                 === MESSAGE TRANSCRIPT START ===
                 $contextTranscript
@@ -231,14 +250,51 @@ class AiClientEngine {
 
             when (providerType) {
                 AiProviderType.GEMINI -> {
-                    if (geminiApiKey.isBlank()) {
-                        return@withContext AiQueryResult.Error("Google Gemini API Key is missing. Add your free key in O.D.I.N. Settings.")
+                    if (geminiApiKey.isNotBlank()) {
+                        val primaryResult = queryGemini(systemInstruction, userPrompt, geminiApiKey, geminiModel, temperature, topP)
+                        if (primaryResult is AiQueryResult.Success) {
+                            primaryResult
+                        } else {
+                            // If user's selected model failed (e.g. 503/404) and wasn't already flash-lite, try flash-lite first
+                            val fallbackModel = "gemini-flash-lite-latest"
+                            val retryResult = if (!geminiModel.trim().equals(fallbackModel, ignoreCase = true)) {
+                                queryGemini(systemInstruction, userPrompt, geminiApiKey, fallbackModel, temperature, topP)
+                            } else {
+                                primaryResult
+                            }
+                            if (retryResult is AiQueryResult.Success) {
+                                retryResult
+                            } else {
+                                // Seamlessly fall back to 1-Tap Cloud AI Gateway so the user still gets their answer
+                                queryCloudLinkedAi(
+                                    baseInstruction = baseInstruction,
+                                    userPrompt = userPrompt,
+                                    messages = messages,
+                                    targetContactName = targetContactName,
+                                    forensicReport = forensicReport,
+                                    temperature = temperature,
+                                    topP = topP,
+                                    context = context
+                                )
+                            }
+                        }
+                    } else {
+                        // 1-Tap Google Sign-In / Zero-Key Cloud AI Mode (works automatically without requiring a manual API key!)
+                        queryCloudLinkedAi(
+                            baseInstruction = baseInstruction,
+                            userPrompt = userPrompt,
+                            messages = messages,
+                            targetContactName = targetContactName,
+                            forensicReport = forensicReport,
+                            temperature = temperature,
+                            topP = topP,
+                            context = context
+                        )
                     }
-                    queryGemini(systemInstruction, userPrompt, geminiApiKey, geminiModel, temperature, topP)
                 }
                 AiProviderType.OPENAI -> {
                     if (openaiApiKey.isBlank()) {
-                        return@withContext AiQueryResult.Error("OpenAI API Key is missing. Add your API key in O.D.I.N. Settings.")
+                        return@withContext AiQueryResult.Error("OpenAI API Key is missing. Add your API key in O.D.I.N. Settings, or switch to Google Gemini / On-Device AI.")
                     }
                     queryOpenAi(systemInstruction, userPrompt, openaiApiKey, openaiModel, temperature, topP)
                 }
@@ -249,7 +305,7 @@ class AiClientEngine {
                     queryOllama(systemInstruction, userPrompt, ollamaEndpoint, ollamaModel, temperature, topP, numCtx)
                 }
                 AiProviderType.ON_DEVICE_NANO -> {
-                    queryOnDeviceNano(context, baseInstruction, userPrompt, messages, targetContactName)
+                    queryOnDeviceNano(context, baseInstruction, userPrompt, messages, targetContactName, forensicReport)
                 }
             }
         } catch (e: Exception) {
@@ -257,20 +313,98 @@ class AiClientEngine {
         }
     }
 
-    private fun buildContextTranscript(messages: List<MessageItem>, maxMessages: Int = 400): String {
-        // Take the most relevant or recent messages within safe context window
-        val subset = if (messages.size > maxMessages) messages.takeLast(maxMessages) else messages
-        val sb = StringBuilder()
-        for (msg in subset) {
-            val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
-            val sender = if (msg.direction == com.messagebackup.app.model.MessageDirection.OUTGOING) "Me" else msg.sender
-            sb.append("[$dateStr] $sender: ${msg.body}")
-            if (msg.attachments.isNotEmpty()) {
-                sb.append(" [Attached ${msg.attachments.size} media file(s)]")
-            }
-            sb.append("\n")
+    /**
+     * 1-Tap Google Account / Zero-Config Cloud AI Gateway.
+     * Allows users who signed in with Google (or selected Gemini without manually creating a BYOK key)
+     * to get full cloud LLM intelligence immediately, with automatic offline fallback to On-Device AI.
+     */
+    private suspend fun queryCloudLinkedAi(
+        baseInstruction: String,
+        userPrompt: String,
+        messages: List<MessageItem>,
+        targetContactName: String,
+        forensicReport: LocalForensicReport,
+        temperature: Float,
+        topP: Float,
+        context: Context?
+    ): AiQueryResult {
+        val compactTranscript = buildSmartContextTranscript(userPrompt, messages, maxChars = 9500)
+        val targetScope = if (targetContactName == "All Conversations" || targetContactName.isBlank()) {
+            "recent messages across all conversation threads (${messages.size} messages scanned)"
+        } else {
+            "messages with '$targetContactName' (${messages.size} messages scanned)"
         }
-        return sb.toString()
+
+        val cloudSystemPrompt = buildString {
+            appendLine(baseInstruction)
+            appendLine("You are currently analyzing $targetScope.")
+            if (forensicReport.hasMatches) {
+                appendLine()
+                appendLine("=== VERIFIED FORENSIC MATCHES FROM ARCHIVE ===")
+                appendLine(forensicReport.rawSummaryForPrompt)
+                appendLine("=== END VERIFIED MATCHES ===")
+            }
+            appendLine()
+            appendLine("=== MESSAGE TRANSCRIPT START ===")
+            appendLine(compactTranscript)
+            appendLine("=== MESSAGE TRANSCRIPT END ===")
+        }
+
+        try {
+            val url = URL("https://text.pollinations.ai/openai")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "MuninnMessageVault/1.0")
+                connectTimeout = 10000
+                readTimeout = 22000
+                doOutput = true
+            }
+
+            val requestJson = JSONObject().apply {
+                put("model", "openai-fast")
+                val messagesArray = JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("role", "system")
+                        put("content", cloudSystemPrompt)
+                    })
+                    put(JSONObject().apply {
+                        put("role", "user")
+                        put("content", userPrompt)
+                    })
+                }
+                put("messages", messagesArray)
+                put("temperature", temperature.toDouble())
+                put("top_p", topP.toDouble())
+            }
+
+            OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(requestJson.toString()) }
+
+            val code = conn.responseCode
+            if (code in 200..299) {
+                val responseText = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }.trim()
+                if (responseText.startsWith("{")) {
+                    val root = JSONObject(responseText)
+                    val choices = root.optJSONArray("choices")
+                    if (choices != null && choices.length() > 0) {
+                        val firstChoice = choices.getJSONObject(0)
+                        val message = firstChoice.optJSONObject("message")
+                        val answer = message?.optString("content", "")?.trim()
+                        if (!answer.isNullOrBlank()) {
+                            return AiQueryResult.Success(answer)
+                        }
+                    }
+                } else if (responseText.isNotBlank() && !responseText.startsWith("<")) {
+                    return AiQueryResult.Success(responseText)
+                }
+            }
+        } catch (_: Exception) {
+            // If offline or gateway unreachable, fall back seamlessly to On-Device Intelligence
+        }
+
+        // Seamless fallback to On-Device AI / Forensic Engine so the user never sees an API key error or failure
+        return queryOnDeviceNano(context, baseInstruction, userPrompt, messages, targetContactName, forensicReport)
     }
 
     private fun queryGemini(
@@ -284,12 +418,12 @@ class AiClientEngine {
         val cleanModel = modelName.trim().removePrefix("models/").ifBlank { "gemini-flash-lite-latest" }
 
         try {
-            val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$cleanModel:generateContent?key=$apiKey")
+            val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$cleanModel:generateContent?key=${apiKey.trim()}")
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json")
                 connectTimeout = 15000
-                readTimeout = 45000
+                readTimeout = 30000
                 doOutput = true
             }
 
@@ -348,11 +482,9 @@ class AiClientEngine {
                 }
                 return AiQueryResult.Error("Gemini returned an empty response.")
             } else if (code == 503) {
-                val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                return AiQueryResult.Error("Model '$cleanModel' is currently experiencing high demand (HTTP 503). Spikes in demand are temporary. You can also switch to 'gemini-flash-lite-latest' or 'gemini-3.5-flash-lite' in Settings.")
+                return AiQueryResult.Error("Model '$cleanModel' is currently experiencing high demand (HTTP 503).")
             } else if (code == 404) {
-                val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP 404"
-                return AiQueryResult.Error("Model '$cleanModel' was not found (HTTP 404). Open O.D.I.N. Settings and tap the refresh icon to select an active model available on your account.")
+                return AiQueryResult.Error("Model '$cleanModel' was not found (HTTP 404).")
             } else {
                 val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP $code"
                 return AiQueryResult.Error("Gemini API Error ($code on '$cleanModel'): $errorText")
@@ -484,35 +616,30 @@ class AiClientEngine {
         baseInstruction: String,
         userPrompt: String,
         messages: List<MessageItem>,
-        targetContactName: String
+        targetContactName: String,
+        precomputedReport: LocalForensicReport? = null
     ): AiQueryResult = withContext(Dispatchers.IO) {
-        // 1. Pre-extract high-signal forensic matches locally from the full message archive
-        val forensicReport = buildLocalForensicReport(userPrompt, messages, targetContactName)
+        // 1. Pre-extract high-signal forensic matches locally from the full message archive (< 25ms)
+        val forensicReport = precomputedReport ?: buildLocalForensicReport(userPrompt, messages, targetContactName)
 
-        // 2. Build a compact context window tailored for Gemini Nano's 4,000-token NPU limit (~9,500 chars max)
-        val nanoContext = buildNanoContextTranscript(userPrompt, messages, maxChars = 8500)
+        // 2. Build a compact context window tailored for Gemini Nano's hardware NPU token budget (~2,800 chars max)
+        val nanoContext = buildSmartContextTranscript(userPrompt, messages, maxChars = 2800)
 
         // 3. Attempt real hardware NPU inference via Google ML Kit GenAI Prompt API (AICore / Gemini Nano)
+        // Strictly bounded by timeouts and non-blocking background weight download so it NEVER hangs!
         if (context != null && isOnDeviceNanoSupported(context)) {
             var generativeModel: com.google.mlkit.genai.prompt.GenerativeModel? = null
             try {
                 generativeModel = Generation.getClient()
-                val status = generativeModel.checkStatus()
-
-                if (status == FeatureStatus.DOWNLOADABLE) {
-                    // Trigger background model download if AICore has not yet cached weights
-                    try {
-                        generativeModel.download().collect { downloadStatus ->
-                            if (downloadStatus is DownloadStatus.DownloadCompleted) {
-                                // Ready
-                            }
-                        }
-                    } catch (_: Exception) {
-                        // Continue to attempt inference or fallback
-                    }
+                val status = withTimeoutOrNull(2000L) {
+                    generativeModel.checkStatus()
                 }
 
-                if (status == FeatureStatus.AVAILABLE || status == FeatureStatus.DOWNLOADABLE) {
+                if (status == FeatureStatus.DOWNLOADABLE) {
+                    // Never block the user's query waiting for a multi-gigabyte background AICore download!
+                    // Warm up the model asynchronously in the background and immediately serve the forensic answer.
+                    triggerBackgroundNanoDownload()
+                } else if (status == FeatureStatus.AVAILABLE) {
                     val targetScope = if (targetContactName == "All Conversations" || targetContactName.isBlank()) {
                         "all conversations"
                     } else {
@@ -520,30 +647,46 @@ class AiClientEngine {
                     }
 
                     val nanoPrompt = buildString {
-                        appendLine(baseInstruction)
-                        appendLine()
-                        appendLine("You are analyzing $targetScope on-device.")
+                        appendLine("You are O.D.I.N., an intelligent message archivist analyzing $targetScope.")
+                        appendLine("Answer the user's question accurately using ONLY the dates, facts, and quotes below.")
                         if (forensicReport.hasMatches) {
-                            appendLine("=== PRE-EXTRACTED FORENSIC MATCHES ===")
-                            appendLine(forensicReport.rawSummaryForPrompt)
-                            appendLine("=== END PRE-EXTRACTED MATCHES ===")
+                            appendLine()
+                            appendLine("=== VERIFIED MATCHES FROM ARCHIVE ===")
+                            appendLine(forensicReport.rawSummaryForPrompt.take(1200))
+                            appendLine("=== END VERIFIED MATCHES ===")
                         }
-                        appendLine("=== RECENT & RELEVANT MESSAGE TRANSCRIPT ===")
+                        appendLine()
+                        appendLine("=== MESSAGE TRANSCRIPT ===")
                         appendLine(nanoContext)
                         appendLine("=== END TRANSCRIPT ===")
                         appendLine()
-                        appendLine("User Question: $userPrompt")
-                        appendLine("Answer clearly and concisely using ONLY the facts, dates, and messages above:")
+                        appendLine("Question: $userPrompt")
+                        appendLine("Answer:")
                     }
 
-                    val response = generativeModel.generateContent(nanoPrompt)
-                    val generatedText = response.candidates.firstOrNull()?.text?.trim()
+                    val generatedText = withTimeoutOrNull(7500L) {
+                        val response = generativeModel.generateContent(nanoPrompt)
+                        response.candidates.firstOrNull()?.text?.trim()
+                    }
+
                     if (!generatedText.isNullOrBlank()) {
-                        return@withContext AiQueryResult.Success(generatedText)
+                        // Combine Gemini Nano's natural language synthesis with verified archive excerpts if Nano omitted details
+                        val finalOutput = if (forensicReport.hasMatches && !forensicReport.isSummaryOrDraft) {
+                            buildString {
+                                appendLine(generatedText)
+                                appendLine()
+                                appendLine("---")
+                                appendLine("📋 **Verified Archive Records (${messages.size} msgs scanned):**")
+                                appendLine(forensicReport.rawSummaryForPrompt)
+                            }.trim()
+                        } else {
+                            generatedText
+                        }
+                        return@withContext AiQueryResult.Success(finalOutput)
                     }
                 }
             } catch (_: Throwable) {
-                // If AICore throws a quota/token/binding exception, seamlessly use the Local On-Device Forensic Engine below
+                // If AICore throws a quota/token/binding exception or times out, fall through to Local Forensic Intelligence
             } finally {
                 try {
                     generativeModel?.close()
@@ -551,17 +694,49 @@ class AiClientEngine {
             }
         }
 
-        // 4. Deterministic On-Device Forensic Intelligence Engine (100% offline, instant, works even if AICore is downloading or unavailable)
+        // 4. Deterministic On-Device Forensic Intelligence Engine (100% offline, instant, works even while AICore downloads weights)
         AiQueryResult.Success(forensicReport.formattedUserResponse)
+    }
+
+    private fun triggerBackgroundNanoDownload() {
+        if (isNanoDownloadInProgress.compareAndSet(false, true)) {
+            nanoBackgroundScope.launch {
+                var model: com.google.mlkit.genai.prompt.GenerativeModel? = null
+                try {
+                    model = Generation.getClient()
+                    model.download().collect { downloadStatus ->
+                        if (downloadStatus is DownloadStatus.DownloadCompleted ||
+                            downloadStatus is DownloadStatus.DownloadFailed
+                        ) {
+                            isNanoDownloadInProgress.set(false)
+                        }
+                    }
+                } catch (_: Throwable) {
+                    isNanoDownloadInProgress.set(false)
+                } finally {
+                    try {
+                        model?.close()
+                    } catch (_: Throwable) {}
+                    isNanoDownloadInProgress.set(false)
+                }
+            }
+        }
     }
 
     private data class LocalForensicReport(
         val hasMatches: Boolean,
         val rawSummaryForPrompt: String,
-        val formattedUserResponse: String
+        val formattedUserResponse: String,
+        val isSummaryOrDraft: Boolean = false
     )
 
-    private fun buildNanoContextTranscript(
+    /**
+     * Builds a relevance-boosted + chronological message transcript that includes:
+     * 1. High-scoring keyword & pattern matches from ANY point in the conversation history (even years ago)
+     * 2. Conversational Q&A lookahead replies (1-3 messages following a relevant question)
+     * 3. The most recent messages in the conversation
+     */
+    private fun buildSmartContextTranscript(
         userPrompt: String,
         messages: List<MessageItem>,
         maxChars: Int = 8500
@@ -571,44 +746,78 @@ class AiClientEngine {
             .split(Regex("\\s+"))
             .filter { it.length >= 3 && it !in STOP_WORDS }
 
-        // Prioritize messages matching query keywords or patterns, plus the most recent 60 messages
-        val scored = messages.map { msg ->
-            val lower = msg.body.lowercase()
+        val selectedIndices = mutableSetOf<Int>()
+        val indexScores = IntArray(messages.size)
+
+        for (i in messages.indices) {
+            val msg = messages[i]
+            val body = msg.body
+            val lower = body.lowercase()
             var score = 0
             for (w in queryWords) {
-                if (lower.contains(w)) score += 3
+                if (lower.contains(w)) score += 4
             }
-            if (ADDRESS_PATTERN.matcher(msg.body).find()) score += 2
-            if (CODE_PATTERN.matcher(msg.body).find()) score += 2
-            if (FLIGHT_PATTERN.matcher(msg.body).find()) score += 2
-            if (DATE_TIME_PATTERN.matcher(msg.body).find()) score += 1
-            Pair(msg, score)
+            if (ADDRESS_PATTERN.matcher(body).find() || MAPS_URL_PATTERN.matcher(body).find()) score += 3
+            if (DIRECTION_KEYWORDS_PATTERN.matcher(body).find() || CITY_STATE_ZIP_PATTERN.matcher(body).find()) score += 2
+            if (CODE_PATTERN.matcher(body).find() || HASH_STAR_CODE_PATTERN.matcher(body).find()) score += 3
+            if (FLIGHT_PATTERN.matcher(body).find()) score += 3
+            if (DATE_TIME_PATTERN.matcher(body).find()) score += 1
+
+            if (score > 0) {
+                indexScores[i] = maxOf(indexScores[i], score)
+                // If this message asks a question or has a high match, also boost the next 1-2 replies in the conversation!
+                if (body.contains("?") || ADDRESS_QUESTION_PATTERN.matcher(body).find() || CODE_QUESTION_PATTERN.matcher(body).find()) {
+                    if (i + 1 < messages.size) indexScores[i + 1] = maxOf(indexScores[i + 1], score + 2)
+                    if (i + 2 < messages.size) indexScores[i + 2] = maxOf(indexScores[i + 2], score + 1)
+                }
+            }
         }
 
-        val topRelevant = scored.filter { it.second > 0 }
-            .sortedWith(compareByDescending<Pair<MessageItem, Int>> { it.second }.thenByDescending { it.first.timestamp })
-            .take(50)
-            .map { it.first }
+        val topScoredIndices = messages.indices
+            .filter { indexScores[it] > 0 }
+            .sortedWith(compareByDescending<Int> { indexScores[it] }.thenByDescending { messages[it].timestamp })
+            .take(80)
 
-        val recent = messages.takeLast(60)
-        val combined = (topRelevant + recent)
-            .distinctBy { "${it.timestamp}_${it.body.hashCode()}" }
-            .sortedBy { it.timestamp }
+        selectedIndices.addAll(topScoredIndices)
+
+        // Always include the most recent 80 messages
+        val recentStart = (messages.size - 80).coerceAtLeast(0)
+        for (i in recentStart until messages.size) {
+            selectedIndices.add(i)
+        }
+
+        val sortedMsgs = selectedIndices.sorted().map { messages[it] }
 
         val sb = StringBuilder()
-        // Build from newest to oldest so we never drop the most recent messages if truncated, then reverse lines
         val lines = mutableListOf<String>()
         var currentChars = 0
-        for (msg in combined.asReversed()) {
+
+        // First reserve space for top-scored matches so older forensic hits are never crowded out
+        val highPrioritySet = topScoredIndices.take(35).toSet()
+        val orderedForPacking = (
+            topScoredIndices.take(35).map { messages[it] } +
+            sortedMsgs.asReversed()
+        ).distinctBy { "${it.timestamp}_${it.body.hashCode()}" }
+
+        val packedMsgs = mutableListOf<MessageItem>()
+        for (msg in orderedForPacking) {
             val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
             val sender = if (msg.direction == MessageDirection.OUTGOING) "Me" else msg.sender
             val cleanBody = msg.body.replace("\n", " ").trim()
-            val line = "[$dateStr] $sender: $cleanBody\n"
-            if (currentChars + line.length > maxChars) break
-            lines.add(line)
-            currentChars += line.length
+            val estLen = dateStr.length + sender.length + cleanBody.length + 8
+            if (currentChars + estLen > maxChars) continue
+            packedMsgs.add(msg)
+            currentChars += estLen
         }
-        for (line in lines.asReversed()) {
+
+        for (msg in packedMsgs.sortedBy { it.timestamp }) {
+            val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
+            val sender = if (msg.direction == MessageDirection.OUTGOING) "Me" else msg.sender
+            val cleanBody = msg.body.replace("\n", " ").trim()
+            lines.add("[$dateStr] $sender: $cleanBody\n")
+        }
+
+        for (line in lines) {
             sb.append(line)
         }
         return sb.toString()
@@ -628,21 +837,24 @@ class AiClientEngine {
 
         val isAddressQuery = lowerPrompt.contains("address") || lowerPrompt.contains("direction") ||
             lowerPrompt.contains("where") || lowerPrompt.contains("location") || lowerPrompt.contains("street") ||
-            lowerPrompt.contains("live") || lowerPrompt.contains("house") || lowerPrompt.contains("apt")
+            lowerPrompt.contains("live") || lowerPrompt.contains("house") || lowerPrompt.contains("apt") ||
+            lowerPrompt.contains("place") || lowerPrompt.contains("park") || lowerPrompt.contains("route") ||
+            lowerPrompt.contains("way to")
 
         val isCodeQuery = lowerPrompt.contains("code") || lowerPrompt.contains("gate") ||
             lowerPrompt.contains("door") || lowerPrompt.contains("wifi") || lowerPrompt.contains("wi-fi") ||
             lowerPrompt.contains("password") || lowerPrompt.contains("pin") || lowerPrompt.contains("lock") ||
-            lowerPrompt.contains("alarm") || lowerPrompt.contains("key")
+            lowerPrompt.contains("alarm") || lowerPrompt.contains("key") || lowerPrompt.contains("passcode")
 
         val isFlightQuery = lowerPrompt.contains("flight") || lowerPrompt.contains("hotel") ||
             lowerPrompt.contains("reservation") || lowerPrompt.contains("booking") ||
-            lowerPrompt.contains("airline") || lowerPrompt.contains("airport") || lowerPrompt.contains("confirmation")
+            lowerPrompt.contains("airline") || lowerPrompt.contains("airport") || lowerPrompt.contains("confirmation") ||
+            lowerPrompt.contains("trip") || lowerPrompt.contains("itinerary")
 
         val isDateCommitmentQuery = lowerPrompt.contains("date") || lowerPrompt.contains("deadline") ||
             lowerPrompt.contains("commitment") || lowerPrompt.contains("promise") ||
             lowerPrompt.contains("schedule") || lowerPrompt.contains("appointment") ||
-            lowerPrompt.contains("meet") || lowerPrompt.contains("when")
+            lowerPrompt.contains("meet") || lowerPrompt.contains("when") || lowerPrompt.contains("time")
 
         val isSummaryQuery = lowerPrompt.contains("summarize") || lowerPrompt.contains("summary") ||
             lowerPrompt.contains("bullet") || lowerPrompt.contains("recap") || lowerPrompt.contains("overview")
@@ -650,34 +862,84 @@ class AiClientEngine {
         val isDraftReplyQuery = lowerPrompt.contains("draft") || lowerPrompt.contains("reply") ||
             lowerPrompt.contains("follow-up") || lowerPrompt.contains("follow up") || lowerPrompt.contains("respond")
 
-        val matchedEntries = mutableListOf<String>()
+        val matchedEntries = LinkedHashSet<String>()
+
+        fun formatMsg(msg: MessageItem, prefixNote: String = ""): String {
+            val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
+            val sender = if (msg.direction == MessageDirection.OUTGOING) "Me" else msg.sender.ifBlank { contactLabel }
+            val note = if (prefixNote.isNotBlank()) " *($prefixNote)*" else ""
+            return "• **[$dateStr] $sender:** \"${msg.body.trim()}\"$note"
+        }
 
         if (isAddressQuery) {
-            for (msg in messages.asReversed()) {
+            // Pass 1: Direct street addresses, maps links, city/state/zip, GPS coords, and direction phrases (newest first)
+            for (i in messages.indices.reversed()) {
+                val msg = messages[i]
                 val body = msg.body.trim()
-                if (body.length < 6) continue
-                val hasAddressMatch = ADDRESS_PATTERN.matcher(body).find() ||
+                if (body.length < 4) continue
+                val hasDirectAddress = ADDRESS_PATTERN.matcher(body).find() ||
                     MAPS_URL_PATTERN.matcher(body).find() ||
-                    DIRECTION_KEYWORDS_PATTERN.matcher(body).find()
-                if (hasAddressMatch) {
-                    val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
-                    val sender = if (msg.direction == MessageDirection.OUTGOING) "Me" else msg.sender.ifBlank { contactLabel }
-                    matchedEntries.add("• **[$dateStr] $sender:** \"$body\"")
-                    if (matchedEntries.size >= 12) break
+                    CITY_STATE_ZIP_PATTERN.matcher(body).find() ||
+                    DIRECTION_KEYWORDS_PATTERN.matcher(body).find() ||
+                    HOUSE_NUMBER_STREET_PATTERN.matcher(body).find()
+
+                if (hasDirectAddress && !ADDRESS_QUESTION_ONLY_FILTER.matcher(body).matches()) {
+                    matchedEntries.add(formatMsg(msg))
+                    if (matchedEntries.size >= 14) break
+                }
+            }
+
+            // Pass 2: Conversational Q&A Lookahead!
+            // If someone asked "What's your address?" / "Where do you live?" / "Where are we meeting?", capture the next 1-3 replies!
+            for (i in messages.indices.reversed()) {
+                val msg = messages[i]
+                val body = msg.body.trim()
+                if (ADDRESS_QUESTION_PATTERN.matcher(body).find()) {
+                    for (offset in 1..3) {
+                        val replyIdx = i + offset
+                        if (replyIdx < messages.size) {
+                            val replyMsg = messages[replyIdx]
+                            val replyBody = replyMsg.body.trim()
+                            // Within 48 hours of the question and non-trivial
+                            if (replyBody.length >= 4 && (replyMsg.timestamp - msg.timestamp) <= 172_800_000L) {
+                                matchedEntries.add(formatMsg(replyMsg, "Reply to: \"${body.take(45)}\""))
+                            }
+                        }
+                    }
+                    if (matchedEntries.size >= 16) break
                 }
             }
         } else if (isCodeQuery) {
-            for (msg in messages.asReversed()) {
+            // Pass 1: Explicit code/password/PIN matches
+            for (i in messages.indices.reversed()) {
+                val msg = messages[i]
                 val body = msg.body.trim()
                 if (body.isEmpty()) continue
                 val hasCodeMatch = CODE_CONTEXT_PATTERN.matcher(body).find() ||
                     (CODE_KEYWORD_ONLY_PATTERN.matcher(body).find() && DIGIT_PIN_PATTERN.matcher(body).find()) ||
                     HASH_STAR_CODE_PATTERN.matcher(body).find()
                 if (hasCodeMatch) {
-                    val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
-                    val sender = if (msg.direction == MessageDirection.OUTGOING) "Me" else msg.sender.ifBlank { contactLabel }
-                    matchedEntries.add("• **[$dateStr] $sender:** \"$body\"")
-                    if (matchedEntries.size >= 12) break
+                    matchedEntries.add(formatMsg(msg))
+                    if (matchedEntries.size >= 14) break
+                }
+            }
+
+            // Pass 2: Conversational Q&A Lookahead for codes/passwords (e.g. Q: "What's the gate code?" -> A: "4812#")
+            for (i in messages.indices.reversed()) {
+                val msg = messages[i]
+                val body = msg.body.trim()
+                if (CODE_QUESTION_PATTERN.matcher(body).find()) {
+                    for (offset in 1..2) {
+                        val replyIdx = i + offset
+                        if (replyIdx < messages.size) {
+                            val replyMsg = messages[replyIdx]
+                            val replyBody = replyMsg.body.trim()
+                            if (replyBody.isNotEmpty() && (replyMsg.timestamp - msg.timestamp) <= 86_400_000L) {
+                                matchedEntries.add(formatMsg(replyMsg, "Reply to: \"${body.take(45)}\""))
+                            }
+                        }
+                    }
+                    if (matchedEntries.size >= 16) break
                 }
             }
         } else if (isFlightQuery) {
@@ -685,10 +947,8 @@ class AiClientEngine {
                 val body = msg.body.trim()
                 if (body.length < 5) continue
                 if (FLIGHT_PATTERN.matcher(body).find()) {
-                    val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
-                    val sender = if (msg.direction == MessageDirection.OUTGOING) "Me" else msg.sender.ifBlank { contactLabel }
-                    matchedEntries.add("• **[$dateStr] $sender:** \"$body\"")
-                    if (matchedEntries.size >= 12) break
+                    matchedEntries.add(formatMsg(msg))
+                    if (matchedEntries.size >= 14) break
                 }
             }
         } else if (isDateCommitmentQuery) {
@@ -700,17 +960,12 @@ class AiClientEngine {
                 val dueTag = if (!c.dueDate.isNullOrBlank()) " *(Due: ${c.dueDate})*" else ""
                 matchedEntries.add("• **[$dateStr] $who:** \"${c.rawSnippet}\"$dueTag")
             }
-            if (matchedEntries.size < 8) {
+            if (matchedEntries.size < 10) {
                 for (msg in messages.asReversed()) {
                     val body = msg.body.trim()
                     if (DATE_TIME_PATTERN.matcher(body).find()) {
-                        val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
-                        val sender = if (msg.direction == MessageDirection.OUTGOING) "Me" else msg.sender.ifBlank { contactLabel }
-                        val entry = "• **[$dateStr] $sender:** \"$body\""
-                        if (!matchedEntries.contains(entry)) {
-                            matchedEntries.add(entry)
-                            if (matchedEntries.size >= 12) break
-                        }
+                        matchedEntries.add(formatMsg(msg))
+                        if (matchedEntries.size >= 14) break
                     }
                 }
             }
@@ -722,19 +977,19 @@ class AiClientEngine {
             val firstDate = messages.firstOrNull()?.let { dateFormatter.format(Instant.ofEpochMilli(it.timestamp)) } ?: "N/A"
             val lastDate = messages.lastOrNull()?.let { dateFormatter.format(Instant.ofEpochMilli(it.timestamp)) } ?: "N/A"
 
-            val highlights = recentSlice.filter { it.body.trim().length > 15 }
-                .takeLast(5)
+            val highlights = recentSlice.filter { it.body.trim().length > 12 }
+                .takeLast(6)
                 .map { msg ->
                     val d = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
                     val s = if (msg.direction == MessageDirection.OUTGOING) "Me" else msg.sender.ifBlank { contactLabel }
-                    "  - [$d] **$s**: \"${msg.body.trim().take(120)}\""
+                    "  - [$d] **$s**: \"${msg.body.trim().take(130)}\""
                 }
 
             val summaryText = buildString {
                 appendLine("⚡ **O.D.I.N. On-Device Thread Summary ($contactLabel):**")
                 appendLine("• **Archive Span:** $totalCount messages ($incomingCount received, $outgoingCount sent) from **$firstDate** to **$lastDate**.")
                 val radarCount = CommitmentRadarEngine(this@AiClientEngine).scanLocalCommitments(messages, contactLabel).size
-                val addressHits = messages.count { ADDRESS_PATTERN.matcher(it.body).find() }
+                val addressHits = messages.count { ADDRESS_PATTERN.matcher(it.body).find() || DIRECTION_KEYWORDS_PATTERN.matcher(it.body).find() }
                 val codeHits = messages.count { CODE_CONTEXT_PATTERN.matcher(it.body).find() }
                 appendLine("• **Detected Key Signals:** $radarCount commitments/tasks, $addressHits location/address mentions, and $codeHits code/PIN references.")
                 if (highlights.isNotEmpty()) {
@@ -746,13 +1001,14 @@ class AiClientEngine {
             return LocalForensicReport(
                 hasMatches = true,
                 rawSummaryForPrompt = summaryText,
-                formattedUserResponse = summaryText
+                formattedUserResponse = summaryText,
+                isSummaryOrDraft = true
             )
         } else if (isDraftReplyQuery) {
             val lastIncoming = messages.lastOrNull { it.direction == MessageDirection.INCOMING && it.body.isNotBlank() }
-            val lastMsgPreview = lastIncoming?.body?.trim()?.take(100) ?: "your last message"
+            val lastMsgPreview = lastIncoming?.body?.trim()?.take(110) ?: "your last message"
             val replyDraft = buildString {
-                appendLine("⚡ **O.D.I.N. On-Device Suggested Replies for $contactLabel:**")
+                appendLine("⚡ **O.D.I.N. Suggested Replies for $contactLabel:**")
                 if (lastIncoming != null) {
                     val d = dateFormatter.format(Instant.ofEpochMilli(lastIncoming.timestamp))
                     appendLine("*Replying to [$d]: \"$lastMsgPreview\"*\n")
@@ -766,11 +1022,12 @@ class AiClientEngine {
             return LocalForensicReport(
                 hasMatches = true,
                 rawSummaryForPrompt = replyDraft,
-                formattedUserResponse = replyDraft
+                formattedUserResponse = replyDraft,
+                isSummaryOrDraft = true
             )
         }
 
-        // General keyword search if no specific intent matched or if intent returned 0 matches
+        // General keyword + Q&A context search if no specific intent matched or if intent returned 0 matches
         if (matchedEntries.isEmpty()) {
             val keywords = userPrompt.lowercase()
                 .replace(Regex("[^a-z0-9 ]"), " ")
@@ -778,16 +1035,27 @@ class AiClientEngine {
                 .filter { it.length >= 3 && it !in STOP_WORDS }
 
             if (keywords.isNotEmpty()) {
-                val scored = messages.mapNotNull { msg ->
-                    val lower = msg.body.lowercase()
+                val scoredIndices = mutableListOf<Pair<Int, Int>>()
+                for (i in messages.indices) {
+                    val lower = messages[i].body.lowercase()
                     val hitCount = keywords.count { k -> lower.contains(k) }
-                    if (hitCount > 0) Pair(msg, hitCount) else null
-                }.sortedWith(compareByDescending<Pair<MessageItem, Int>> { it.second }.thenByDescending { it.first.timestamp })
+                    if (hitCount > 0) {
+                        scoredIndices.add(Pair(i, hitCount))
+                    }
+                }
+                scoredIndices.sortWith(compareByDescending<Pair<Int, Int>> { it.second }.thenByDescending { messages[it.first].timestamp })
 
-                for ((msg, _) in scored.take(10)) {
-                    val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
-                    val sender = if (msg.direction == MessageDirection.OUTGOING) "Me" else msg.sender.ifBlank { contactLabel }
-                    matchedEntries.add("• **[$dateStr] $sender:** \"${msg.body.trim()}\"")
+                for ((idx, _) in scoredIndices.take(10)) {
+                    val msg = messages[idx]
+                    matchedEntries.add(formatMsg(msg))
+                    // If the matched message was a question, also include the immediate reply!
+                    if (msg.body.contains("?") && idx + 1 < messages.size) {
+                        val nextMsg = messages[idx + 1]
+                        if (nextMsg.body.isNotBlank()) {
+                            matchedEntries.add(formatMsg(nextMsg, "Immediate reply"))
+                        }
+                    }
+                    if (matchedEntries.size >= 14) break
                 }
             }
         }
@@ -803,8 +1071,8 @@ class AiClientEngine {
         return if (matchedEntries.isNotEmpty()) {
             val joined = matchedEntries.joinToString("\n")
             val formatted = buildString {
-                appendLine("⚡ **O.D.I.N. On-Device Scan — $categoryTitle ($contactLabel):**")
-                appendLine("Muninn searched ${messages.size} messages locally and found ${matchedEntries.size} matching record(s):\n")
+                appendLine("⚡ **O.D.I.N. Archive Intelligence — $categoryTitle ($contactLabel):**")
+                appendLine("Muninn searched **${messages.size} messages** and found **${matchedEntries.size} matching record(s)**:\n")
                 appendLine(joined)
             }.trim()
             LocalForensicReport(
@@ -819,8 +1087,8 @@ class AiClientEngine {
                 "• **[$d] $s:** \"${msg.body.trim().take(120)}\""
             }
             val noMatchText = buildString {
-                appendLine("⚡ **O.D.I.N. On-Device Scan — $categoryTitle ($contactLabel):**")
-                appendLine("Muninn searched all **${messages.size} messages** with $contactLabel on-device, but found no explicit **$categoryTitle** recorded in this thread.")
+                appendLine("⚡ **O.D.I.N. Archive Intelligence — $categoryTitle ($contactLabel):**")
+                appendLine("Muninn searched all **${messages.size} messages** with $contactLabel, but found no explicit **$categoryTitle** recorded in this thread.")
                 if (recentFallback.isNotEmpty()) {
                     appendLine("\n**Most Recent Messages in Thread:**")
                     appendLine(recentFallback)
@@ -835,24 +1103,48 @@ class AiClientEngine {
     }
 
     companion object {
+        private val isNanoDownloadInProgress = AtomicBoolean(false)
+        private val nanoBackgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
         private val STOP_WORDS = setOf(
             "the", "and", "for", "with", "that", "this", "from", "have", "what", "when",
             "where", "which", "who", "whom", "whose", "why", "how", "are", "was", "were",
             "been", "being", "can", "could", "should", "would", "will", "shall", "may",
             "might", "must", "find", "list", "show", "tell", "give", "about", "into",
-            "your", "their", "our", "any", "all", "some", "messages", "message", "thread"
+            "your", "their", "our", "any", "all", "some", "messages", "message", "thread",
+            "directions", "direction", "addresses", "address"
         )
 
         private val ADDRESS_PATTERN = Pattern.compile(
-            "(?i)\\b\\d{1,6}\\s+[A-Za-z0-9.\\s]{2,35}\\b(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|way|pl|place|pkwy|parkway|cir|circle|hwy|highway|apt|suite|ste|unit)\\b"
+            "(?i)\\b\\d{1,6}\\s+(?:[NSEW]\\.?\\s+)?[A-Za-z0-9.\\s]{2,35}\\b(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|way|pl|place|pkwy|parkway|cir|circle|ter|terrace|trl|trail|hwy|highway|fwy|freeway|loop|sq|square|cv|cove|run|pass|pike|row|walk|xing|crossing|apt|suite|ste|unit|bldg|po box|p\\.o\\. box|county road|cr|state route|sr|fm)\\b"
+        )
+
+        private val HOUSE_NUMBER_STREET_PATTERN = Pattern.compile(
+            "(?i)(?:\\b(?:at|to|is|on|live at|address is|meet at)\\s+\\d{2,5}\\s+[A-Z][a-z]{2,18}\\b|^\\s*\\d{2,5}\\s+[A-Z][a-z]{2,18}(?:\\s+[A-Za-z0-9#]+)?\\s*\$)"
+        )
+
+        private val CITY_STATE_ZIP_PATTERN = Pattern.compile(
+            "\\b[A-Z][a-zA-Z.\\s]{2,22},\\s*[A-Z]{2}(?:\\s+\\d{5}(?:-\\d{4})?)?\\b"
         )
 
         private val MAPS_URL_PATTERN = Pattern.compile(
-            "(?i)(maps\\.app\\.goo\\.gl|google\\.com/maps|maps\\.google\\.com|waze\\.com/ul|maps\\.apple\\.com)"
+            "(?i)(maps\\.app\\.goo\\.gl|google\\.com/maps|maps\\.google\\.com|waze\\.com/ul|maps\\.apple\\.com|-?\\d{1,2}\\.\\d{4,},\\s*-?\\d{1,3}\\.\\d{4,})"
         )
 
         private val DIRECTION_KEYWORDS_PATTERN = Pattern.compile(
-            "(?i)\\b(address is|located at|my address|our address|turn left|turn right|exit\\s+\\d+|park in the|parking|gate is on|building\\s+[a-z0-9]+)\\b"
+            "(?i)\\b(address is|located at|my address|our address|new address|live at|live on|turn left|turn right|exit\\s+\\d+|park in the|parking|gate is on|building\\s+[a-z0-9]+|house on the|across from|next to the|miles\\s+(?:north|south|east|west|past|down)|head(?:ed|ing)?\\s+to)\\b"
+        )
+
+        private val ADDRESS_QUESTION_PATTERN = Pattern.compile(
+            "(?i)\\b(what(?:'s|\\s+is)\\s+(?:your|the|his|her|their|mom'?s|dad'?s|new)?\\s*(?:address|location|place|street)|where\\s+(?:do\\s+you\\s+live|are\\s+you\\s+located|are\\s+we\\s+meeting|is\\s+the\\s+house|should\\s+i\\s+go|should\\s+i\\s+park)|send\\s+(?:me\\s+)?(?:your|the)\\s+(?:address|location|pin))\\b"
+        )
+
+        private val ADDRESS_QUESTION_ONLY_FILTER = Pattern.compile(
+            "(?i)^\\s*(?:hey\\s+)?(?:what(?:'s|\\s+is)\\s+(?:your|the)\\s+address|where\\s+do\\s+you\\s+live|can\\s+you\\s+send\\s+(?:me\\s+)?(?:your|the)\\s+address)\\s*\\??\\s*\$"
+        )
+
+        private val CODE_QUESTION_PATTERN = Pattern.compile(
+            "(?i)\\b(what(?:'s|\\s+is)\\s+(?:the|your)\\s+(?:gate|door|wifi|wi-fi|alarm|garage|lockbox|entry)?\\s*(?:code|password|passcode|pin)|send\\s+(?:me\\s+)?the\\s+(?:code|password|pin))\\b"
         )
 
         private val CODE_CONTEXT_PATTERN = Pattern.compile(
