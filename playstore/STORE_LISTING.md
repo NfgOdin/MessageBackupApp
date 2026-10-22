@@ -72,6 +72,6 @@ Keep your private conversations and exported archives safe from prying eyes with
 SMS Backup, MMS Export, Message Vault, PDF Export, Text Message Backup, Offline Viewer, Private Messenger, Walkie Talkie, Local AI, SMS Archive.
 
 ### Contact Information
-• **Support Website:** https://NfgOdin.github.io/MessageBackupApp/
-• **Privacy Policy URL:** https://NfgOdin.github.io/MessageBackupApp/
+• **Support Website:** https://nfgodin.github.io/muninn/
+• **Privacy Policy URL:** https://nfgodin.github.io/muninn/
 • **Source Repository:** https://github.com/NfgOdin/MessageBackupApp

@@ -3031,7 +3031,7 @@ Rules:
                 onClick = {
                     val privacyIntent = android.content.Intent(
                         android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse("https://NfgOdin.github.io/MessageBackupApp/")
+                        android.net.Uri.parse("https://nfgodin.github.io/muninn/")
                     )
                     try {
                         context.startActivity(privacyIntent)

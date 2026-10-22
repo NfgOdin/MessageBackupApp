@@ -57,4 +57,4 @@ We may update this Privacy Policy periodically. Any changes will be reflected in
 ## 8. Contact Us
 If you have any questions or feedback regarding this Privacy Policy or your privacy while using Muninn, please reach out through our official GitHub repository:
 - **Repository:** https://github.com/NfgOdin/MessageBackupApp
-- **Website:** https://NfgOdin.github.io/MessageBackupApp/
+- **Website:** https://nfgodin.github.io/muninn/

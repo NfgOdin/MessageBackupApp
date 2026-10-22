@@ -9,7 +9,7 @@ All required release files have been prepared and organized inside the `playstor
 1. **App Bundle (AAB):** `playstore/app-release.aab` *(20.2 MB, Signed with your release keystore)*
 2. **App Icon (512x512):** `playstore/icon_512x512.png` *(High-res 32-bit PNG)*
 3. **Feature Graphic (1024x500):** `playstore/feature_graphic_1024x500.png` *(High-res landscape banner)*
-4. **Privacy Policy URL:** `https://NfgOdin.github.io/MessageBackupApp/`
+4. **Privacy Policy URL:** `https://nfgodin.github.io/muninn/`
 5. **Listing Copy:** `playstore/STORE_LISTING.md`
 
 ---
@@ -32,7 +32,7 @@ All required release files have been prepared and organized inside the `playstor
 Complete each of the required policy forms as follows:
 
 #### 1. Privacy Policy
-- **Privacy Policy URL:** `https://NfgOdin.github.io/MessageBackupApp/`
+- **Privacy Policy URL:** `https://nfgodin.github.io/muninn/`
 
 #### 2. App Access
 - Select: **"All functionality is available without special access"**
