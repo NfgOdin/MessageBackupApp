@@ -177,9 +177,10 @@ class BillingManager(
             .setProductList(productList)
             .build()
 
-        billingClient.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
+        billingClient.queryProductDetailsAsync(params) { billingResult, queryProductDetailsResult ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                 val map = mutableMapOf<String, ProductDetails>()
+                val productDetailsList = queryProductDetailsResult.productDetailsList
                 for (details in productDetailsList) {
                     map[details.productId] = details
                     if (details.productId == PRODUCT_REMOVE_ADS) {
