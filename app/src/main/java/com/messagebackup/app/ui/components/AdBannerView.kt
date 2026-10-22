@@ -44,6 +44,9 @@ fun AdBannerView(
                         adUnitId = context.getString(R.string.admob_banner_id)
                         loadAd(AdRequest.Builder().build())
                     }
+                },
+                onRelease = { adView ->
+                    adView.destroy()
                 }
             )
         }

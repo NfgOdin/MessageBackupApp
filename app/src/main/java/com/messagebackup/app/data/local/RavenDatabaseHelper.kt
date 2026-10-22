@@ -13,6 +13,37 @@ import com.messagebackup.app.domain.mesh.RavenPeerStatus
  */
 class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, DATABASE_VERSION) {
 
+    private val appContext = context.applicationContext
+
+    init {
+        setWriteAheadLoggingEnabled(true)
+    }
+
+    private fun offloadLargeBlobIfNeeded(prefix: String, base64Data: String?): String? {
+        if (base64Data.isNullOrBlank() || base64Data.length <= 65_536 || base64Data.startsWith("@blobfile:")) {
+            return base64Data
+        }
+        return try {
+            val dir = java.io.File(appContext.filesDir, "raven_blobs").apply { mkdirs() }
+            val fileName = "${prefix}_${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}.b64"
+            java.io.File(dir, fileName).writeText(base64Data, Charsets.UTF_8)
+            "@blobfile:$fileName"
+        } catch (_: Exception) {
+            base64Data
+        }
+    }
+
+    private fun resolveBlobIfNeeded(storedValue: String?): String? {
+        if (storedValue == null || !storedValue.startsWith("@blobfile:")) return storedValue
+        return try {
+            val fileName = storedValue.removePrefix("@blobfile:")
+            val file = java.io.File(java.io.File(appContext.filesDir, "raven_blobs"), fileName)
+            if (file.exists()) file.readText(Charsets.UTF_8) else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     companion object {
         private const val DATABASE_NAME = "raven_mesh.db"
         private const val DATABASE_VERSION = 5
@@ -90,6 +121,16 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
             )
             """.trimIndent()
         )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_raven_messages_peer_ts ON $TABLE_MESSAGES ($COL_MSG_PEER_ID, $COL_MSG_TIMESTAMP)")
+    }
+
+    override fun onOpen(db: SQLiteDatabase) {
+        super.onOpen(db)
+        if (!db.isReadOnly) {
+            try {
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_raven_messages_peer_ts ON $TABLE_MESSAGES ($COL_MSG_PEER_ID, $COL_MSG_TIMESTAMP)")
+            } catch (_: Exception) {}
+        }
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -157,50 +198,56 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
         val canonicalId = normalizePeerId(peer.peerId)
         val cleanWithoutPrefix = peer.peerId.removePrefix("raven://").trim()
 
-        // Preserve existing unread count & ephemeral TTL if already in DB
-        var existingUnread = 0
-        var existingTtl = 0
-        var existingStatus: RavenPeerStatus? = null
-        db.rawQuery(
-            "SELECT $COL_UNREAD_COUNT, $COL_EPHEMERAL_TTL, $COL_STATUS FROM $TABLE_PEERS WHERE LOWER($COL_PEER_ID) = ? OR LOWER($COL_PEER_ID) = ?",
-            arrayOf(canonicalId, cleanWithoutPrefix.lowercase())
-        )?.use { c ->
-            if (c.moveToFirst()) {
-                existingUnread = c.getInt(0)
-                existingTtl = c.getInt(1)
-                val stStr = c.getString(2)
-                existingStatus = runCatching { RavenPeerStatus.valueOf(stStr) }.getOrNull()
+        db.beginTransaction()
+        return try {
+            // Preserve existing unread count & ephemeral TTL if already in DB
+            var existingUnread = 0
+            var existingTtl = 0
+            var existingStatus: RavenPeerStatus? = null
+            db.rawQuery(
+                "SELECT $COL_UNREAD_COUNT, $COL_EPHEMERAL_TTL, $COL_STATUS FROM $TABLE_PEERS WHERE LOWER($COL_PEER_ID) = ? OR LOWER($COL_PEER_ID) = ?",
+                arrayOf(canonicalId, cleanWithoutPrefix.lowercase())
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    existingUnread = c.getInt(0)
+                    existingTtl = c.getInt(1)
+                    val stStr = c.getString(2)
+                    existingStatus = runCatching { RavenPeerStatus.valueOf(stStr) }.getOrNull()
+                }
             }
-        }
 
-        // Remove any legacy non-canonical duplicate rows for this same peer
-        db.delete(
-            TABLE_PEERS,
-            "LOWER($COL_PEER_ID) = ? OR LOWER($COL_PEER_ID) = ?",
-            arrayOf(canonicalId, cleanWithoutPrefix.lowercase())
-        )
+            // Remove any legacy non-canonical duplicate rows for this same peer
+            db.delete(
+                TABLE_PEERS,
+                "LOWER($COL_PEER_ID) = ? OR LOWER($COL_PEER_ID) = ?",
+                arrayOf(canonicalId, cleanWithoutPrefix.lowercase())
+            )
 
-        // Never downgrade a CONNECTED peer back to PENDING
-        val finalStatus = if (existingStatus == RavenPeerStatus.CONNECTED) {
-            RavenPeerStatus.CONNECTED
-        } else {
-            peer.status
-        }
+            // Never downgrade a CONNECTED peer back to PENDING
+            val finalStatus = if (existingStatus == RavenPeerStatus.CONNECTED) {
+                RavenPeerStatus.CONNECTED
+            } else {
+                peer.status
+            }
 
-        val values = ContentValues().apply {
-            put(COL_PEER_ID, canonicalId)
-            put(COL_DISPLAY_NAME, peer.displayName.removePrefix("raven://").ifBlank { cleanWithoutPrefix })
-            put(COL_PUBLIC_KEY, peer.publicKey)
-            put(COL_LAST_KNOWN_IP, peer.lastKnownIp)
-            put(COL_LAST_SEEN, peer.lastSeenTimestamp)
-            put(COL_IS_TRUSTED, if (peer.isTrusted) 1 else 0)
-            put(COL_AVATAR_COLOR, peer.avatarColor)
-            put(COL_STATUS, finalStatus.name)
-            put(COL_UNREAD_COUNT, existingUnread)
-            put(COL_EPHEMERAL_TTL, existingTtl)
+            val values = ContentValues().apply {
+                put(COL_PEER_ID, canonicalId)
+                put(COL_DISPLAY_NAME, peer.displayName.removePrefix("raven://").ifBlank { cleanWithoutPrefix })
+                put(COL_PUBLIC_KEY, peer.publicKey)
+                put(COL_LAST_KNOWN_IP, peer.lastKnownIp)
+                put(COL_LAST_SEEN, peer.lastSeenTimestamp)
+                put(COL_IS_TRUSTED, if (peer.isTrusted) 1 else 0)
+                put(COL_AVATAR_COLOR, peer.avatarColor)
+                put(COL_STATUS, finalStatus.name)
+                put(COL_UNREAD_COUNT, existingUnread)
+                put(COL_EPHEMERAL_TTL, existingTtl)
+            }
+            val result = db.insertWithOnConflict(TABLE_PEERS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            db.setTransactionSuccessful()
+            result != -1L
+        } finally {
+            db.endTransaction()
         }
-        val result = db.insertWithOnConflict(TABLE_PEERS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
-        return result != -1L
     }
 
     fun getAllPeers(): List<RavenPeer> {
@@ -308,8 +355,43 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
 
     fun getLastMessageForPeer(peerId: String): RavenChatMessage? {
         purgeExpiredMessages()
-        val msgs = getMessagesForPeer(peerId)
-        return msgs.lastOrNull()
+        val db = readableDatabase
+        val cleanId = peerId.removePrefix("raven://").trim().lowercase()
+        val withPrefix = "raven://$cleanId"
+        val columns = arrayOf(
+            COL_MSG_ID,
+            COL_MSG_PEER_ID,
+            COL_MSG_SENDER_CALLSIGN,
+            COL_MSG_SENDER_NAME,
+            COL_MSG_IS_OUTBOUND,
+            COL_MSG_TEXT,
+            COL_MSG_TYPE,
+            COL_MSG_TIMESTAMP
+        )
+        db.query(
+            TABLE_MESSAGES,
+            columns,
+            "LOWER($COL_MSG_PEER_ID) = ? OR LOWER($COL_MSG_PEER_ID) = ?",
+            arrayOf(cleanId, withPrefix),
+            null,
+            null,
+            "$COL_MSG_TIMESTAMP DESC",
+            "1"
+        )?.use { c ->
+            if (c.moveToFirst()) {
+                return RavenChatMessage(
+                    id = c.getLong(0),
+                    peerId = c.getString(1),
+                    senderCallsign = c.getString(2),
+                    senderDisplayName = c.getString(3),
+                    isOutbound = c.getInt(4) == 1,
+                    messageText = c.getString(5),
+                    messageType = c.getString(6) ?: "TEXT",
+                    timestamp = c.getLong(7)
+                )
+            }
+        }
+        return null
     }
 
     fun deletePeer(peerId: String): Boolean {
@@ -327,6 +409,8 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
     fun insertMessage(msg: RavenChatMessage): Long {
         val db = writableDatabase
         val canonicalPeerId = normalizePeerId(msg.peerId)
+        val storedAudio = offloadLargeBlobIfNeeded("audio", msg.audioBase64)
+        val storedAttachment = offloadLargeBlobIfNeeded("att", msg.attachmentBase64)
         val values = ContentValues().apply {
             put(COL_MSG_PEER_ID, canonicalPeerId)
             put(COL_MSG_SENDER_CALLSIGN, msg.senderCallsign)
@@ -335,8 +419,8 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
             put(COL_MSG_TEXT, msg.messageText)
             put(COL_MSG_TYPE, msg.messageType)
             put(COL_MSG_TIMESTAMP, msg.timestamp)
-            put(COL_MSG_AUDIO_BASE64, msg.audioBase64)
-            put(COL_MSG_ATTACHMENT_BASE64, msg.attachmentBase64)
+            put(COL_MSG_AUDIO_BASE64, storedAudio)
+            put(COL_MSG_ATTACHMENT_BASE64, storedAttachment)
             put(COL_MSG_ATTACHMENT_NAME, msg.attachmentName)
             put(COL_MSG_ATTACHMENT_MIME, msg.attachmentMimeType)
             put(COL_MSG_TRANSCRIPTION, msg.transcription)
@@ -404,8 +488,10 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
             val idxBurn = c.getColumnIndex(COL_MSG_BURN_ON_READ)
 
             while (c.moveToNext()) {
-                val audioB64 = if (idxAudio != -1 && !c.isNull(idxAudio)) c.getString(idxAudio) else null
-                val attB64 = if (idxAttB64 != -1 && !c.isNull(idxAttB64)) c.getString(idxAttB64) else null
+                val rawAudio = if (idxAudio != -1 && !c.isNull(idxAudio)) c.getString(idxAudio) else null
+                val rawAtt = if (idxAttB64 != -1 && !c.isNull(idxAttB64)) c.getString(idxAttB64) else null
+                val audioB64 = resolveBlobIfNeeded(rawAudio)
+                val attB64 = resolveBlobIfNeeded(rawAtt)
                 val attName = if (idxAttName != -1 && !c.isNull(idxAttName)) c.getString(idxAttName) else null
                 val attMime = if (idxAttMime != -1 && !c.isNull(idxAttMime)) c.getString(idxAttMime) else null
                 val trans = if (idxTrans != -1 && !c.isNull(idxTrans)) c.getString(idxTrans) else null

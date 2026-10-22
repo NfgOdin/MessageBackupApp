@@ -179,22 +179,23 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
         val db = writableDatabase
         db.beginTransaction()
         try {
-            val stmt = db.compileStatement(
+            db.compileStatement(
                 """
                 INSERT OR REPLACE INTO threads (thread_id, address, contact_name, snippet, timestamp, message_count, has_attachment)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """.trimIndent()
-            )
-            for (t in threads) {
-                stmt.clearBindings()
-                stmt.bindLong(1, t.threadId)
-                stmt.bindString(2, t.address)
-                if (t.contactName != null) stmt.bindString(3, t.contactName) else stmt.bindNull(3)
-                stmt.bindString(4, t.snippet)
-                stmt.bindLong(5, t.timestamp)
-                stmt.bindLong(6, t.messageCount.toLong())
-                stmt.bindLong(7, if (t.hasAttachment) 1L else 0L)
-                stmt.executeInsert()
+            ).use { stmt ->
+                for (t in threads) {
+                    stmt.clearBindings()
+                    stmt.bindLong(1, t.threadId)
+                    stmt.bindString(2, t.address)
+                    if (t.contactName != null) stmt.bindString(3, t.contactName) else stmt.bindNull(3)
+                    stmt.bindString(4, t.snippet)
+                    stmt.bindLong(5, t.timestamp)
+                    stmt.bindLong(6, t.messageCount.toLong())
+                    stmt.bindLong(7, if (t.hasAttachment) 1L else 0L)
+                    stmt.executeInsert()
+                }
             }
             db.setTransactionSuccessful()
         } finally {
@@ -274,26 +275,28 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
 
         // Attach cached media attachments if any
         if (messageIds.isNotEmpty()) {
-            val inClause = messageIds.joinToString(",")
             val attachmentMap = mutableMapOf<Long, MutableList<MediaAttachment>>()
-            db.rawQuery("SELECT part_id, message_id, content_type, uri_string, file_name FROM attachments WHERE message_id IN ($inClause)", null)?.use { ac ->
-                val pIdIdx = ac.getColumnIndexOrThrow("part_id")
-                val mIdIdx = ac.getColumnIndexOrThrow("message_id")
-                val ctIdx = ac.getColumnIndexOrThrow("content_type")
-                val uriIdx = ac.getColumnIndexOrThrow("uri_string")
-                val fnIdx = ac.getColumnIndexOrThrow("file_name")
+            for (chunk in messageIds.chunked(500)) {
+                val inClause = chunk.joinToString(",")
+                db.rawQuery("SELECT part_id, message_id, content_type, uri_string, file_name FROM attachments WHERE message_id IN ($inClause)", null)?.use { ac ->
+                    val pIdIdx = ac.getColumnIndexOrThrow("part_id")
+                    val mIdIdx = ac.getColumnIndexOrThrow("message_id")
+                    val ctIdx = ac.getColumnIndexOrThrow("content_type")
+                    val uriIdx = ac.getColumnIndexOrThrow("uri_string")
+                    val fnIdx = ac.getColumnIndexOrThrow("file_name")
 
-                while (ac.moveToNext()) {
-                    val mId = ac.getLong(mIdIdx)
-                    val list = attachmentMap.getOrPut(mId) { mutableListOf() }
-                    list.add(
-                        MediaAttachment(
-                            partId = ac.getLong(pIdIdx),
-                            contentType = ac.getString(ctIdx) ?: "",
-                            uriString = ac.getString(uriIdx) ?: "",
-                            fileName = ac.getString(fnIdx) ?: ""
+                    while (ac.moveToNext()) {
+                        val mId = ac.getLong(mIdIdx)
+                        val list = attachmentMap.getOrPut(mId) { mutableListOf() }
+                        list.add(
+                            MediaAttachment(
+                                partId = ac.getLong(pIdIdx),
+                                contentType = ac.getString(ctIdx) ?: "",
+                                uriString = ac.getString(uriIdx) ?: "",
+                                fileName = ac.getString(fnIdx) ?: ""
+                            )
                         )
-                    )
+                    }
                 }
             }
 
@@ -331,39 +334,40 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
         val db = writableDatabase
         db.beginTransaction()
         try {
-            val msgStmt = db.compileStatement(
+            db.compileStatement(
                 """
                 INSERT OR REPLACE INTO messages (message_id, thread_id, type, direction, sender, recipient, body, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """.trimIndent()
-            )
-            val attachStmt = db.compileStatement(
-                """
-                INSERT OR REPLACE INTO attachments (part_id, message_id, content_type, uri_string, file_name)
-                VALUES (?, ?, ?, ?, ?)
-                """.trimIndent()
-            )
+            ).use { msgStmt ->
+                db.compileStatement(
+                    """
+                    INSERT OR REPLACE INTO attachments (part_id, message_id, content_type, uri_string, file_name)
+                    VALUES (?, ?, ?, ?, ?)
+                    """.trimIndent()
+                ).use { attachStmt ->
+                    for (m in messages) {
+                        msgStmt.clearBindings()
+                        msgStmt.bindLong(1, m.messageId)
+                        msgStmt.bindLong(2, m.threadId)
+                        msgStmt.bindString(3, m.type.name)
+                        msgStmt.bindString(4, m.direction.name)
+                        msgStmt.bindString(5, m.sender)
+                        msgStmt.bindString(6, m.recipient)
+                        msgStmt.bindString(7, m.body)
+                        msgStmt.bindLong(8, m.timestamp)
+                        msgStmt.executeInsert()
 
-            for (m in messages) {
-                msgStmt.clearBindings()
-                msgStmt.bindLong(1, m.messageId)
-                msgStmt.bindLong(2, m.threadId)
-                msgStmt.bindString(3, m.type.name)
-                msgStmt.bindString(4, m.direction.name)
-                msgStmt.bindString(5, m.sender)
-                msgStmt.bindString(6, m.recipient)
-                msgStmt.bindString(7, m.body)
-                msgStmt.bindLong(8, m.timestamp)
-                msgStmt.executeInsert()
-
-                for (att in m.attachments) {
-                    attachStmt.clearBindings()
-                    attachStmt.bindLong(1, att.partId)
-                    attachStmt.bindLong(2, m.messageId)
-                    attachStmt.bindString(3, att.contentType)
-                    attachStmt.bindString(4, att.uriString)
-                    attachStmt.bindString(5, att.fileName)
-                    attachStmt.executeInsert()
+                        for (att in m.attachments) {
+                            attachStmt.clearBindings()
+                            attachStmt.bindLong(1, att.partId)
+                            attachStmt.bindLong(2, m.messageId)
+                            attachStmt.bindString(3, att.contentType)
+                            attachStmt.bindString(4, att.uriString)
+                            attachStmt.bindString(5, att.fileName)
+                            attachStmt.executeInsert()
+                        }
+                    }
                 }
             }
             db.setTransactionSuccessful()
@@ -417,24 +421,25 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
         val db = writableDatabase
         db.beginTransaction()
         try {
-            val stmt = db.compileStatement(
+            db.compileStatement(
                 """
                 INSERT OR REPLACE INTO vault_items (part_id, message_id, thread_id, timestamp, content_type, file_name, uri_string, contact_name, contact_address)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """.trimIndent()
-            )
-            for (item in items) {
-                stmt.clearBindings()
-                stmt.bindLong(1, item.partId)
-                stmt.bindLong(2, item.messageId)
-                stmt.bindLong(3, item.threadId)
-                stmt.bindLong(4, item.timestamp)
-                stmt.bindString(5, item.contentType)
-                stmt.bindString(6, item.fileName)
-                stmt.bindString(7, item.uriString)
-                stmt.bindString(8, item.contactName)
-                stmt.bindString(9, item.contactAddress)
-                stmt.executeInsert()
+            ).use { stmt ->
+                for (item in items) {
+                    stmt.clearBindings()
+                    stmt.bindLong(1, item.partId)
+                    stmt.bindLong(2, item.messageId)
+                    stmt.bindLong(3, item.threadId)
+                    stmt.bindLong(4, item.timestamp)
+                    stmt.bindString(5, item.contentType)
+                    stmt.bindString(6, item.fileName)
+                    stmt.bindString(7, item.uriString)
+                    stmt.bindString(8, item.contactName)
+                    stmt.bindString(9, item.contactAddress)
+                    stmt.executeInsert()
+                }
             }
             db.setTransactionSuccessful()
         } finally {

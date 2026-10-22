@@ -39,22 +39,39 @@ object DirectLocalMigrationManager {
 
     /**
      * Resolves the primary local IPv4 address of this device on Wi-Fi or hotspot.
+     * Prioritizes wlan/ap/swlan site-local addresses over cellular rmnet or VPN tun interfaces.
      */
     fun getLocalIpAddress(): String? {
         try {
+            var fallbackSiteLocal: String? = null
+            var fallbackAny: String? = null
             val interfaces = NetworkInterface.getNetworkInterfaces()
             while (interfaces.hasMoreElements()) {
                 val iface = interfaces.nextElement()
                 if (iface.isLoopback || !iface.isUp) continue
+                val name = iface.name.lowercase()
+                if (name.startsWith("tun") || name.startsWith("ppp") || name.startsWith("rmnet") || name.startsWith("ccmni") || name.startsWith("dummy")) {
+                    continue
+                }
+                val isWifiOrHotspot = name.startsWith("wlan") || name.startsWith("ap") || name.startsWith("swlan") || name.startsWith("eth")
 
                 val addresses = iface.inetAddresses
                 while (addresses.hasMoreElements()) {
                     val addr = addresses.nextElement()
                     if (addr is Inet4Address && !addr.isLoopbackAddress) {
-                        return addr.hostAddress
+                        val hostAddr = addr.hostAddress ?: continue
+                        if (isWifiOrHotspot && addr.isSiteLocalAddress) {
+                            return hostAddr
+                        }
+                        if (addr.isSiteLocalAddress && fallbackSiteLocal == null) {
+                            fallbackSiteLocal = hostAddr
+                        } else if (fallbackAny == null) {
+                            fallbackAny = hostAddr
+                        }
                     }
                 }
             }
+            return fallbackSiteLocal ?: fallbackAny
         } catch (_: Exception) {}
         return null
     }
@@ -168,6 +185,10 @@ object DirectLocalMigrationManager {
             socket.close()
             output.close()
             input.close()
+
+            if (totalBytes > 0 && totalReceived < totalBytes) {
+                return@withContext Result.failure(Exception("Transfer interrupted ($totalReceived / $totalBytes bytes received)."))
+            }
 
             Result.success(outputDestinationFile)
         } catch (e: Exception) {

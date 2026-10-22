@@ -168,6 +168,7 @@ fun RavenChatDialog(
 
     DisposableEffect(Unit) {
         onDispose {
+            pttEngine.cancelRecording()
             pttEngine.stopPlayback()
         }
     }
@@ -1228,16 +1229,18 @@ fun RavenMessageBubble(
         SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(msg.timestamp))
     }
 
-    val decodedBitmap = remember(msg.id, msg.attachmentBase64, msg.messageType) {
-        if (msg.messageType == "IMAGE" && !msg.attachmentBase64.isNullOrBlank()) {
-            try {
-                val bytes = Base64.decode(msg.attachmentBase64, Base64.NO_WRAP)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } catch (_: Exception) {
-                null
+    val decodedBitmap = androidx.compose.runtime.produceState<Bitmap?>(initialValue = null, msg.id, msg.attachmentBase64, msg.messageType) {
+        value = if (msg.messageType == "IMAGE" && !msg.attachmentBase64.isNullOrBlank()) {
+            withContext(Dispatchers.Default) {
+                try {
+                    val bytes = Base64.decode(msg.attachmentBase64, Base64.NO_WRAP)
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                } catch (_: Exception) {
+                    null
+                }
             }
         } else null
-    }
+    }.value
 
     Column(
         modifier = Modifier.fillMaxWidth(),

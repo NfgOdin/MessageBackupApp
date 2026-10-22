@@ -656,7 +656,7 @@ fun MessageCopilotScreen(
             onSaveEndpoint = { endpoint, model ->
                 prefs.setOllamaEndpoint(endpoint)
                 prefs.setOllamaModel(model)
-                prefs.setAiProvider("LOCAL_OLLAMA")
+                prefs.setAiProvider("OLLAMA")
             },
             onDismiss = { showGuideDialog = false }
         )
@@ -749,7 +749,9 @@ private fun ChatBubble(
 
     // Determine if this ODIN response appears to suggest/draft a reply or contains actionable response text
     val isOdinResponse = !isUser && !message.isError
-    val containsDraftOrReply = isOdinResponse && message.text.length > 5 && !message.text.startsWith("Greetings!")
+    val containsDraftOrReply = isOdinResponse && message.text.length > 5 &&
+        !message.text.startsWith("Greetings!") &&
+        !message.text.startsWith("Hail, traveler.")
 
     Column(
         modifier = Modifier.fillMaxWidth(),

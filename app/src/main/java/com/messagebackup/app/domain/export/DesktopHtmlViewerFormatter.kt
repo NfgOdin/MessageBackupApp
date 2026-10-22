@@ -64,6 +64,7 @@ class DesktopHtmlViewerFormatter {
                         val attObj = JSONObject().apply {
                             put("fileName", att.fileName)
                             put("mimeType", att.contentType)
+                            put("fileSize", 0L)
                             // Path relative to index.html in the root archive:
                             val safeThreadDir = sanitizeFilename("${thread.displayName}_${thread.threadId}")
                             put("relPath", "$safeThreadDir/$mediaSubdirPrefix${att.fileName}")
@@ -79,7 +80,7 @@ class DesktopHtmlViewerFormatter {
         }
 
         rootJson.put("threads", threadsArray)
-        val rawJsonString = rootJson.toString()
+        val rawJsonString = rootJson.toString().replace("</", "<\\/")
 
         return buildHtmlDocument(rawJsonString)
     }

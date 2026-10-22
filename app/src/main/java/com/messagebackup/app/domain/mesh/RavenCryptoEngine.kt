@@ -51,22 +51,49 @@ class RavenCryptoEngine(private val context: Context) {
             }
         }
 
-        // Generate a new EC P-256 keypair inside Android Keystore
-        val keyPairGenerator = KeyPairGenerator.getInstance(
-            KeyProperties.KEY_ALGORITHM_EC,
-            ANDROID_KEYSTORE
-        )
+        // Generate a new EC P-256 keypair inside Android Keystore (API 31+ supports PURPOSE_AGREE_KEY in hardware)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            try {
+                val keyPairGenerator = KeyPairGenerator.getInstance(
+                    KeyProperties.KEY_ALGORITHM_EC,
+                    ANDROID_KEYSTORE
+                )
+                val parameterSpec = KeyGenParameterSpec.Builder(
+                    KEY_ALIAS_IDENTITY,
+                    KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY or KeyProperties.PURPOSE_AGREE_KEY
+                ).apply {
+                    setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
+                }.build()
 
-        val parameterSpec = KeyGenParameterSpec.Builder(
-            KEY_ALIAS_IDENTITY,
-            KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY or KeyProperties.PURPOSE_AGREE_KEY
-        ).apply {
-            setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
-            // EC Curve standard P-256 is universally supported across Android Keystore TEE
-        }.build()
+                keyPairGenerator.initialize(parameterSpec)
+                return keyPairGenerator.generateKeyPair()
+            } catch (_: Exception) {
+                // Fall through to software EC P-256 fallback if hardware Keymaster rejects combined purposes
+            }
+        }
 
-        keyPairGenerator.initialize(parameterSpec)
-        return keyPairGenerator.generateKeyPair()
+        return getOrCreateSoftwareFallbackKeyPair()
+    }
+
+    private fun getOrCreateSoftwareFallbackKeyPair(): KeyPair {
+        val pubB64 = sharedPrefs.getString("fallback_ec_pub", null)
+        val privB64 = sharedPrefs.getString("fallback_ec_priv", null)
+        if (!pubB64.isNullOrBlank() && !privB64.isNullOrBlank()) {
+            try {
+                val kf = java.security.KeyFactory.getInstance("EC")
+                val pub = kf.generatePublic(java.security.spec.X509EncodedKeySpec(Base64.decode(pubB64, Base64.NO_WRAP)))
+                val priv = kf.generatePrivate(java.security.spec.PKCS8EncodedKeySpec(Base64.decode(privB64, Base64.NO_WRAP)))
+                return KeyPair(pub, priv)
+            } catch (_: Exception) {}
+        }
+        val kpg = KeyPairGenerator.getInstance("EC")
+        kpg.initialize(java.security.spec.ECGenParameterSpec("secp256r1"))
+        val kp = kpg.generateKeyPair()
+        sharedPrefs.edit()
+            .putString("fallback_ec_pub", Base64.encodeToString(kp.public.encoded, Base64.NO_WRAP))
+            .putString("fallback_ec_priv", Base64.encodeToString(kp.private.encoded, Base64.NO_WRAP))
+            .apply()
+        return kp
     }
 
     /**

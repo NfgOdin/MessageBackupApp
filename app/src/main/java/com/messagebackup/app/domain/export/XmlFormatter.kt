@@ -80,8 +80,8 @@ class XmlFormatter {
                         threadId = 0L,
                         type = MessageType.SMS,
                         direction = if (isIncoming) MessageDirection.INCOMING else MessageDirection.OUTGOING,
-                        sender = if (isIncoming) contactName else "Me",
-                        recipient = if (isIncoming) "Me" else contactName,
+                        sender = if (isIncoming) address.ifBlank { contactName } else "Me",
+                        recipient = if (isIncoming) "Me" else address.ifBlank { contactName },
                         body = body,
                         timestamp = timestamp,
                         attachments = emptyList()

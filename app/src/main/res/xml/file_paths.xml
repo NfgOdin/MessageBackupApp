@@ -2,4 +2,6 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Grants temporary read access to generated backup archives stored in the app's internal cache -->
     <cache-path name="export_cache" path="exports/" />
+    <cache-path name="root_cache" path="." />
+    <files-path name="internal_files" path="." />
 </paths>

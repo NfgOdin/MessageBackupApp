@@ -72,11 +72,7 @@ class AutoBackupWorker(
         }
 
         val isAutoBackupUnlocked = app.billingManager.isAutoBackupUnlocked.value
-        val hasCredit = if (!isAutoBackupUnlocked) {
-            app.appPreferences.consumeAutoBackupCredit()
-        } else {
-            true
-        }
+        val hasCredit = isAutoBackupUnlocked || app.appPreferences.autoBackupCredits.value > 0
 
         if (!hasCredit) {
             // User does not have active Pro/Standalone unlock and has 0 auto-backup credits
@@ -127,6 +123,9 @@ class AutoBackupWorker(
             )
 
             if (result.success && result.outputFile != null) {
+                if (!isAutoBackupUnlocked) {
+                    app.appPreferences.consumeAutoBackupCredit()
+                }
                 if (destination == OutputDestination.GOOGLE_DRIVE ||
                     destination == OutputDestination.ONEDRIVE ||
                     destination == OutputDestination.DROPBOX ||

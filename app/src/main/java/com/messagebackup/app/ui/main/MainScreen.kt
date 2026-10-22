@@ -212,7 +212,7 @@ fun MainScreen(
             }
         }
     }
-    var showOnboarding by rememberSaveable { mutableStateOf(!isOnboardingCompleted) }
+    var showOnboarding by rememberSaveable(isOnboardingCompleted) { mutableStateOf(!isOnboardingCompleted) }
     var isAppSessionUnlocked by rememberSaveable { mutableStateOf(false) }
     var pendingProtectedAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val previewLazyListState = rememberLazyListState()
@@ -2070,17 +2070,7 @@ fun MainScreen(
         com.messagebackup.app.ui.dialogs.PhoneMigrationDialog(
             latestExportFile = uiState.lastExportResult?.outputFile,
             onPrepareExport = { onReady ->
-                // Ensure a backup package exists to send
-                val currentThreads = uiState.threads
-                if (currentThreads.isNotEmpty()) {
-                    executeExportWithOptions(
-                        ExportOptions(
-                            format = ExportFormat.JSON,
-                            includeMedia = false
-                        )
-                    )
-                }
-                uiState.lastExportResult?.outputFile?.let { onReady(it) }
+                viewModel.prepareMigrationArchive(onReady)
             },
             onBackupReceivedForRestore = { receivedFile ->
                 viewModel.setShowMigrationDialog(false)

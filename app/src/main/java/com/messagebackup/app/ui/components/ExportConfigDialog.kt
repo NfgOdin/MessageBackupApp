@@ -222,36 +222,6 @@ fun ExportConfigDialog(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                // 2. Legal / Evidentiary Mode for PDF
-                if (selectedFormat == ExportFormat.PDF) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { legalEvidenceMode = !legalEvidenceMode }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = legalEvidenceMode,
-                            onCheckedChange = { legalEvidenceMode = it }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = "⚖️ Certified Legal / Court Evidentiary Mode",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                            )
-                            Text(
-                                text = "Includes UTC & local timestamps, E.164 phone headers, Page X of Y numbering, and SHA-256 tamper-evident verification checksum.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                }
-
                 // 2. HTML Theme
                 if (selectedFormat == ExportFormat.HTML) {
                     Text(

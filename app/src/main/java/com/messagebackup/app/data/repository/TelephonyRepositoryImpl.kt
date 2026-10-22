@@ -29,7 +29,7 @@ class TelephonyRepositoryImpl(
 ) : TelephonyRepository {
 
     private val contentResolver: ContentResolver = context.contentResolver
-    private val contactCache = mutableMapOf<String, String>()
+    private val contactCache = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     override fun getConversationThreads(resolveContacts: Boolean): Flow<List<ConversationThread>> = flow {
         val threads = mutableListOf<ConversationThread>()
@@ -66,6 +66,30 @@ class TelephonyRepositoryImpl(
             }
         } catch (_: Exception) {}
 
+        // Pre-query canonical addresses table in a single batch query to avoid N+1 queries per thread
+        val canonicalAddressMap = mutableMapOf<String, String>()
+        try {
+            contentResolver.query(
+                Uri.parse("content://mms-sms/canonical-addresses"),
+                arrayOf("_id", "address"),
+                null,
+                null,
+                null
+            )?.use { canonCursor ->
+                val cIdIdx = canonCursor.getColumnIndex("_id")
+                val cAddrIdx = canonCursor.getColumnIndex("address")
+                if (cIdIdx != -1 && cAddrIdx != -1) {
+                    while (canonCursor.moveToNext()) {
+                        val idStr = canonCursor.getLong(cIdIdx).toString()
+                        val addr = canonCursor.getString(cAddrIdx)
+                        if (!addr.isNullOrBlank()) {
+                            canonicalAddressMap[idStr] = addr
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
         var cursor: Cursor? = null
         try {
             cursor = contentResolver.query(
@@ -91,7 +115,7 @@ class TelephonyRepositoryImpl(
                     val recipientIds = if (recipientIdsIdx != -1) it.getString(recipientIdsIdx) ?: "" else ""
 
                     // Resolve phone number address from canonical recipient IDs
-                    val address = resolveAddressForThread(threadId, recipientIds)
+                    val address = resolveAddressForThread(threadId, recipientIds, canonicalAddressMap)
                     val contactName = if (resolveContacts && address.isNotBlank()) {
                         resolveContactName(address)
                     } else null
@@ -335,7 +359,7 @@ class TelephonyRepositoryImpl(
 
                     messages.add(
                         MessageItem(
-                            messageId = mmsId,
+                            messageId = mmsId + MMS_ID_OFFSET,
                             threadId = tId,
                             type = MessageType.MMS,
                             direction = if (isIncoming) MessageDirection.INCOMING else MessageDirection.OUTGOING,
@@ -540,7 +564,7 @@ class TelephonyRepositoryImpl(
 
                     outList.add(
                         MessageItem(
-                            messageId = mmsId,
+                            messageId = mmsId + MMS_ID_OFFSET,
                             threadId = tId,
                             type = MessageType.MMS,
                             direction = direction,
@@ -686,8 +710,21 @@ class TelephonyRepositoryImpl(
         }
     }
 
-    private fun resolveAddressForThread(threadId: Long, recipientIds: String): String {
-        // Query sms table first for this thread to find address
+    private fun resolveAddressForThread(
+        threadId: Long,
+        recipientIds: String,
+        canonicalAddressMap: Map<String, String> = emptyMap()
+    ): String {
+        // 1. Fast O(1) lookup from preloaded canonical-addresses map
+        if (recipientIds.isNotBlank() && canonicalAddressMap.isNotEmpty()) {
+            val ids = recipientIds.split(" ").filter { it.isNotBlank() }
+            for (id in ids) {
+                val cachedAddr = canonicalAddressMap[id]
+                if (!cachedAddr.isNullOrBlank()) return cachedAddr
+            }
+        }
+
+        // 2. Fallback: Query sms table for this thread to find address
         var cursor: Cursor? = null
         try {
             cursor = contentResolver.query(
@@ -695,7 +732,7 @@ class TelephonyRepositoryImpl(
                 arrayOf(Telephony.Sms.ADDRESS),
                 "${Telephony.Sms.THREAD_ID} = ?",
                 arrayOf(threadId.toString()),
-                "${Telephony.Sms.DATE} DESC"
+                "${Telephony.Sms.DATE} DESC LIMIT 1"
             )
             if (cursor != null && cursor.moveToFirst()) {
                 val addressIdx = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
@@ -710,7 +747,7 @@ class TelephonyRepositoryImpl(
             cursor?.close()
         }
 
-        // Fallback: Query canonical addresses table if recipientIds is present
+        // 3. Fallback: Query canonical addresses table per ID if recipientIds is present
         if (recipientIds.isNotBlank()) {
             val ids = recipientIds.split(" ").filter { it.isNotBlank() }
             for (id in ids) {
@@ -735,8 +772,9 @@ class TelephonyRepositoryImpl(
 
     private fun resolveContactName(phoneNumber: String): String? {
         if (phoneNumber.isBlank()) return null
-        if (contactCache.containsKey(phoneNumber)) {
-            return contactCache[phoneNumber]
+        val cached = contactCache[phoneNumber]
+        if (cached != null) {
+            return if (cached == NO_CONTACT_SENTINEL) null else cached
         }
 
         val uri = Uri.withAppendedPath(
@@ -767,7 +805,7 @@ class TelephonyRepositoryImpl(
             cursor?.close()
         }
 
-        contactCache[phoneNumber] = phoneNumber
+        contactCache[phoneNumber] = NO_CONTACT_SENTINEL
         return null
     }
 
@@ -899,5 +937,7 @@ class TelephonyRepositoryImpl(
 
     companion object {
         private const val TAG = "TelephonyRepoImpl"
+        private const val NO_CONTACT_SENTINEL = "\u0000"
+        private const val MMS_ID_OFFSET = 1_000_000_000_000L
     }
 }

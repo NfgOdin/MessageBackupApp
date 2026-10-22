@@ -501,6 +501,7 @@ class RavenSocketTransport(
 
     /**
      * Dispatches a single real-time 450ms walkie-talkie audio chunk while the user is holding the PTT button.
+     * Live PCM chunks are streamed only over direct local Wi-Fi sockets so the public HTTP relay is never rate-limited.
      */
     suspend fun sendLiveVoiceStreamChunk(
         peer: RavenPeer,
@@ -508,6 +509,7 @@ class RavenSocketTransport(
         sessionId: Long,
         seq: Int
     ) = withContext(Dispatchers.IO) {
+        if (!isReachableLocalSubnet(peer.lastKnownIp)) return@withContext
         val payload = JSONObject().apply {
             put("type", "PTT_STREAM_CHUNK")
             put("chunk_b64", chunkBase64)

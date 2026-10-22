@@ -112,7 +112,7 @@ fun DocumentViewerScreen(
                             }
                         }
                         val lower = header.fileName.lowercase()
-                        if (foundMainDoc == null && (lower.endsWith(".html") || lower.endsWith(".pdf") || lower.endsWith(".csv") || lower.endsWith(".md") || lower.endsWith(".txt"))) {
+                        if (foundMainDoc == null && (lower.endsWith(".html") || lower.endsWith(".pdf") || lower.endsWith(".csv") || lower.endsWith(".md") || lower.endsWith(".txt") || lower.endsWith(".json") || lower.endsWith(".xml"))) {
                             foundMainDoc = outFile
                         }
                     }
@@ -239,11 +239,15 @@ fun DocumentViewerScreen(
                         AndroidView(
                             factory = { ctx ->
                                 WebView(ctx).apply {
-                                    settings.javaScriptEnabled = false
+                                    settings.javaScriptEnabled = true
                                     settings.allowFileAccess = true
+                                    settings.allowContentAccess = false
                                     webViewClient = WebViewClient()
                                     loadUrl("file://${file.absolutePath}")
                                 }
+                            },
+                            onRelease = { webView ->
+                                webView.destroy()
                             },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -270,17 +274,21 @@ fun DocumentViewerScreen(
                         }
                     }
                     else -> {
-                        // Markdown, CSV, or Text
-                        Column(
+                        // Markdown, CSV, JSON, XML, or Text rendered via LazyColumn so large archives never freeze Compose
+                        val lines = remember(documentContent) {
+                            (documentContent ?: "").lines()
+                        }
+                        androidx.compose.foundation.lazy.LazyColumn(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(16.dp)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
-                            Text(
-                                text = documentContent ?: "",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                            items(lines.size) { index ->
+                                Text(
+                                    text = lines[index],
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                         }
                     }
                 }

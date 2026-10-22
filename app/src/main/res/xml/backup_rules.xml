@@ -7,4 +7,7 @@
 -->
 <full-backup-content>
     <exclude domain="sharedpref" path="message_backup_app_prefs.xml" />
+    <exclude domain="sharedpref" path="raven_mesh_prefs.xml" />
+    <exclude domain="database" path="raven_mesh.db" />
+    <exclude domain="database" path="message_backup_cache.db" />
 </full-backup-content>

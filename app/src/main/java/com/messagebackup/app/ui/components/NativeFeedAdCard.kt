@@ -119,6 +119,9 @@ fun NativeFeedAdCard(
                             adUnitId = ctx.getString(R.string.admob_banner_id)
                             loadAd(AdRequest.Builder().build())
                         }
+                    },
+                    onRelease = { adView ->
+                        adView.destroy()
                     }
                 )
             }

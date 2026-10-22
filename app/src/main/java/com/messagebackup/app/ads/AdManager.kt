@@ -30,6 +30,8 @@ class AdManager(private val context: Context) {
         private const val TAG = "AdManager"
     }
 
+    @Volatile
+    private var isMobileAdsInitialized = false
     private var rewardedAd: RewardedAd? = null
     private var isAdLoading = false
     private var rewardedInterstitialAd: RewardedInterstitialAd? = null
@@ -43,6 +45,7 @@ class AdManager(private val context: Context) {
      * then initializes the Google Mobile Ads SDK upon consent resolution.
      */
     fun initializeUmpAndAds(activity: Activity, onComplete: () -> Unit = {}) {
+        val appContext = this.context.applicationContext
         val params = ConsentRequestParameters.Builder()
             .setTagForUnderAgeOfConsent(false)
             .build()
@@ -58,7 +61,7 @@ class AdManager(private val context: Context) {
                         Log.w(TAG, "Consent form error: ${formError.message}")
                     }
                     if (consentInformation.canRequestAds()) {
-                        initializeMobileAds(activity)
+                        initializeMobileAds(appContext)
                     }
                     onComplete()
                 }
@@ -66,7 +69,7 @@ class AdManager(private val context: Context) {
             { requestConsentError ->
                 Log.w(TAG, "Consent request error: ${requestConsentError.message}")
                 if (consentInformation.canRequestAds()) {
-                    initializeMobileAds(activity)
+                    initializeMobileAds(appContext)
                 }
                 onComplete()
             }
@@ -74,25 +77,34 @@ class AdManager(private val context: Context) {
     }
 
     private fun initializeMobileAds(context: Context) {
-        MobileAds.initialize(context) {
-            loadRewardedAd(context)
-            loadRewardedInterstitialAd(context)
-            loadInterstitialAd(context)
+        val appCtx = context.applicationContext
+        if (isMobileAdsInitialized) {
+            loadRewardedAd(appCtx)
+            loadRewardedInterstitialAd(appCtx)
+            loadInterstitialAd(appCtx)
+            return
+        }
+        isMobileAdsInitialized = true
+        MobileAds.initialize(appCtx) {
+            loadRewardedAd(appCtx)
+            loadRewardedInterstitialAd(appCtx)
+            loadInterstitialAd(appCtx)
         }
     }
 
     /**
      * Preloads a high-eCPM Rewarded Interstitial Ad for high-value actions (Legal PDF export, Desktop viewer).
      */
-    fun loadRewardedInterstitialAd(context: Context) {
+    fun loadRewardedInterstitialAd(context: Context = this.context) {
         if (rewardedInterstitialAd != null || isRewardedInterstitialLoading) return
 
+        val appCtx = context.applicationContext
         isRewardedInterstitialLoading = true
-        val adUnitId = context.getString(R.string.admob_rewarded_interstitial_id)
+        val adUnitId = appCtx.getString(R.string.admob_rewarded_interstitial_id)
         val adRequest = AdRequest.Builder().build()
 
         RewardedInterstitialAd.load(
-            context,
+            appCtx,
             adUnitId,
             adRequest,
             object : RewardedInterstitialAdLoadCallback() {
@@ -125,17 +137,18 @@ class AdManager(private val context: Context) {
             return
         }
 
+        val appCtx = this.context.applicationContext
         val ad = rewardedInterstitialAd
         if (ad != null) {
             ad.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     rewardedInterstitialAd = null
-                    loadRewardedInterstitialAd(activity)
+                    loadRewardedInterstitialAd(appCtx)
                 }
 
                 override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                     rewardedInterstitialAd = null
-                    loadRewardedInterstitialAd(activity)
+                    loadRewardedInterstitialAd(appCtx)
                     onUserEarnedReward()
                 }
             }
@@ -145,23 +158,28 @@ class AdManager(private val context: Context) {
             }
         } else {
             // Fallback to standard rewarded ad
-            loadRewardedInterstitialAd(activity)
-            showRewardedAd(activity, isAdsRemoved, onUserEarnedReward)
+            loadRewardedInterstitialAd(appCtx)
+            showRewardedAd(
+                activity = activity,
+                isAdsRemoved = isAdsRemoved,
+                onUserEarnedReward = onUserEarnedReward
+            )
         }
     }
 
     /**
      * Preloads a Rewarded Ad so it is ready for instant presentation when user taps Export.
      */
-    fun loadRewardedAd(context: Context) {
+    fun loadRewardedAd(context: Context = this.context) {
         if (rewardedAd != null || isAdLoading) return
 
+        val appCtx = context.applicationContext
         isAdLoading = true
-        val adUnitId = context.getString(R.string.admob_rewarded_id)
+        val adUnitId = appCtx.getString(R.string.admob_rewarded_id)
         val adRequest = AdRequest.Builder().build()
 
         RewardedAd.load(
-            context,
+            appCtx,
             adUnitId,
             adRequest,
             object : RewardedAdLoadCallback() {
@@ -182,11 +200,14 @@ class AdManager(private val context: Context) {
 
     /**
      * Shows the preloaded Rewarded Ad.
-     * If no ad is ready or ads are removed, immediately triggers the onUserEarnedReward callback.
+     * When requireStrictReward is true (e.g., earning runes in the Arcade), rewards are ONLY granted
+     * when the user actually watches and completes the ad.
      */
     fun showRewardedAd(
         activity: Activity,
         isAdsRemoved: Boolean,
+        requireStrictReward: Boolean = false,
+        onAdUnavailable: () -> Unit = {},
         onUserEarnedReward: () -> Unit
     ) {
         if (isAdsRemoved) {
@@ -195,20 +216,25 @@ class AdManager(private val context: Context) {
             return
         }
 
+        val appCtx = this.context.applicationContext
         val ad = rewardedAd
         if (ad != null) {
             ad.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     rewardedAd = null
                     // Preload the next rewarded ad
-                    loadRewardedAd(activity)
+                    loadRewardedAd(appCtx)
                 }
 
                 override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                     rewardedAd = null
-                    loadRewardedAd(activity)
-                    // If ad display fails, grant export gracefully rather than blocking user
-                    onUserEarnedReward()
+                    loadRewardedAd(appCtx)
+                    if (requireStrictReward) {
+                        onAdUnavailable()
+                    } else {
+                        // If ad display fails for a utility export, grant export gracefully rather than blocking user
+                        onUserEarnedReward()
+                    }
                 }
             }
 
@@ -216,24 +242,29 @@ class AdManager(private val context: Context) {
                 onUserEarnedReward()
             }
         } else {
-            // Ad was not ready; don't penalize user - proceed with export and queue load
-            loadRewardedAd(activity)
-            onUserEarnedReward()
+            loadRewardedAd(appCtx)
+            if (requireStrictReward) {
+                onAdUnavailable()
+            } else {
+                // Ad was not ready; don't penalize user for utility export - proceed and queue load
+                onUserEarnedReward()
+            }
         }
     }
 
     /**
      * Preloads an Interstitial Ad for screen transition monetization.
      */
-    fun loadInterstitialAd(context: Context) {
+    fun loadInterstitialAd(context: Context = this.context) {
         if (interstitialAd != null || isInterstitialLoading) return
 
+        val appCtx = context.applicationContext
         isInterstitialLoading = true
-        val adUnitId = context.getString(R.string.admob_interstitial_id)
+        val adUnitId = appCtx.getString(R.string.admob_interstitial_id)
         val adRequest = AdRequest.Builder().build()
 
         com.google.android.gms.ads.interstitial.InterstitialAd.load(
-            context,
+            appCtx,
             adUnitId,
             adRequest,
             object : com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback() {
@@ -275,26 +306,27 @@ class AdManager(private val context: Context) {
             return
         }
 
+        val appCtx = this.context.applicationContext
         val ad = interstitialAd
         if (ad != null) {
             ad.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     interstitialAd = null
                     lastInterstitialShownTime = System.currentTimeMillis()
-                    loadInterstitialAd(activity)
+                    loadInterstitialAd(appCtx)
                     onComplete()
                 }
 
                 override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                     interstitialAd = null
-                    loadInterstitialAd(activity)
+                    loadInterstitialAd(appCtx)
                     onComplete()
                 }
             }
 
             ad.show(activity)
         } else {
-            loadInterstitialAd(activity)
+            loadInterstitialAd(appCtx)
             onComplete()
         }
     }

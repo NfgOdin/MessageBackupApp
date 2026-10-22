@@ -251,55 +251,87 @@ class BillingManager(
     }
 
     private fun handlePurchasesList(purchases: List<Purchase>) {
+        val appPrefs = runCatching { com.messagebackup.app.MessageBackupApp.instance.appPreferences }.getOrNull()
+        val processedTokens = prefs.getStringSet("processed_consumable_tokens", emptySet())?.toMutableSet() ?: mutableSetOf()
+
         for (purchase in purchases) {
             if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                var isNonConsumable = false
+
                 if (purchase.products.contains(PRODUCT_REMOVE_ADS)) {
-                    prefs.edit().putBoolean(KEY_ADS_REMOVED, true).apply()
-                    _isAdsRemoved.value = true
-                    // Pro includes auto backup, Huginn, and Odin Eye forever
+                    isNonConsumable = true
                     prefs.edit()
+                        .putBoolean(KEY_ADS_REMOVED, true)
                         .putBoolean(KEY_AUTO_BACKUP, true)
                         .putBoolean(KEY_HUGINN_UNLOCKED, true)
                         .putBoolean(KEY_ODIN_UNLOCKED, true)
                         .apply()
+                    _isAdsRemoved.value = true
                     _isAutoBackupUnlocked.value = true
                     _isHuginnUnlocked.value = true
                     _isOdinUnlocked.value = true
-                } else if (purchase.products.contains(PRODUCT_AUTO_BACKUP)) {
+                    appPrefs?.setHuginnPermanentUnlocked(true)
+                    appPrefs?.setOdinPermanentUnlocked(true)
+                }
+                if (purchase.products.contains(PRODUCT_AUTO_BACKUP)) {
+                    isNonConsumable = true
                     prefs.edit().putBoolean(KEY_AUTO_BACKUP, true).apply()
                     _isAutoBackupUnlocked.value = true
-                } else if (purchase.products.contains(PRODUCT_UNLOCK_HUGINN)) {
+                }
+                if (purchase.products.contains(PRODUCT_UNLOCK_HUGINN)) {
+                    isNonConsumable = true
                     prefs.edit().putBoolean(KEY_HUGINN_UNLOCKED, true).apply()
                     _isHuginnUnlocked.value = true
-                } else if (purchase.products.contains(PRODUCT_UNLOCK_ODIN_EYE)) {
+                    appPrefs?.setHuginnPermanentUnlocked(true)
+                }
+                if (purchase.products.contains(PRODUCT_UNLOCK_ODIN_EYE)) {
+                    isNonConsumable = true
                     prefs.edit().putBoolean(KEY_ODIN_UNLOCKED, true).apply()
                     _isOdinUnlocked.value = true
-                } else if (purchase.products.contains(PRODUCT_PACK_ANSUZ_100)) {
-                    val appPrefs = com.messagebackup.app.MessageBackupApp.instance.appPreferences
-                    appPrefs.addAnsuzCredits(100)
-                    consumePurchase(purchase)
-                } else if (purchase.products.contains(PRODUCT_PACK_OTHALA_100)) {
-                    val appPrefs = com.messagebackup.app.MessageBackupApp.instance.appPreferences
-                    appPrefs.addAiCredits(100)
-                    consumePurchase(purchase)
-                } else if (purchase.products.contains(PRODUCT_PACK_JERA_10)) {
-                    val appPrefs = com.messagebackup.app.MessageBackupApp.instance.appPreferences
-                    appPrefs.addAutoBackupCredits(10)
-                    consumePurchase(purchase)
+                    appPrefs?.setOdinPermanentUnlocked(true)
+                }
+
+                if (isNonConsumable) {
+                    if (!purchase.isAcknowledged) {
+                        acknowledgeNonConsumablePurchase(purchase)
+                    }
                 } else {
-                    // Consumable tip - consume so user can donate again if desired
-                    consumePurchase(purchase)
+                    // Consumable packs & tips: consume and grant once per purchaseToken
+                    val token = purchase.purchaseToken
+                    val alreadyGranted = processedTokens.contains(token)
+                    consumePurchase(purchase) {
+                        if (!alreadyGranted) {
+                            processedTokens.add(token)
+                            prefs.edit().putStringSet("processed_consumable_tokens", processedTokens).apply()
+                            when {
+                                purchase.products.contains(PRODUCT_PACK_ANSUZ_100) -> appPrefs?.addAnsuzCredits(100)
+                                purchase.products.contains(PRODUCT_PACK_OTHALA_100) -> appPrefs?.addAiCredits(100)
+                                purchase.products.contains(PRODUCT_PACK_JERA_10) -> appPrefs?.addAutoBackupCredits(10)
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    private fun consumePurchase(purchase: Purchase) {
+    private fun acknowledgeNonConsumablePurchase(purchase: Purchase) {
+        val params = com.android.billingclient.api.AcknowledgePurchaseParams.newBuilder()
+            .setPurchaseToken(purchase.purchaseToken)
+            .build()
+        billingClient.acknowledgePurchase(params) { _ -> }
+    }
+
+    private fun consumePurchase(purchase: Purchase, onConsumedSuccess: () -> Unit = {}) {
         val consumeParams = com.android.billingclient.api.ConsumeParams.newBuilder()
             .setPurchaseToken(purchase.purchaseToken)
             .build()
 
-        billingClient.consumeAsync(consumeParams) { _, _ -> }
+        billingClient.consumeAsync(consumeParams) { result, _ ->
+            if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                onConsumedSuccess()
+            }
+        }
     }
 
     /**
@@ -334,6 +366,11 @@ class BillingManager(
                 _isAutoBackupUnlocked.value = true
                 _isHuginnUnlocked.value = true
                 _isOdinUnlocked.value = true
+                runCatching {
+                    val appPrefs = com.messagebackup.app.MessageBackupApp.instance.appPreferences
+                    appPrefs.setHuginnPermanentUnlocked(true)
+                    appPrefs.setOdinPermanentUnlocked(true)
+                }
                 return true
             }
         } catch (e: Exception) {
@@ -356,5 +393,10 @@ class BillingManager(
         _isAutoBackupUnlocked.value = false
         _isHuginnUnlocked.value = false
         _isOdinUnlocked.value = false
+        runCatching {
+            val appPrefs = com.messagebackup.app.MessageBackupApp.instance.appPreferences
+            appPrefs.setHuginnPermanentUnlocked(false)
+            appPrefs.setOdinPermanentUnlocked(false)
+        }
     }
 }

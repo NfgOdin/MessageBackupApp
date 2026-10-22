@@ -391,6 +391,7 @@ class RavenVoicePttEngine(context: Context) {
             liveStreamAudioTrack?.release()
         } catch (_: Exception) {}
         liveStreamAudioTrack = null
+        restoreAudioRouting()
     }
 
     /**
@@ -471,9 +472,7 @@ class RavenVoicePttEngine(context: Context) {
                 if (activeTempPlaybackFile === tempFile) {
                     activeTempPlaybackFile = null
                 }
-                if (!useLoudspeaker) {
-                    restoreAudioRouting()
-                }
+                restoreAudioRouting()
             }
         }
     }
@@ -531,6 +530,9 @@ class RavenVoicePttEngine(context: Context) {
     fun transcribeLiveSpeech(
         onPartialOrFinalText: (String) -> Unit
     ) {
+        // Avoid starting external SpeechRecognizer while MediaRecorder is actively capturing PTT audio,
+        // as Android's external speech service can preempt microphone focus and silence the recording.
+        if (mediaRecorder != null) return
         Handler(Looper.getMainLooper()).post {
             try {
                 if (!SpeechRecognizer.isRecognitionAvailable(appContext)) return@post

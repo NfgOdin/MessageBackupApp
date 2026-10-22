@@ -677,7 +677,7 @@ class RavenGlobalRelayTransport(
      * High-speed, atomic HTTP POST/PUT dispatch to peer's global relay inbox.
      * Supports both compact inline JSON packets (<3.8KB) and larger attachment packets (Voice Notes, Encrypted Images & Files).
      */
-    private fun sendOverRelay(targetPeerId: String, payload: String): Boolean {
+    private suspend fun sendOverRelay(targetPeerId: String, payload: String): Boolean {
         val targetTopic = getTopicForCallsign(targetPeerId)
         val url = "$RELAY_HTTP_BASE/$targetTopic"
 
@@ -697,17 +697,24 @@ class RavenGlobalRelayTransport(
         val request = requestBuilder.post(body).build()
 
         for (attempt in 1..3) {
+            var shouldRetry429 = false
+            var shouldRetryError = false
             try {
                 pollClient.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         return true
                     }
                     if (response.code == 429) {
-                        Thread.sleep(500)
+                        shouldRetry429 = true
                     }
                 }
             } catch (e: Exception) {
-                try { Thread.sleep(250) } catch (_: Exception) {}
+                shouldRetryError = true
+            }
+            if (shouldRetry429) {
+                delay(500)
+            } else if (shouldRetryError) {
+                delay(250)
             }
         }
         return false

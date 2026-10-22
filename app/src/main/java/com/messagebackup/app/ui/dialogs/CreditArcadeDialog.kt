@@ -116,8 +116,8 @@ fun CreditArcadeDialog(
     val isAdsRemoved by billing.isAdsRemoved.collectAsState()
     val isHuginnUnlockedByBilling by billing.isHuginnUnlocked.collectAsState()
 
-    var selectedTab by remember { mutableStateOf(0) } // 0 = Earn Free (Ads), 1 = Runic Bazaar (Store)
-    var selectedOption by remember { mutableStateOf(RewardOption.HUGINN_LEASE) }
+    var selectedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(0) } // 0 = Earn Free (Ads), 1 = Runic Bazaar (Store)
+    var selectedOption by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(RewardOption.HUGINN_LEASE) }
 
     var showCelebrationDialog by remember { mutableStateOf(false) }
     var celebrationTitle by remember { mutableStateOf("") }
@@ -502,6 +502,10 @@ fun CreditArcadeDialog(
                                             adManager.showRewardedAd(
                                                 activity = activity,
                                                 isAdsRemoved = false,
+                                                requireStrictReward = true,
+                                                onAdUnavailable = {
+                                                    Toast.makeText(context, "Ad is still loading or connection is offline. Please try again in a moment.", Toast.LENGTH_SHORT).show()
+                                                },
                                                 onUserEarnedReward = {
                                                     prefs.recordRewardAdWatched()
                                                     when (option) {
@@ -760,6 +764,10 @@ fun CreditArcadeDialog(
                                         adManager.showRewardedAd(
                                             activity = activity,
                                             isAdsRemoved = false,
+                                            requireStrictReward = true,
+                                            onAdUnavailable = {
+                                                Toast.makeText(context, "Ad is still loading or connection is offline. Please try again in a moment.", Toast.LENGTH_SHORT).show()
+                                            },
                                             onUserEarnedReward = {
                                                 prefs.recordRewardAdWatched()
                                                 val completed = prefs.recordHuginnAdWatched()

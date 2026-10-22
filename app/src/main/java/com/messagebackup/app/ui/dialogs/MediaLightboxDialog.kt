@@ -362,7 +362,10 @@ private fun LightboxMediaPage(item: VaultMediaItem) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .transformable(state = transformState),
+            .transformable(
+                state = transformState,
+                canPan = { scale > 1.01f }
+            ),
         contentAlignment = Alignment.Center
     ) {
         if (isLoading) {

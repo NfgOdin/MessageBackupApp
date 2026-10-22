@@ -162,6 +162,10 @@ class HuginnLeaseExpiryWorker(
             .setAutoCancel(true)
             .build()
 
-        manager.notify(8711, notification)
+        try {
+            manager.notify(8711, notification)
+        } catch (_: SecurityException) {
+            // Notification permission not granted on Android 13+
+        }
     }
 }

@@ -178,22 +178,26 @@ fun SettingsScreen(
     var showDevKeyDialog by remember { mutableStateOf(false) }
     var devKeyInput by remember { mutableStateOf("") }
     var showAutoBackupThreadPicker by remember { mutableStateOf(false) }
-    val allConversationThreads by remember(resolveContacts) {
-        app.realTelephonyRepository.getConversationThreads(resolveContacts = resolveContacts)
+    val allConversationThreads by remember(resolveContacts, showAutoBackupThreadPicker) {
+        if (showAutoBackupThreadPicker) {
+            app.realTelephonyRepository.getConversationThreads(resolveContacts = resolveContacts)
+        } else {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
     }.collectAsState(initial = emptyList())
 
     // Collapsible / Dropdown states for Settings sections
-    var isProCardExpanded by remember { mutableStateOf(!isAdsRemoved) }
-    var isSaveLocationExpanded by remember { mutableStateOf(false) }
-    var isPaginationExpanded by remember { mutableStateOf(false) }
+    var isProCardExpanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(!isAdsRemoved) }
+    var isSaveLocationExpanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var isPaginationExpanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var customSplitInput by remember(maxMessagesPerFile) {
         mutableStateOf(if (maxMessagesPerFile > 0) maxMessagesPerFile.toString() else "")
     }
-    var isFormatPickerExpanded by remember { mutableStateOf(false) }
-    var isPerformanceExpanded by remember { mutableStateOf(false) }
-    var isOdinExpanded by remember { mutableStateOf(false) }
-    var isRavenExpanded by remember { mutableStateOf(false) }
-    var isSecurityExpanded by remember { mutableStateOf(false) }
+    var isFormatPickerExpanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var isPerformanceExpanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var isOdinExpanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var isRavenExpanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var isSecurityExpanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -214,12 +218,15 @@ fun SettingsScreen(
     }
 
     // Export cache size computation (including subdirectories like unzipped viewer files)
-    val exportsDir = File(context.cacheDir, "exports")
-    var cacheSizeMb by remember {
-        val bytes = if (exportsDir.exists()) {
-            exportsDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-        } else 0L
-        mutableStateOf(String.format("%.2f MB", bytes.toDouble() / (1024 * 1024)))
+    val exportsDir = remember { File(context.cacheDir, "exports") }
+    var cacheSizeMb by remember { mutableStateOf("Calculating...") }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            if (exportsDir.exists()) {
+                exportsDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+            } else 0L
+        }
+        cacheSizeMb = String.format("%.2f MB", bytes.toDouble() / (1024 * 1024))
     }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
@@ -2957,7 +2964,7 @@ Rules:
             onSaveEndpoint = { endpoint, model ->
                 prefs.setOllamaEndpoint(endpoint)
                 prefs.setOllamaModel(model)
-                prefs.setAiProvider("LOCAL_OLLAMA")
+                prefs.setAiProvider("OLLAMA")
             },
             onDismiss = { showOllamaGuide = false }
         )

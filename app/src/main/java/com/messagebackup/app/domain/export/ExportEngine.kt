@@ -98,7 +98,9 @@ class ExportEngine(
                         customEnd = options.customEndDate
                     )
                     totalProcessedMessages += messages.size
-                    processedThreadsMap[thread] = messages
+                    if (options.format == ExportFormat.DESKTOP_VIEWER) {
+                        processedThreadsMap[thread] = messages
+                    }
 
                     val threadDirName = sanitizeFilename("${thread.displayName}_${thread.threadId}")
                     val mediaDirEntry = "$threadDirName/media/"

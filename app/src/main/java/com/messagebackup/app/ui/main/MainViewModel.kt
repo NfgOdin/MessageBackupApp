@@ -170,7 +170,7 @@ class MainViewModel : ViewModel() {
             searchQuery = if (!active) "" else _uiState.value.searchQuery
         )
         if (!active) {
-            _uiState.value = _uiState.value.copy(filteredThreads = _uiState.value.threads)
+            _uiState.value = _uiState.value.copy(filteredThreads = sortThreadList(_uiState.value.threads))
         }
     }
 
@@ -870,7 +870,7 @@ class MainViewModel : ViewModel() {
         val targetThread = _uiState.value.selectedThreadForPreview
         val threads = if (targetThread != null) listOf(targetThread) else _uiState.value.threads.take(15)
 
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             var sentCount = 0
             var receivedCount = 0
             var firstTimestamp: Long? = null
@@ -902,16 +902,18 @@ class MainViewModel : ViewModel() {
                 }
             }
 
-            onResult(
-                PhraseFrequencyResult(
-                    query = query.trim(),
-                    sentCount = sentCount,
-                    receivedCount = receivedCount,
-                    totalCount = sentCount + receivedCount,
-                    firstTimestamp = firstTimestamp,
-                    lastTimestamp = lastTimestamp
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                onResult(
+                    PhraseFrequencyResult(
+                        query = query.trim(),
+                        sentCount = sentCount,
+                        receivedCount = receivedCount,
+                        totalCount = sentCount + receivedCount,
+                        firstTimestamp = firstTimestamp,
+                        lastTimestamp = lastTimestamp
+                    )
                 )
-            )
+            }
         }
     }
 
@@ -923,6 +925,38 @@ class MainViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(showReviewPromptDialog = show)
     }
 
+    fun prepareMigrationArchive(onReady: (java.io.File) -> Unit) {
+        val existingFile = _uiState.value.lastExportResult?.outputFile
+        if (existingFile != null && existingFile.exists()) {
+            onReady(existingFile)
+            return
+        }
+        viewModelScope.launch {
+            val selectedIds = _uiState.value.selectedThreadIds
+            val threadsToExport = if (selectedIds.isNotEmpty()) {
+                _uiState.value.threads.filter { selectedIds.contains(it.threadId) }
+            } else {
+                _uiState.value.threads
+            }
+            if (threadsToExport.isEmpty()) {
+                return@launch
+            }
+            val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                app.exportEngine.exportThreads(
+                    threads = threadsToExport,
+                    options = ExportOptions(
+                        format = com.messagebackup.app.model.ExportFormat.JSON,
+                        includeMedia = false
+                    ),
+                    resolveContacts = prefs.resolveContacts.value && _uiState.value.hasContactsPermission,
+                    customSafTreeUri = null
+                )
+            }
+            _uiState.value = _uiState.value.copy(lastExportResult = result)
+            result.outputFile?.let { onReady(it) }
+        }
+    }
+
     fun startRestoreFromUri(uri: Uri, onResult: (Boolean, Int, String) -> Unit) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
@@ -931,39 +965,69 @@ class MainViewModel : ViewModel() {
             )
 
             try {
-                val inputStream = app.contentResolver.openInputStream(uri)
-                if (inputStream == null) {
+                val messagesWithFallbackAddress = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val rawBytes = app.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: return@withContext null
+
+                    val parsedList = mutableListOf<Pair<MessageItem, String>>()
+                    val isZip = rawBytes.size >= 4 && rawBytes[0] == 0x50.toByte() && rawBytes[1] == 0x4B.toByte()
+
+                    if (isZip) {
+                        java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(rawBytes)).use { zis ->
+                            var entry = zis.nextEntry
+                            while (entry != null) {
+                                if (!entry.isDirectory) {
+                                    val entryName = entry.name.lowercase()
+                                    if (entryName.endsWith(".json") || entryName.endsWith(".xml")) {
+                                        val entryText = zis.bufferedReader(Charsets.UTF_8).readText()
+                                        val trimmedText = entryText.trimStart()
+                                        if (trimmedText.startsWith("{")) {
+                                            val (thread, parsedMsgs) = com.messagebackup.app.domain.export.JsonFormatter().parseBackupJson(entryText)
+                                            val addr = thread?.address ?: ""
+                                            parsedMsgs.forEach { parsedList.add(it to addr) }
+                                        } else if (trimmedText.startsWith("<")) {
+                                            val parsedMsgs = com.messagebackup.app.domain.export.XmlFormatter().parseBackupXml(entryText)
+                                            parsedMsgs.forEach { parsedList.add(it to "") }
+                                        }
+                                    }
+                                }
+                                zis.closeEntry()
+                                entry = zis.nextEntry
+                            }
+                        }
+                    } else {
+                        val content = String(rawBytes, Charsets.UTF_8)
+                        val trimmed = content.trimStart()
+                        if (trimmed.startsWith("{")) {
+                            val (thread, parsedMsgs) = com.messagebackup.app.domain.export.JsonFormatter().parseBackupJson(content)
+                            val addr = thread?.address ?: ""
+                            parsedMsgs.forEach { parsedList.add(it to addr) }
+                        } else if (trimmed.startsWith("<")) {
+                            val parsedMsgs = com.messagebackup.app.domain.export.XmlFormatter().parseBackupXml(content)
+                            parsedMsgs.forEach { parsedList.add(it to "") }
+                        } else {
+                            throw IllegalArgumentException("Unsupported backup format. Please select a valid .zip, .json, or .xml backup.")
+                        }
+                    }
+                    parsedList
+                }
+
+                if (messagesWithFallbackAddress == null) {
                     _uiState.value = _uiState.value.copy(isRestoring = false, restoreProgressMessage = null)
                     onResult(false, 0, "Could not open backup file.")
                     return@launch
                 }
 
-                val content = inputStream.bufferedReader().use { it.readText() }
-                val messages = mutableListOf<MessageItem>()
-                var fallbackAddress = ""
-
-                if (content.trimStart().startsWith("{")) {
-                    val (thread, parsedMsgs) = com.messagebackup.app.domain.export.JsonFormatter().parseBackupJson(content)
-                    messages.addAll(parsedMsgs)
-                    fallbackAddress = thread?.address ?: ""
-                } else if (content.trimStart().startsWith("<")) {
-                    val parsedMsgs = com.messagebackup.app.domain.export.XmlFormatter().parseBackupXml(content)
-                    messages.addAll(parsedMsgs)
-                } else {
-                    _uiState.value = _uiState.value.copy(isRestoring = false, restoreProgressMessage = null)
-                    onResult(false, 0, "Unsupported backup format. Please select a valid .json or .xml backup.")
-                    return@launch
-                }
-
-                if (messages.isEmpty()) {
+                if (messagesWithFallbackAddress.isEmpty()) {
                     _uiState.value = _uiState.value.copy(isRestoring = false, restoreProgressMessage = null)
                     onResult(false, 0, "No messages found in the selected backup file.")
                     return@launch
                 }
 
                 var successCount = 0
-                val total = messages.size
-                for ((index, msg) in messages.withIndex()) {
+                val total = messagesWithFallbackAddress.size
+                for ((index, pair) in messagesWithFallbackAddress.withIndex()) {
+                    val (msg, fallbackAddress) = pair
                     val pct = if (total > 0) (((index + 1).toFloat() / total.toFloat()) * 100f).toInt().coerceIn(0, 100) else 0
                     _uiState.value = _uiState.value.copy(
                         restoreProgressPct = pct,
@@ -980,7 +1044,7 @@ class MainViewModel : ViewModel() {
                     restoredCount = successCount
                 )
 
-                loadThreads()
+                loadThreads(forceRefresh = true)
                 onResult(true, successCount, "Successfully restored $successCount messages to your phone!")
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isRestoring = false, restoreProgressMessage = null)

@@ -125,6 +125,15 @@ fun RavenIdentityDialog(
     val pttEngine = remember { com.messagebackup.app.domain.mesh.RavenVoicePttEngine.getInstance(context) }
     val bleEngine = remember { com.messagebackup.app.domain.mesh.RavenBleMeshEngine(context, scope) }
 
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            bleEngine.stopScanning()
+            bleEngine.stopBroadcasting()
+            pttEngine.cancelRecording()
+            pttEngine.stopPlayback()
+        }
+    }
+
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var myCallSign by remember { mutableStateOf(cryptoEngine.getRavenCallSign()) }
     var showEditNameDialog by remember { mutableStateOf(false) }
