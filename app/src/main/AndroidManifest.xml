@@ -15,6 +15,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="com.android.vending.BILLING" />
 
+    <!-- Google Play Advertising ID permission (Targeting Android 13+ / API 33+) -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
+
     <!-- Mind-to-Mind PTT (Push-To-Talk) Audio Capture & Audio Routing for Raven Mesh Walkie-Talkie -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
