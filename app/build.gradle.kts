@@ -8,7 +8,7 @@ android {
     namespace = "com.messagebackup.app"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.messagebackup.app"
+        applicationId = "com.nfgodin.muninn"
         minSdk = 26
         targetSdk = 36
         versionCode = 10000

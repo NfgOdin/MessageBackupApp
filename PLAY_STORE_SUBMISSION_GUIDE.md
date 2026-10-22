@@ -65,7 +65,7 @@ Before building your final signed `.aab` (Android App Bundle) for Production:
    - `app/src/main/java/com/messagebackup/app/ads/AdManager.kt` (`REWARDED_AD_UNIT_ID`)
    - `app/src/main/java/com/messagebackup/app/ui/main/MainScreen.kt` (Banner `adUnitId`)
 2. **Configure OAuth Client ID in Google Cloud Console** (for optional Google Drive sync):
-   - Register your **Release Keystore SHA-1 fingerprint** and the **Google Play App Signing SHA-1 fingerprint** in Google Cloud Console under your Android OAuth 2.0 Client ID (`com.messagebackup.app`).
+   - Register your **Release Keystore SHA-1 fingerprint** and the **Google Play App Signing SHA-1 fingerprint** in Google Cloud Console under your Android OAuth 2.0 Client ID (`com.nfgodin.muninn`).
 3. **Create In-App Products in Play Console** (matching `BillingManager.kt`):
    - `pro_lifetime` (One-time purchase)
    - `pro_monthly` / `pro_yearly` (Subscriptions)
