@@ -100,6 +100,9 @@ dependencies {
   // Global Cellular/Internet P2P Transport (OkHttp WebSockets / HTTP)
   implementation(libs.okhttp)
 
+  // On-Device Gemini Nano via Android AICore (ML Kit GenAI Prompt API)
+  implementation(libs.mlkit.genai.prompt)
+
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
