@@ -29,18 +29,22 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
@@ -66,11 +70,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.messagebackup.app.R
 import com.messagebackup.app.ads.AdManager
+import com.messagebackup.app.data.local.LocalMessageDatabase
 import com.messagebackup.app.data.preferences.AppPreferences
 import com.messagebackup.app.domain.ai.AiClientEngine
 import com.messagebackup.app.domain.ai.AiProviderType
@@ -80,7 +86,9 @@ import com.messagebackup.app.domain.ai.OdinChatMessage
 import com.messagebackup.app.model.ConversationThread
 import com.messagebackup.app.model.MessageItem
 import com.messagebackup.app.ui.dialogs.OllamaSetupGuideDialog
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -110,6 +118,7 @@ fun MessageCopilotScreen(
     val activity = context as Activity
     val scope = rememberCoroutineScope()
     val aiEngine = remember { AiClientEngine() }
+    val localDb = remember { LocalMessageDatabase.getInstance(context) }
 
     val aiCredits by prefs.aiCredits.collectAsState()
     val isOdinPermanentUnlocked by prefs.isOdinPermanentUnlocked.collectAsState()
@@ -126,6 +135,15 @@ fun MessageCopilotScreen(
     val odinTopP by prefs.odinTopP.collectAsState()
     val odinNumCtx by prefs.odinNumCtx.collectAsState()
     val customSystemPrompt by prefs.odinCustomSystemPrompt.collectAsState()
+    val odinSaveHistory by prefs.odinSaveHistory.collectAsState()
+
+    val threadKey = remember(targetContactName) {
+        if (targetContactName == "All Conversations" || targetContactName.isBlank()) {
+            "ALL_CONVERSATIONS"
+        } else {
+            "THREAD_${targetContactName.trim()}"
+        }
+    }
 
     val currentProvider = remember(aiProviderStr) {
         try {
@@ -139,6 +157,7 @@ fun MessageCopilotScreen(
     var pendingPromptText by remember { mutableStateOf<String?>(null) }
     var showPromptSpendConfirm by remember { mutableStateOf(false) }
     var showRadarSpendConfirm by remember { mutableStateOf(false) }
+    var showClearHistoryMenu by remember { mutableStateOf(false) }
 
     var showGuideDialog by remember { mutableStateOf(false) }
     var showArcadeDialog by remember { mutableStateOf(false) }
@@ -146,18 +165,32 @@ fun MessageCopilotScreen(
     var inputText by remember { mutableStateOf("") }
     var isThinking by remember { mutableStateOf(false) }
 
-    val chatMessages = remember {
+    val greetingMessage = remember(targetContactName) {
         val greeting = if (targetContactName == "All Conversations" || targetContactName.isBlank()) {
             "Hail, traveler. I am O.D.I.N. (Omniscient Document & Insights Navigator). My raven Muninn remembers all words, oaths, dates, and secrets in these vaults. What wisdom or forgotten truth dost thou seek?"
         } else {
             "Hail, traveler. I am O.D.I.N. The archives of your words with $targetContactName are open before me. Ask of their oaths, door codes, dates, or hidden truths, and Muninn shall find them."
         }
-        mutableStateListOf(
-            OdinChatMessage(
-                sender = OdinChatMessage.MessageSender.ODIN,
-                text = greeting
-            )
+        OdinChatMessage(
+            sender = OdinChatMessage.MessageSender.ODIN,
+            text = greeting
         )
+    }
+
+    val chatMessages = remember(threadKey) {
+        mutableStateListOf(greetingMessage)
+    }
+
+    // Load saved O.D.I.N. history for this conversation when opened
+    LaunchedEffect(threadKey, odinSaveHistory) {
+        if (odinSaveHistory) {
+            val savedHistory = withContext(Dispatchers.IO) {
+                localDb.getOdinChatHistory(threadKey)
+            }
+            chatMessages.clear()
+            chatMessages.add(greetingMessage)
+            chatMessages.addAll(savedHistory)
+        }
     }
 
     val listState = rememberLazyListState()
@@ -179,7 +212,13 @@ fun MessageCopilotScreen(
 
     fun executeSendPrompt(trimmed: String) {
         inputText = ""
-        chatMessages.add(OdinChatMessage(sender = OdinChatMessage.MessageSender.USER, text = trimmed))
+        val userMsg = OdinChatMessage(sender = OdinChatMessage.MessageSender.USER, text = trimmed)
+        chatMessages.add(userMsg)
+        if (odinSaveHistory) {
+            scope.launch(Dispatchers.IO) {
+                localDb.insertOdinChatMessage(threadKey, userMsg)
+            }
+        }
         isThinking = true
 
         scope.launch {
@@ -208,9 +247,13 @@ fun MessageCopilotScreen(
                     if (!isOdinUnlimited) {
                         prefs.consumeAiCredit()
                     }
-                    chatMessages.add(
-                        OdinChatMessage(sender = OdinChatMessage.MessageSender.ODIN, text = result.responseText)
-                    )
+                    val odinReply = OdinChatMessage(sender = OdinChatMessage.MessageSender.ODIN, text = result.responseText)
+                    chatMessages.add(odinReply)
+                    if (odinSaveHistory) {
+                        withContext(Dispatchers.IO) {
+                            localDb.insertOdinChatMessage(threadKey, odinReply)
+                        }
+                    }
                 }
                 is AiQueryResult.Error -> {
                     // Credit is preserved/never taken on error
@@ -354,14 +397,14 @@ fun MessageCopilotScreen(
                         ) {
                             if (isOdinUnlimited) {
                                 Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
+                                    painter = painterResource(id = R.drawable.ic_odin_allfather),
                                     contentDescription = null,
                                     modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.onTertiaryContainer
                                 )
                             } else {
                                 Icon(
-                                    painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_rune_othala),
+                                    painter = painterResource(id = com.messagebackup.app.R.drawable.ic_rune_othala),
                                     contentDescription = null,
                                     modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer
@@ -414,6 +457,49 @@ fun MessageCopilotScreen(
                             modifier = Modifier.size(38.dp)
                         ) {
                             Icon(imageVector = Icons.Default.VideoLibrary, contentDescription = "Reward Arcade", modifier = Modifier.size(20.dp))
+                        }
+                    }
+
+                    // Clear O.D.I.N. History Menu
+                    Box {
+                        IconButton(
+                            onClick = { showClearHistoryMenu = true },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.DeleteSweep, contentDescription = "Clear O.D.I.N. History", modifier = Modifier.size(20.dp))
+                        }
+                        DropdownMenu(
+                            expanded = showClearHistoryMenu,
+                            onDismissRequest = { showClearHistoryMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Clear This Conversation's History") },
+                                onClick = {
+                                    showClearHistoryMenu = false
+                                    scope.launch(Dispatchers.IO) {
+                                        localDb.clearOdinChatHistoryForThread(threadKey)
+                                        withContext(Dispatchers.Main) {
+                                            chatMessages.clear()
+                                            chatMessages.add(greetingMessage)
+                                            Toast.makeText(context, "Cleared O.D.I.N. history for this conversation", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Delete All Saved O.D.I.N. History") },
+                                onClick = {
+                                    showClearHistoryMenu = false
+                                    scope.launch(Dispatchers.IO) {
+                                        localDb.clearAllOdinChatHistory()
+                                        withContext(Dispatchers.Main) {
+                                            chatMessages.clear()
+                                            chatMessages.add(greetingMessage)
+                                            Toast.makeText(context, "Deleted all saved O.D.I.N. chat history", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            )
                         }
                     }
 
@@ -686,7 +772,7 @@ private fun ChatBubble(
                         modifier = Modifier.padding(bottom = 4.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.AutoAwesome,
+                            painter = painterResource(id = R.drawable.ic_odin_allfather),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(14.dp)
@@ -707,6 +793,8 @@ private fun ChatBubble(
                 )
 
                 if (containsDraftOrReply) {
+                    val scope = rememberCoroutineScope()
+                    val localDb = remember { LocalMessageDatabase.getInstance(context) }
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -725,6 +813,38 @@ private fun ChatBubble(
                                 Icon(
                                     imageVector = Icons.Default.ContentCopy,
                                     contentDescription = "Copy text",
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+                            )
+                        )
+
+                        // Pin to Starred Vault Memories chip
+                        AssistChip(
+                            onClick = {
+                                scope.launch(Dispatchers.IO) {
+                                    localDb.addStarredMemory(
+                                        messageId = message.timestamp,
+                                        threadId = 0L,
+                                        contactName = if (targetContactName.isBlank()) "O.D.I.N. Insight" else "O.D.I.N. ($targetContactName)",
+                                        sender = "O.D.I.N.",
+                                        body = message.text,
+                                        timestamp = message.timestamp,
+                                        sourceType = "ODIN"
+                                    )
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(context, "⭐ Pinned to Vault Memories!", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            label = { Text("Pin", style = MaterialTheme.typography.labelSmall) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = "Pin to Vault",
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(14.dp)
                                 )
                             },
@@ -755,7 +875,7 @@ private fun ChatBubble(
                             },
                             label = {
                                 Text(
-                                    if (!targetAddress.isNullOrBlank()) "Send to $targetContactName" else "Open in Messages",
+                                    if (!targetAddress.isNullOrBlank()) "Send" else "SMS",
                                     style = MaterialTheme.typography.labelSmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis

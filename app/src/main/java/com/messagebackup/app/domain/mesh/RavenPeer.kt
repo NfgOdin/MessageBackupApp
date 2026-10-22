@@ -23,7 +23,8 @@ data class RavenPeer(
     val lastSeenTimestamp: Long,
     val isTrusted: Boolean = true,
     val avatarColor: String = "#0284c7",
-    val status: RavenPeerStatus = RavenPeerStatus.CONNECTED
+    val status: RavenPeerStatus = RavenPeerStatus.CONNECTED,
+    val unreadCount: Int = 0
 ) {
     /**
      * Short visual fingerprint of the peer's public key (e.g. 4 hex characters).

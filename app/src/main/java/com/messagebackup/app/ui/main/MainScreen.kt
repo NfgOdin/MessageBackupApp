@@ -107,6 +107,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.res.painterResource
+import com.messagebackup.app.R
+import com.messagebackup.app.data.local.LocalMessageDatabase
+import com.messagebackup.app.data.local.RavenDatabaseHelper
+import com.messagebackup.app.data.local.StarredMemoryItem
+import com.messagebackup.app.domain.mesh.RavenPeerStatus
+import com.messagebackup.app.domain.mesh.RavenSendResult
+import com.messagebackup.app.domain.mesh.RavenSocketTransport
 import com.messagebackup.app.model.DateRangeFilter
 import com.messagebackup.app.model.ExportOptions
 import com.messagebackup.app.model.OutputDestination
@@ -151,14 +166,23 @@ fun MainScreen(
     val alwaysPromptExportOptions by prefs.alwaysPromptExportOptions.collectAsState()
     val isOnboardingCompleted by prefs.isOnboardingCompleted.collectAsState()
     val huginnComposerEnabled by prefs.huginnComposerEnabled.collectAsState()
+    val ravenMeshEnabled by prefs.ravenMeshEnabled.collectAsState()
+    val memoryCapsuleEnabled by prefs.memoryCapsuleEnabled.collectAsState()
     val aiEngine = remember { com.messagebackup.app.domain.ai.AiClientEngine() }
+    val ravenDb = remember { RavenDatabaseHelper(context) }
+    val localCacheDb = remember { LocalMessageDatabase.getInstance(context) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val socketTransport = remember { RavenSocketTransport.getInstance(context, scope) }
+    var ravenUnreadCount by remember { mutableStateOf(0) }
     var showMenu by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
     var isMessageSelectionMode by rememberSaveable { mutableStateOf(false) }
     var showRewardArcade by rememberSaveable { mutableStateOf(false) }
+    var showStarredMemoriesDialog by rememberSaveable { mutableStateOf(false) }
+    var showSendExcerptToRavenDialog by rememberSaveable { mutableStateOf(false) }
+    var memoryCapsuleDismissed by rememberSaveable { mutableStateOf(false) }
     val viewModelShowRewardArcade = uiState.showRewardArcade
     LaunchedEffect(viewModelShowRewardArcade) {
         if (viewModelShowRewardArcade) {
@@ -167,6 +191,27 @@ fun MainScreen(
         }
     }
     var showRavenMeshDialog by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(ravenMeshEnabled, showRavenMeshDialog) {
+        socketTransport.setMeshEnabled(ravenMeshEnabled)
+        if (ravenMeshEnabled) {
+            socketTransport.startServer()
+            ravenUnreadCount = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                ravenDb.getTotalUnreadCount()
+            }
+        } else {
+            ravenUnreadCount = 0
+        }
+    }
+    LaunchedEffect(ravenMeshEnabled) {
+        if (ravenMeshEnabled) {
+            socketTransport.incomingMessages.collect {
+                ravenUnreadCount = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    ravenDb.getTotalUnreadCount()
+                }
+            }
+        }
+    }
     var showOnboarding by rememberSaveable { mutableStateOf(!isOnboardingCompleted) }
     var isAppSessionUnlocked by rememberSaveable { mutableStateOf(false) }
     var pendingProtectedAction by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -565,9 +610,10 @@ fun MainScreen(
                         }
                         IconButton(onClick = { runWithOdinLock { viewModel.setCopilotOpen(true) } }) {
                             Icon(
-                                imageVector = Icons.Default.AutoAwesome,
+                                painter = painterResource(id = R.drawable.ic_odin_allfather),
                                 contentDescription = "O.D.I.N. Copilot",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                         IconButton(onClick = {
@@ -732,10 +778,34 @@ fun MainScreen(
                     actions = {
                         IconButton(onClick = { runWithOdinLock { viewModel.setCopilotOpen(true) } }) {
                             Icon(
-                                imageVector = Icons.Default.AutoAwesome,
+                                painter = painterResource(id = R.drawable.ic_odin_allfather),
                                 contentDescription = "O.D.I.N. Copilot",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
                             )
+                        }
+                        if (ravenMeshEnabled) {
+                            IconButton(onClick = { showRavenMeshDialog = true }) {
+                                BadgedBox(
+                                    badge = {
+                                        if (ravenUnreadCount > 0) {
+                                            Badge {
+                                                Text(
+                                                    text = if (ravenUnreadCount > 99) "99+" else "$ravenUnreadCount",
+                                                    style = MaterialTheme.typography.labelSmall
+                                                )
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_flying_raven),
+                                        contentDescription = "Raven Mesh Network",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
                         }
                         IconButton(onClick = { viewModel.setSearchActive(!uiState.isSearchActive) }) {
                             Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
@@ -762,9 +832,6 @@ fun MainScreen(
                                 )
                             }
                         }
-                        IconButton(onClick = { viewModel.loadThreads(forceRefresh = true) }) {
-                            Icon(imageVector = Icons.Default.Refresh, contentDescription = "Refresh")
-                        }
                         IconButton(onClick = { showMenu = true }) {
                             Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Menu")
                         }
@@ -773,25 +840,49 @@ fun MainScreen(
                             onDismissRequest = { showMenu = false }
                         ) {
 
+                            if (ravenMeshEnabled) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                text = "Raven Mesh Identity",
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                text = "Decentralized E2EE Peer Network & Sigil",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.QrCode, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                    onClick = {
+                                        showMenu = false
+                                        showRavenMeshDialog = true
+                                    }
+                                )
+                            }
+
                             DropdownMenuItem(
                                 text = {
                                     Column {
                                         Text(
-                                            text = "Raven Mesh Identity",
+                                            text = "Pinned Vault Memories",
                                             color = MaterialTheme.colorScheme.onSurface,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                         Text(
-                                            text = "Decentralized E2EE Peer Network & Sigil",
+                                            text = "Starred messages, codes & O.D.I.N. answers",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 },
-                                leadingIcon = { Icon(Icons.Default.QrCode, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                leadingIcon = { Icon(Icons.Default.Bookmark, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                                 onClick = {
                                     showMenu = false
-                                    showRavenMeshDialog = true
+                                    showStarredMemoriesDialog = true
                                 }
                             )
 
@@ -1234,7 +1325,7 @@ fun MainScreen(
                                         label = { Text("⚡ Summarize Thread", style = MaterialTheme.typography.labelSmall) },
                                         leadingIcon = {
                                             Icon(
-                                                imageVector = Icons.Default.AutoAwesome,
+                                                painter = painterResource(id = R.drawable.ic_odin_allfather),
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(14.dp)
@@ -1324,6 +1415,78 @@ fun MainScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 12.dp, vertical = 6.dp)
                             )
+                        }
+
+                        // Message Selection & Vault Actions Bar
+                        AnimatedVisibility(visible = isMessageSelectionMode) {
+                            val includedMessages = uiState.filteredPreviewMessages.filter {
+                                !uiState.excludedMessageIds.contains(it.messageId)
+                            }
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${includedMessages.size} of ${uiState.filteredPreviewMessages.size} included",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                val toStar = includedMessages.takeLast(15)
+                                                if (toStar.isEmpty()) {
+                                                    Toast.makeText(context, "Include at least 1 message to pin", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    scope.launch {
+                                                        toStar.forEach { m ->
+                                                            localCacheDb.addStarredMemory(
+                                                                messageId = m.messageId,
+                                                                threadId = m.threadId,
+                                                                contactName = thread.displayName,
+                                                                sender = if (m.direction == com.messagebackup.app.model.MessageDirection.OUTGOING) "Me" else thread.displayName,
+                                                                body = m.body,
+                                                                timestamp = m.timestamp,
+                                                                sourceType = "SMS"
+                                                            )
+                                                        }
+                                                        Toast.makeText(context, "⭐ Pinned ${toStar.size} message(s) to Vault Memories", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            shape = RoundedCornerShape(16.dp)
+                                        ) {
+                                            Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Pin to Vault", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                        if (ravenMeshEnabled) {
+                                            Button(
+                                                onClick = { showSendExcerptToRavenDialog = true },
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                shape = RoundedCornerShape(16.dp)
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_flying_raven),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("Send via Raven", style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         if (uiState.isPreviewLoading) {
@@ -1505,27 +1668,119 @@ fun MainScreen(
                                 }
                             }
                             else -> {
-                                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                    itemsIndexed(uiState.filteredThreads, key = { _, it -> it.threadId }) { index, thread ->
-                                        val isSelected = uiState.selectedThreadIds.contains(thread.threadId)
-                                        ConversationItem(
-                                            thread = thread,
-                                            isSelected = isSelected,
-                                            isSelectionMode = uiState.isSelectionMode,
-                                            onToggleSelect = { viewModel.toggleThreadSelection(thread.threadId) },
-                                            onClick = { viewModel.openThreadPreview(thread) }
-                                        )
-
-                                        // Native In-Feed Video Ad inserted after conversation #3 for non-pro users
-                                        if (!isAdsRemoved && (index == 3 || (index > 3 && (index - 3) % 12 == 0))) {
-                                            com.messagebackup.app.ui.components.NativeFeedAdCard(
-                                                adManager = viewModel.adManager
-                                            )
+                                val memoryCapsuleThread = remember(uiState.threads, memoryCapsuleEnabled, memoryCapsuleDismissed) {
+                                    if (!memoryCapsuleEnabled || memoryCapsuleDismissed || uiState.threads.isEmpty()) {
+                                        null
+                                    } else {
+                                        val nowZone = java.time.LocalDate.now()
+                                        val exactDayMatch = uiState.threads.find { t ->
+                                            val dt = Instant.ofEpochMilli(t.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                                            dt.monthValue == nowZone.monthValue && dt.dayOfMonth == nowZone.dayOfMonth && dt.year < nowZone.year
                                         }
+                                        exactDayMatch ?: uiState.threads
+                                            .filter { it.snippet.isNotBlank() && it.messageCount >= 5 }
+                                            .minByOrNull { it.timestamp }
                                     }
+                                }
 
-                                    item {
-                                        Spacer(modifier = Modifier.height(96.dp))
+                                PullToRefreshBox(
+                                    isRefreshing = uiState.isLoading,
+                                    onRefresh = { viewModel.loadThreads(forceRefresh = true) },
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                        if (memoryCapsuleThread != null && uiState.searchQuery.isBlank()) {
+                                            item(key = "memory_capsule_card") {
+                                                val capsuleDate = remember(memoryCapsuleThread.timestamp) {
+                                                    DateTimeFormatter.ofPattern("MMM d, yyyy")
+                                                        .withZone(ZoneId.systemDefault())
+                                                        .format(Instant.ofEpochMilli(memoryCapsuleThread.timestamp))
+                                                }
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                                    shape = RoundedCornerShape(14.dp),
+                                                    border = androidx.compose.foundation.BorderStroke(
+                                                        1.dp,
+                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                                                    ),
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                                        .clickable { viewModel.openThreadPreview(memoryCapsuleThread) }
+                                                ) {
+                                                    Column(modifier = Modifier.padding(12.dp)) {
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                                Icon(
+                                                                    painter = painterResource(id = R.drawable.ic_flying_raven),
+                                                                    contentDescription = null,
+                                                                    tint = MaterialTheme.colorScheme.primary,
+                                                                    modifier = Modifier.size(16.dp)
+                                                                )
+                                                                Spacer(modifier = Modifier.width(6.dp))
+                                                                Text(
+                                                                    text = "Muninn Memory Capsule • $capsuleDate",
+                                                                    style = MaterialTheme.typography.labelMedium,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = MaterialTheme.colorScheme.primary
+                                                                )
+                                                            }
+                                                            IconButton(
+                                                                onClick = { memoryCapsuleDismissed = true },
+                                                                modifier = Modifier.size(22.dp)
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Close,
+                                                                    contentDescription = "Dismiss Memory Capsule",
+                                                                    modifier = Modifier.size(14.dp),
+                                                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                                                )
+                                                            }
+                                                        }
+                                                        Spacer(modifier = Modifier.height(4.dp))
+                                                        Text(
+                                                            text = memoryCapsuleThread.displayName,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                        )
+                                                        Text(
+                                                            text = "\"${memoryCapsuleThread.snippet}\"",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            maxLines = 2,
+                                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        itemsIndexed(uiState.filteredThreads, key = { _, it -> it.threadId }) { index, thread ->
+                                            val isSelected = uiState.selectedThreadIds.contains(thread.threadId)
+                                            ConversationItem(
+                                                thread = thread,
+                                                isSelected = isSelected,
+                                                isSelectionMode = uiState.isSelectionMode,
+                                                onToggleSelect = { viewModel.toggleThreadSelection(thread.threadId) },
+                                                onClick = { viewModel.openThreadPreview(thread) }
+                                            )
+
+                                            // Native In-Feed Video Ad inserted after conversation #3 for non-pro users
+                                            if (!isAdsRemoved && (index == 3 || (index > 3 && (index - 3) % 12 == 0))) {
+                                                com.messagebackup.app.ui.components.NativeFeedAdCard(
+                                                    adManager = viewModel.adManager
+                                                )
+                                            }
+                                        }
+
+                                        item {
+                                            Spacer(modifier = Modifier.height(96.dp))
+                                        }
                                     }
                                 }
                             }
@@ -1849,6 +2104,34 @@ fun MainScreen(
         )
     }
 
+    if (showStarredMemoriesDialog) {
+        StarredMemoriesDialog(
+            localCacheDb = localCacheDb,
+            onJumpToThread = { threadId ->
+                val targetThread = uiState.threads.find { it.threadId == threadId }
+                if (targetThread != null) {
+                    showStarredMemoriesDialog = false
+                    viewModel.openThreadPreview(targetThread)
+                }
+            },
+            onDismiss = { showStarredMemoriesDialog = false }
+        )
+    }
+
+    if (showSendExcerptToRavenDialog && uiState.selectedThreadForPreview != null) {
+        val thread = uiState.selectedThreadForPreview!!
+        val includedMessages = uiState.filteredPreviewMessages.filter {
+            !uiState.excludedMessageIds.contains(it.messageId)
+        }.takeLast(15)
+        SendExcerptToRavenDialog(
+            ravenDb = ravenDb,
+            socketTransport = socketTransport,
+            contactName = thread.displayName,
+            messagesToForward = includedMessages,
+            onDismiss = { showSendExcerptToRavenDialog = false }
+        )
+    }
+
     if (showOnboarding) {
         com.messagebackup.app.ui.dialogs.OnboardingWalkthroughDialog(
             onComplete = {
@@ -1857,4 +2140,286 @@ fun MainScreen(
             }
         )
     }
+}
+
+@Composable
+private fun StarredMemoriesDialog(
+    localCacheDb: LocalMessageDatabase,
+    onJumpToThread: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    var starredList by remember { mutableStateOf<List<StarredMemoryItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    val dateFormatter = remember {
+        DateTimeFormatter.ofPattern("MMM d, yyyy • h:mm a").withZone(ZoneId.systemDefault())
+    }
+
+    LaunchedEffect(Unit) {
+        starredList = localCacheDb.getStarredMemories()
+        isLoading = false
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Bookmark,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(30.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "Pinned Vault Memories",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (starredList.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "No Pinned Memories Yet",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Pin important O.D.I.N. answers (using the '⭐ Pin' chip in O.D.I.N. Copilot) or use the Filter checklist inside any conversation to pin important messages, codes, or addresses here.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().height(380.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(starredList, key = { it.id }) { item ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (item.sourceType == "ODIN") "⚡ O.D.I.N. • ${item.contactName}" else "💬 ${item.contactName}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Row {
+                                        IconButton(
+                                            onClick = {
+                                                clipboardManager.setText(AnnotatedString(item.body))
+                                                Toast.makeText(context, "Copied memory to clipboard", Toast.LENGTH_SHORT).show()
+                                            },
+                                            modifier = Modifier.size(26.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ContentCopy,
+                                                contentDescription = "Copy",
+                                                modifier = Modifier.size(15.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    localCacheDb.removeStarredMemory(item.id)
+                                                    starredList = localCacheDb.getStarredMemories()
+                                                }
+                                            },
+                                            modifier = Modifier.size(26.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.DeleteOutline,
+                                                contentDescription = "Remove",
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = item.body,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = dateFormatter.format(Instant.ofEpochMilli(item.timestamp)),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    if (item.threadId > 0L) {
+                                        Text(
+                                            text = "Open Thread →",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.clickable { onJumpToThread(item.threadId) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+private fun SendExcerptToRavenDialog(
+    ravenDb: RavenDatabaseHelper,
+    socketTransport: RavenSocketTransport,
+    contactName: String,
+    messagesToForward: List<com.messagebackup.app.model.MessageItem>,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val peers = remember {
+        ravenDb.getAllPeers().filter { it.status == RavenPeerStatus.CONNECTED }
+    }
+    var isSending by remember { mutableStateOf(false) }
+    val dateFormatter = remember {
+        DateTimeFormatter.ofPattern("MMM d, h:mm a").withZone(ZoneId.systemDefault())
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!isSending) onDismiss() },
+        icon = {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_flying_raven),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(30.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "Send Vault Excerpt via Raven",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Forward ${messagesToForward.size} selected message(s) from $contactName over end-to-end encrypted Raven Mesh:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (peers.isEmpty()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "No connected Raven friends yet. Pair with a friend in Raven Mesh first!",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().height(220.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(peers, key = { it.peerId }) { peer ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !isSending) {
+                                        isSending = true
+                                        val excerptBuilder = StringBuilder()
+                                        excerptBuilder.append("📜 [Shared Vault Excerpt: $contactName]\n")
+                                        messagesToForward.forEach { m ->
+                                            val who = if (m.direction == com.messagebackup.app.model.MessageDirection.OUTGOING) "Me" else contactName
+                                            val dt = dateFormatter.format(Instant.ofEpochMilli(m.timestamp))
+                                            excerptBuilder.append("• [$dt] $who: ${m.body}\n")
+                                        }
+                                        val payload = excerptBuilder.toString().trim()
+                                        scope.launch {
+                                            val res = socketTransport.sendMessageToPeer(peer, payload, messageType = "SMS_EXCERPT")
+                                            isSending = false
+                                            if (res is RavenSendResult.Success) {
+                                                Toast.makeText(context, "🪶 Excerpt dispatched to ${peer.displayName}", Toast.LENGTH_SHORT).show()
+                                                onDismiss()
+                                            } else {
+                                                Toast.makeText(context, "Could not reach ${peer.displayName}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = peer.displayName,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                        Text(
+                                            text = peer.peerId,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.Send,
+                                        contentDescription = "Send",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss, enabled = !isSending) {
+                Text("Cancel")
+            }
+        }
+    )
 }

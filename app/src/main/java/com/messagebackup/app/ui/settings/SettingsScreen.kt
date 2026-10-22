@@ -143,6 +143,11 @@ fun SettingsScreen(
     val odinTopP by prefs.odinTopP.collectAsState()
     val odinNumCtx by prefs.odinNumCtx.collectAsState()
     val customSystemPrompt by prefs.odinCustomSystemPrompt.collectAsState()
+    val odinSaveHistory by prefs.odinSaveHistory.collectAsState()
+    val ravenMeshEnabled by prefs.ravenMeshEnabled.collectAsState()
+    val ravenAudioLoudspeaker by prefs.ravenAudioLoudspeaker.collectAsState()
+    val ravenPttAutoPlay by prefs.ravenPttAutoPlay.collectAsState()
+    val memoryCapsuleEnabled by prefs.memoryCapsuleEnabled.collectAsState()
     val googleAccountEmail by prefs.googleAccountEmail.collectAsState()
     val googleAccountName by prefs.googleAccountName.collectAsState()
     val googleAuthManager = app.googleAuthManager
@@ -152,6 +157,7 @@ fun SettingsScreen(
 
     val scope = rememberCoroutineScope()
     val aiEngine = remember { com.messagebackup.app.domain.ai.AiClientEngine() }
+    val localDb = remember { com.messagebackup.app.data.local.LocalMessageDatabase.getInstance(context) }
 
     var showProviderDropdown by remember { mutableStateOf(false) }
     var showOpenAiDropdown by remember { mutableStateOf(false) }
@@ -186,6 +192,7 @@ fun SettingsScreen(
     var isFormatPickerExpanded by remember { mutableStateOf(false) }
     var isPerformanceExpanded by remember { mutableStateOf(false) }
     var isOdinExpanded by remember { mutableStateOf(false) }
+    var isRavenExpanded by remember { mutableStateOf(false) }
     var isSecurityExpanded by remember { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -1065,10 +1072,12 @@ fun SettingsScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                             Icon(
-                                imageVector = Icons.Default.AutoAwesome,
+                                painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_odin_allfather),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(end = 8.dp)
+                                modifier = Modifier
+                                    .padding(end = 8.dp)
+                                    .size(24.dp)
                             )
                             Column {
                                 Text(
@@ -2021,8 +2030,219 @@ Rules:
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // O.D.I.N. Persistent Conversation History Toggle & Delete All Button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Save O.D.I.N. Chat History",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Keep past O.D.I.N. conversations saved for each contact and for All Conversations when switching threads.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = odinSaveHistory,
+                            onCheckedChange = { prefs.setOdinSaveHistory(it) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                localDb.clearAllOdinChatHistory()
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    Toast.makeText(context, "Deleted all saved O.D.I.N. conversation histories!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteSweep,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Delete All Saved O.D.I.N. History")
+                    }
                     } // End if (isOdinExpanded)
                 }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 8b. Raven Mesh & Walkie-Talkie Network (Collapsible Card + Optional Master Toggle)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(
+                                painter = androidx.compose.ui.res.painterResource(id = com.messagebackup.app.R.drawable.ic_flying_raven),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .padding(end = 8.dp)
+                                    .size(24.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Raven Mesh & Walkie-Talkie",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = if (!ravenMeshEnabled) {
+                                        "Disabled (Hidden from main app)"
+                                    } else {
+                                        val audioLabel = if (ravenAudioLoudspeaker) "🔊 Loudspeaker" else "👂 Private Earpiece"
+                                        val pttLabel = if (ravenPttAutoPlay) "📻 Walkie Live" else "🔕 Silent Mode"
+                                        "$audioLabel • $pttLabel"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (ravenMeshEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Switch(
+                                checked = ravenMeshEnabled,
+                                onCheckedChange = { enabled ->
+                                    prefs.setRavenMeshEnabled(enabled)
+                                    com.messagebackup.app.domain.mesh.RavenSocketTransport.getInstance(context, scope).setMeshEnabled(enabled)
+                                    Toast.makeText(
+                                        context,
+                                        if (enabled) "🪶 Raven Mesh enabled!" else "Raven Mesh disabled and hidden from main screen.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            )
+                            IconButton(onClick = { isRavenExpanded = !isRavenExpanded }) {
+                                Icon(
+                                    imageVector = if (isRavenExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (isRavenExpanded) "Collapse" else "Expand",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    if (isRavenExpanded) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = "When Raven Mesh is disabled, the Raven icon and menu items are completely hidden and background mesh relays are stopped.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Setting 1: Loudspeaker vs Private Earpiece
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (ravenAudioLoudspeaker) "🔊 Loudspeaker Audio (Default)" else "👂 Private Earpiece Audio",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (ravenAudioLoudspeaker)
+                                        "Voice notes & walkie-talkie play out loud through the phone speaker"
+                                    else
+                                        "Voice notes play quietly through the top phone earpiece when held to your ear",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = ravenAudioLoudspeaker,
+                                onCheckedChange = { prefs.setRavenAudioLoudspeaker(it) },
+                                enabled = ravenMeshEnabled
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Setting 2: Walkie-Talkie Live Auto-Play vs Silent Play-Button Mode
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (ravenPttAutoPlay) "📻 Walkie-Talkie Live Mode (Auto-Play)" else "🔕 Silent PTT Mode (Play Button Only)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (ravenPttAutoPlay)
+                                        "Incoming PTT streams play immediately like a real-life walkie-talkie"
+                                    else
+                                        "Incoming PTT messages arrive silently in chat with a Play button",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = ravenPttAutoPlay,
+                                onCheckedChange = { prefs.setRavenPttAutoPlay(it) },
+                                enabled = ravenMeshEnabled
+                            )
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 8c. "On This Day" Norse Memory Capsule Toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "🕰️ \"On This Day\" Memory Capsule", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Surface a daily memory card from your message archive on this date in past years",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = memoryCapsuleEnabled,
+                    onCheckedChange = { prefs.setMemoryCapsuleEnabled(it) }
+                )
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))

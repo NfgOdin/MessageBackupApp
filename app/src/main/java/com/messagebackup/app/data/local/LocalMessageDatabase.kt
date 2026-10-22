@@ -93,14 +93,52 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
             """.trimIndent()
         )
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vault_date ON vault_items(timestamp DESC)")
+
+        createExtraTables(db)
+    }
+
+    private fun createExtraTables(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS odin_chat_history (
+                id TEXT PRIMARY KEY,
+                thread_key TEXT NOT NULL,
+                sender TEXT NOT NULL,
+                text TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                is_error INTEGER DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_odin_thread_time ON odin_chat_history(thread_key, timestamp ASC)")
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS starred_memories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL,
+                thread_id INTEGER NOT NULL,
+                contact_name TEXT NOT NULL,
+                sender TEXT NOT NULL,
+                body TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                source_type TEXT DEFAULT 'SMS'
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_starred_time ON starred_memories(timestamp DESC)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS threads")
-        db.execSQL("DROP TABLE IF EXISTS messages")
-        db.execSQL("DROP TABLE IF EXISTS attachments")
-        db.execSQL("DROP TABLE IF EXISTS vault_items")
-        onCreate(db)
+        if (oldVersion < 2) {
+            createExtraTables(db)
+        } else {
+            db.execSQL("DROP TABLE IF EXISTS threads")
+            db.execSQL("DROP TABLE IF EXISTS messages")
+            db.execSQL("DROP TABLE IF EXISTS attachments")
+            db.execSQL("DROP TABLE IF EXISTS vault_items")
+            onCreate(db)
+        }
     }
 
     /* ------------------------------------------------------------------------
@@ -404,6 +442,133 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
         }
     }
 
+    /* ------------------------------------------------------------------------
+       O.D.I.N. Persistent Conversation History Operations
+       ------------------------------------------------------------------------ */
+
+    suspend fun getOdinChatHistory(threadKey: String): List<com.messagebackup.app.domain.ai.OdinChatMessage> = withContext(Dispatchers.IO) {
+        val list = mutableListOf<com.messagebackup.app.domain.ai.OdinChatMessage>()
+        val db = readableDatabase
+        db.rawQuery(
+            "SELECT id, sender, text, timestamp, is_error FROM odin_chat_history WHERE thread_key = ? ORDER BY timestamp ASC",
+            arrayOf(threadKey)
+        )?.use { c ->
+            val idIdx = c.getColumnIndexOrThrow("id")
+            val senderIdx = c.getColumnIndexOrThrow("sender")
+            val textIdx = c.getColumnIndexOrThrow("text")
+            val tsIdx = c.getColumnIndexOrThrow("timestamp")
+            val errIdx = c.getColumnIndexOrThrow("is_error")
+
+            while (c.moveToNext()) {
+                val senderStr = c.getString(senderIdx) ?: "ODIN"
+                val senderEnum = runCatching {
+                    com.messagebackup.app.domain.ai.OdinChatMessage.MessageSender.valueOf(senderStr)
+                }.getOrDefault(com.messagebackup.app.domain.ai.OdinChatMessage.MessageSender.ODIN)
+
+                list.add(
+                    com.messagebackup.app.domain.ai.OdinChatMessage(
+                        id = c.getString(idIdx),
+                        sender = senderEnum,
+                        text = c.getString(textIdx) ?: "",
+                        timestamp = c.getLong(tsIdx),
+                        isError = c.getInt(errIdx) == 1
+                    )
+                )
+            }
+        }
+        list
+    }
+
+    suspend fun insertOdinChatMessage(threadKey: String, msg: com.messagebackup.app.domain.ai.OdinChatMessage) = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put("id", msg.id)
+            put("thread_key", threadKey)
+            put("sender", msg.sender.name)
+            put("text", msg.text)
+            put("timestamp", msg.timestamp)
+            put("is_error", if (msg.isError) 1 else 0)
+        }
+        db.insertWithOnConflict("odin_chat_history", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    suspend fun clearOdinChatHistoryForThread(threadKey: String) = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        db.delete("odin_chat_history", "thread_key = ?", arrayOf(threadKey))
+    }
+
+    suspend fun clearAllOdinChatHistory() = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        db.execSQL("DELETE FROM odin_chat_history")
+    }
+
+    /* ------------------------------------------------------------------------
+       Starred / Pinned Vault Memories Operations
+       ------------------------------------------------------------------------ */
+
+    suspend fun getStarredMemories(): List<StarredMemoryItem> = withContext(Dispatchers.IO) {
+        val list = mutableListOf<StarredMemoryItem>()
+        val db = readableDatabase
+        db.rawQuery(
+            "SELECT id, message_id, thread_id, contact_name, sender, body, timestamp, source_type FROM starred_memories ORDER BY timestamp DESC",
+            null
+        )?.use { c ->
+            val idIdx = c.getColumnIndexOrThrow("id")
+            val msgIdIdx = c.getColumnIndexOrThrow("message_id")
+            val tIdIdx = c.getColumnIndexOrThrow("thread_id")
+            val cnIdx = c.getColumnIndexOrThrow("contact_name")
+            val sIdx = c.getColumnIndexOrThrow("sender")
+            val bIdx = c.getColumnIndexOrThrow("body")
+            val tsIdx = c.getColumnIndexOrThrow("timestamp")
+            val srcIdx = c.getColumnIndexOrThrow("source_type")
+
+            while (c.moveToNext()) {
+                list.add(
+                    StarredMemoryItem(
+                        id = c.getLong(idIdx),
+                        messageId = c.getLong(msgIdIdx),
+                        threadId = c.getLong(tIdIdx),
+                        contactName = c.getString(cnIdx) ?: "",
+                        sender = c.getString(sIdx) ?: "",
+                        body = c.getString(bIdx) ?: "",
+                        timestamp = c.getLong(tsIdx),
+                        sourceType = c.getString(srcIdx) ?: "SMS"
+                    )
+                )
+            }
+        }
+        list
+    }
+
+    suspend fun addStarredMemory(
+        messageId: Long,
+        threadId: Long,
+        contactName: String,
+        sender: String,
+        body: String,
+        timestamp: Long,
+        sourceType: String = "SMS"
+    ) = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        // Avoid duplicate starring of the same message
+        db.delete("starred_memories", "message_id = ? AND body = ?", arrayOf(messageId.toString(), body))
+        val values = ContentValues().apply {
+            put("message_id", messageId)
+            put("thread_id", threadId)
+            put("contact_name", contactName)
+            put("sender", sender)
+            put("body", body)
+            put("timestamp", timestamp)
+            put("source_type", sourceType)
+        }
+        db.insert("starred_memories", null, values)
+    }
+
+    suspend fun removeStarredMemory(id: Long) = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        db.delete("starred_memories", "id = ?", arrayOf(id.toString()))
+    }
+
     suspend fun clearCache() = withContext(Dispatchers.IO) {
         val db = writableDatabase
         db.execSQL("DELETE FROM threads")
@@ -414,7 +579,7 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
 
     companion object {
         private const val DATABASE_NAME = "message_backup_cache.db"
-        private const val DATABASE_VERSION = 1
+        private const val DATABASE_VERSION = 2
 
         @Volatile
         private var instance: LocalMessageDatabase? = null
@@ -426,3 +591,14 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
         }
     }
 }
+
+data class StarredMemoryItem(
+    val id: Long,
+    val messageId: Long,
+    val threadId: Long,
+    val contactName: String,
+    val sender: String,
+    val body: String,
+    val timestamp: Long,
+    val sourceType: String = "SMS"
+)

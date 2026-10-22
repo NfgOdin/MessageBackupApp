@@ -1,6 +1,8 @@
 package com.messagebackup.app.domain.mesh
 
 import android.content.Context
+import com.messagebackup.app.MessageBackupApp
+import com.messagebackup.app.data.local.RavenChatMessage
 import com.messagebackup.app.data.local.RavenDatabaseHelper
 import com.messagebackup.app.domain.migration.DirectLocalMigrationManager
 import java.io.BufferedReader
@@ -23,7 +25,8 @@ import org.json.JSONObject
 /**
  * Peer-to-peer transport manager for Raven Mesh.
  * Operates an embedded background TCP socket server on local Wi-Fi / Hotspot networks
- * to send and receive authenticated, AES-256-GCM encrypted peer messages.
+ * and coordinates seamlessly with the Global Cellular / Internet Relay for zero-delay
+ * cross-state communication, live PTT walkie-talkie streaming, encrypted parcels, and Loki's Mist.
  */
 class RavenSocketTransport(
     private val context: Context,
@@ -32,7 +35,7 @@ class RavenSocketTransport(
 
     companion object {
         const val DEFAULT_MESH_PORT = 8744
-        const val SOCKET_TIMEOUT_MS = 15_000
+        const val SOCKET_TIMEOUT_MS = 10_000
 
         @Volatile
         private var instance: RavenSocketTransport? = null
@@ -49,12 +52,18 @@ class RavenSocketTransport(
 
     private val cryptoEngine = RavenCryptoEngine(context)
     private val dbHelper = RavenDatabaseHelper(context)
-    private val voicePttEngine = RavenVoicePttEngine(context)
+    private val voicePttEngine = RavenVoicePttEngine.getInstance(context)
     private val globalRelay = RavenGlobalRelayTransport(context, scope)
 
     init {
-        // Automatically start global cellular / internet relay alongside local socket server
-        globalRelay.startGlobalRelay()
+        val enabled = try {
+            MessageBackupApp.instance.appPreferences.ravenMeshEnabled.value
+        } catch (_: Exception) {
+            true
+        }
+        if (enabled) {
+            globalRelay.startGlobalRelay()
+        }
         scope.launch {
             globalRelay.incomingMessages.collect { _incomingMessages.emit(it) }
         }
@@ -63,6 +72,16 @@ class RavenSocketTransport(
         }
         scope.launch {
             globalRelay.peerLinkedEvents.collect { _peerLinkedEvents.emit(it) }
+        }
+    }
+
+    fun setMeshEnabled(enabled: Boolean) {
+        if (enabled) {
+            startServer()
+            globalRelay.startGlobalRelay()
+        } else {
+            stopServer()
+            globalRelay.stopGlobalRelay()
         }
     }
 
@@ -87,6 +106,12 @@ class RavenSocketTransport(
      */
     @Synchronized
     fun startServer(port: Int = DEFAULT_MESH_PORT) {
+        val enabled = try {
+            MessageBackupApp.instance.appPreferences.ravenMeshEnabled.value
+        } catch (_: Exception) {
+            true
+        }
+        if (!enabled) return
         if (serverJob?.isActive == true) return
 
         serverJob = scope.launch {
@@ -128,7 +153,19 @@ class RavenSocketTransport(
     }
 
     /**
-     * Handles an incoming connection from a peer node.
+     * Checks if a target IP is on the same local Wi-Fi subnet as our phone right now.
+     * Prevents waiting 3 seconds for a unreachable local IP when peers are across states!
+     */
+    private fun isReachableLocalSubnet(targetIp: String?): Boolean {
+        if (targetIp.isNullOrBlank() || targetIp == "CELLULAR_RELAY") return false
+        val myIp = DirectLocalMigrationManager.getLocalIpAddress() ?: return false
+        val myPrefix = myIp.substringBeforeLast('.', "")
+        val targetPrefix = targetIp.substringBeforeLast('.', "")
+        return myPrefix.isNotEmpty() && myPrefix == targetPrefix
+    }
+
+    /**
+     * Handles an incoming connection from a local Wi-Fi peer node.
      */
     private suspend fun handleClientConnection(socket: Socket) = withContext(Dispatchers.IO) {
         try {
@@ -148,7 +185,9 @@ class RavenSocketTransport(
             val rootPacketType = packet.optString("type", "ENVELOPE")
             if (rootPacketType == "PEER_ACCEPT_CONFIRMATION") {
                 val senderCallSign = packet.getString("sender")
-                val existing = dbHelper.getAllPeers().find { it.peerId == senderCallSign }
+                val existing = dbHelper.getAllPeers().find {
+                    it.peerId.removePrefix("raven://").equals(senderCallSign.removePrefix("raven://"), ignoreCase = true)
+                }
                 if (existing != null) {
                     val updated = existing.copy(
                         status = RavenPeerStatus.CONNECTED,
@@ -178,8 +217,9 @@ class RavenSocketTransport(
                     return@withContext
                 }
 
-                // Save the peer with PENDING_ACCEPTANCE if not already accepted/connected
-                val existingPeer = dbHelper.getAllPeers().find { it.peerId == senderCallSign }
+                val existingPeer = dbHelper.getAllPeers().find {
+                    it.peerId.removePrefix("raven://").equals(senderCallSign.removePrefix("raven://"), ignoreCase = true)
+                }
                 val currentStatus = if (existingPeer != null && existingPeer.status == RavenPeerStatus.CONNECTED) {
                     RavenPeerStatus.CONNECTED
                 } else {
@@ -188,7 +228,7 @@ class RavenSocketTransport(
 
                 val resolvedIp = if (senderLocalIp.isNotBlank()) senderLocalIp else (socket.inetAddress?.hostAddress ?: "")
                 val mutualPeer = RavenPeer(
-                    peerId = senderCallSign,
+                    peerId = RavenDatabaseHelper.normalizePeerId(senderCallSign),
                     displayName = displayName,
                     publicKey = publicKeyBase64,
                     lastKnownIp = resolvedIp,
@@ -198,7 +238,6 @@ class RavenSocketTransport(
                 )
                 dbHelper.upsertPeer(mutualPeer)
 
-                // Return our identity so the scanning phone is 100% confirmed as well
                 val myCallSign = cryptoEngine.getRavenCallSign()
                 val myPubKey = cryptoEngine.getPublicKeyBase64()
                 val myName = cryptoEngine.getRavenCallSign().removePrefix("raven://")
@@ -226,15 +265,15 @@ class RavenSocketTransport(
             val encryptedEnvelope = packet.getString("envelope")
             val timestamp = packet.getLong("ts")
 
-            // Look up peer in database
             val peers = dbHelper.getAllPeers()
-            val senderPeer = peers.find { it.peerId == senderCallSign }
-            if (senderPeer == null || !senderPeer.isTrusted || senderPeer.status != RavenPeerStatus.CONNECTED) {
+            val senderPeer = peers.find {
+                it.peerId.removePrefix("raven://").equals(senderCallSign.removePrefix("raven://"), ignoreCase = true)
+            }
+            if (senderPeer == null || !senderPeer.isTrusted) {
                 writer.println(JSONObject().apply { put("status", "ERR_UNTRUSTED_PEER") })
                 return@withContext
             }
 
-            // Verify sender signature over the encrypted envelope + timestamp
             val peerPubKey = cryptoEngine.decodePublicKey(senderPeer.publicKey)
             val claim = "$senderCallSign|$encryptedEnvelope|$timestamp"
             val isValid = cryptoEngine.verifySignature(claim.toByteArray(Charsets.UTF_8), signature, peerPubKey)
@@ -243,7 +282,6 @@ class RavenSocketTransport(
                 return@withContext
             }
 
-            // Derive shared secret and decrypt
             val sharedSecret = cryptoEngine.deriveSharedSecret(peerPubKey)
             val decryptedJson = RavenPacketCipher.decryptPayload(encryptedEnvelope, sharedSecret)
             if (decryptedJson == null) {
@@ -253,22 +291,42 @@ class RavenSocketTransport(
 
             val innerMsg = JSONObject(decryptedJson)
             val packetType = innerMsg.optString("type", "TEXT")
+            val ttlSeconds = innerMsg.optInt("ttl_sec", 0)
+            val burnOnRead = innerMsg.optBoolean("burn_on_read", false)
+            val expiresAt = if (ttlSeconds > 0) System.currentTimeMillis() + (ttlSeconds * 1000L) else 0L
 
-            // Update peer's last seen IP
             val clientIp = socket.inetAddress.hostAddress
             dbHelper.upsertPeer(
                 senderPeer.copy(
+                    status = RavenPeerStatus.CONNECTED,
                     lastKnownIp = clientIp,
                     lastSeenTimestamp = System.currentTimeMillis()
                 )
             )
 
+            if (packetType == "PTT_STREAM_CHUNK") {
+                val isAutoPlay = try {
+                    MessageBackupApp.instance.appPreferences.ravenPttAutoPlay.value
+                } catch (_: Exception) {
+                    true
+                }
+                if (isAutoPlay) {
+                    val chunkB64 = innerMsg.optString("chunk_b64", "")
+                    if (chunkB64.isNotBlank()) {
+                        voicePttEngine.playLiveStreamChunk(chunkB64)
+                    }
+                }
+                writer.println(JSONObject().apply { put("status", "OK_DELIVERED") })
+                return@withContext
+            }
+
             if (packetType == "PTT_VOICE") {
                 val audioBase64 = innerMsg.getString("audio_base64")
                 val durationMs = innerMsg.optLong("duration_ms", 0L)
+                val transcription = innerMsg.optString("transcription", "").ifBlank { null }
                 val durationSec = String.format(java.util.Locale.US, "%.1fs", durationMs / 1000f)
 
-                val chatMsg = com.messagebackup.app.data.local.RavenChatMessage(
+                val chatMsg = RavenChatMessage(
                     peerId = senderPeer.peerId,
                     senderCallsign = senderCallSign,
                     senderDisplayName = senderPeer.displayName,
@@ -276,11 +334,14 @@ class RavenSocketTransport(
                     messageText = "🎙️ Voice Note ($durationSec)",
                     messageType = "VOICE",
                     timestamp = timestamp,
-                    audioBase64 = audioBase64
+                    audioBase64 = audioBase64,
+                    transcription = transcription,
+                    expiresAtTimestamp = expiresAt,
+                    burnOnRead = burnOnRead
                 )
                 dbHelper.insertMessage(chatMsg)
+                dbHelper.incrementUnreadCount(senderPeer.peerId)
 
-                // Emit voice stream event
                 _incomingVoiceStreams.emit(
                     RavenIncomingVoice(
                         senderCallsign = senderCallSign,
@@ -291,25 +352,39 @@ class RavenSocketTransport(
                     )
                 )
 
-                // Automatically trigger immediate tactical speaker playback via PTT Engine
-                scope.launch(Dispatchers.IO) {
-                    voicePttEngine.playInboundVoice(audioBase64)
+                val isAutoPlay = try {
+                    MessageBackupApp.instance.appPreferences.ravenPttAutoPlay.value
+                } catch (_: Exception) {
+                    true
+                }
+                if (isAutoPlay) {
+                    scope.launch(Dispatchers.IO) {
+                        voicePttEngine.playInboundVoice(audioBase64)
+                    }
                 }
             } else {
-                val messageText = innerMsg.getString("text")
+                val messageText = innerMsg.optString("text", "")
+                val attB64 = innerMsg.optString("attachment_base64", "").ifBlank { null }
+                val attName = innerMsg.optString("attachment_name", "").ifBlank { null }
+                val attMime = innerMsg.optString("attachment_mime", "").ifBlank { null }
 
-                val chatMsg = com.messagebackup.app.data.local.RavenChatMessage(
+                val chatMsg = RavenChatMessage(
                     peerId = senderPeer.peerId,
                     senderCallsign = senderCallSign,
                     senderDisplayName = senderPeer.displayName,
                     isOutbound = false,
                     messageText = messageText,
-                    messageType = "TEXT",
-                    timestamp = timestamp
+                    messageType = packetType,
+                    timestamp = timestamp,
+                    attachmentBase64 = attB64,
+                    attachmentName = attName,
+                    attachmentMimeType = attMime,
+                    expiresAtTimestamp = expiresAt,
+                    burnOnRead = burnOnRead
                 )
                 dbHelper.insertMessage(chatMsg)
+                dbHelper.incrementUnreadCount(senderPeer.peerId)
 
-                // Emit incoming message
                 _incomingMessages.emit(
                     RavenIncomingMessage(
                         senderCallsign = senderCallSign,
@@ -320,49 +395,127 @@ class RavenSocketTransport(
                 )
             }
 
-            // Acknowledge receipt
             writer.println(JSONObject().apply {
                 put("status", "OK_DELIVERED")
                 put("ack_ts", System.currentTimeMillis())
             })
-
-        } catch (e: Exception) {
-            // Socket or handshake error
+        } catch (_: Exception) {
         } finally {
             try { socket.close() } catch (_: Exception) {}
         }
     }
 
     /**
-     * Sends an encrypted Raven packet directly to a peer's IP address.
+     * Sends an encrypted Raven text or special message (e.g. LOCATION, SMS_EXCERPT) to a peer.
      */
     suspend fun sendMessageToPeer(
         peer: RavenPeer,
         text: String,
         targetIp: String? = peer.lastKnownIp,
-        port: Int = DEFAULT_MESH_PORT
+        port: Int = DEFAULT_MESH_PORT,
+        messageType: String = "TEXT"
     ): RavenSendResult = withContext(Dispatchers.IO) {
+        val ttlSec = dbHelper.getEphemeralTtlForPeer(peer.peerId)
+        val burnOnRead = ttlSec == -1 // -1 means Burn immediately after reading
+        val effectiveTtl = if (ttlSec > 0) ttlSec else 0
+        val expiresAt = if (effectiveTtl > 0) System.currentTimeMillis() + (effectiveTtl * 1000L) else 0L
+
         val payload = JSONObject().apply {
-            put("type", "TEXT")
+            put("type", messageType)
             put("text", text)
+            put("ttl_sec", effectiveTtl)
+            put("burn_on_read", burnOnRead)
             put("ts", System.currentTimeMillis())
         }.toString()
+
         val result = sendRawPayloadToPeer(peer, payload, targetIp, port)
         if (result is RavenSendResult.Success) {
             val myCallSign = cryptoEngine.getRavenCallSign()
             val myName = myCallSign.removePrefix("raven://")
-            val chatMsg = com.messagebackup.app.data.local.RavenChatMessage(
+            val chatMsg = RavenChatMessage(
                 peerId = peer.peerId,
                 senderCallsign = myCallSign,
                 senderDisplayName = myName,
                 isOutbound = true,
                 messageText = text,
-                messageType = "TEXT",
-                timestamp = System.currentTimeMillis()
+                messageType = messageType,
+                timestamp = System.currentTimeMillis(),
+                expiresAtTimestamp = expiresAt,
+                burnOnRead = burnOnRead
             )
             dbHelper.insertMessage(chatMsg)
         }
         result
+    }
+
+    /**
+     * Sends an encrypted Raven Parcel (Image or File attachment) to a peer.
+     */
+    suspend fun sendParcelToPeer(
+        peer: RavenPeer,
+        captionText: String,
+        attachmentBase64: String,
+        attachmentName: String,
+        attachmentMimeType: String,
+        isImage: Boolean
+    ): RavenSendResult = withContext(Dispatchers.IO) {
+        val ttlSec = dbHelper.getEphemeralTtlForPeer(peer.peerId)
+        val burnOnRead = ttlSec == -1
+        val effectiveTtl = if (ttlSec > 0) ttlSec else 0
+        val expiresAt = if (effectiveTtl > 0) System.currentTimeMillis() + (effectiveTtl * 1000L) else 0L
+        val msgType = if (isImage) "IMAGE" else "FILE"
+
+        val payload = JSONObject().apply {
+            put("type", msgType)
+            put("text", captionText)
+            put("attachment_base64", attachmentBase64)
+            put("attachment_name", attachmentName)
+            put("attachment_mime", attachmentMimeType)
+            put("ttl_sec", effectiveTtl)
+            put("burn_on_read", burnOnRead)
+            put("ts", System.currentTimeMillis())
+        }.toString()
+
+        val result = sendRawPayloadToPeer(peer, payload, peer.lastKnownIp, DEFAULT_MESH_PORT)
+        if (result is RavenSendResult.Success) {
+            val myCallSign = cryptoEngine.getRavenCallSign()
+            val myName = myCallSign.removePrefix("raven://")
+            val chatMsg = RavenChatMessage(
+                peerId = peer.peerId,
+                senderCallsign = myCallSign,
+                senderDisplayName = myName,
+                isOutbound = true,
+                messageText = captionText,
+                messageType = msgType,
+                timestamp = System.currentTimeMillis(),
+                attachmentBase64 = attachmentBase64,
+                attachmentName = attachmentName,
+                attachmentMimeType = attachmentMimeType,
+                expiresAtTimestamp = expiresAt,
+                burnOnRead = burnOnRead
+            )
+            dbHelper.insertMessage(chatMsg)
+        }
+        result
+    }
+
+    /**
+     * Dispatches a single real-time 450ms walkie-talkie audio chunk while the user is holding the PTT button.
+     */
+    suspend fun sendLiveVoiceStreamChunk(
+        peer: RavenPeer,
+        chunkBase64: String,
+        sessionId: Long,
+        seq: Int
+    ) = withContext(Dispatchers.IO) {
+        val payload = JSONObject().apply {
+            put("type", "PTT_STREAM_CHUNK")
+            put("chunk_b64", chunkBase64)
+            put("session_id", sessionId)
+            put("seq", seq)
+            put("ts", System.currentTimeMillis())
+        }.toString()
+        sendRawPayloadToPeer(peer, payload, peer.lastKnownIp, DEFAULT_MESH_PORT)
     }
 
     /**
@@ -371,21 +524,34 @@ class RavenSocketTransport(
     suspend fun sendVoiceSnippetToPeer(
         peer: RavenPeer,
         voiceSnippet: VoiceSnippet,
+        sessionId: Long = 0L,
         targetIp: String? = peer.lastKnownIp,
         port: Int = DEFAULT_MESH_PORT
     ): RavenSendResult = withContext(Dispatchers.IO) {
+        val ttlSec = dbHelper.getEphemeralTtlForPeer(peer.peerId)
+        val burnOnRead = ttlSec == -1
+        val effectiveTtl = if (ttlSec > 0) ttlSec else 0
+        val expiresAt = if (effectiveTtl > 0) System.currentTimeMillis() + (effectiveTtl * 1000L) else 0L
+
         val payload = JSONObject().apply {
             put("type", "PTT_VOICE")
             put("audio_base64", voiceSnippet.audioBase64)
             put("duration_ms", voiceSnippet.durationMs)
+            put("session_id", sessionId)
+            if (!voiceSnippet.transcription.isNullOrBlank()) {
+                put("transcription", voiceSnippet.transcription)
+            }
+            put("ttl_sec", effectiveTtl)
+            put("burn_on_read", burnOnRead)
             put("ts", System.currentTimeMillis())
         }.toString()
+
         val result = sendRawPayloadToPeer(peer, payload, targetIp, port)
         if (result is RavenSendResult.Success) {
             val myCallSign = cryptoEngine.getRavenCallSign()
             val myName = myCallSign.removePrefix("raven://")
             val durationSec = String.format(java.util.Locale.US, "%.1fs", voiceSnippet.durationMs / 1000f)
-            val chatMsg = com.messagebackup.app.data.local.RavenChatMessage(
+            val chatMsg = RavenChatMessage(
                 peerId = peer.peerId,
                 senderCallsign = myCallSign,
                 senderDisplayName = myName,
@@ -393,7 +559,10 @@ class RavenSocketTransport(
                 messageText = "🎙️ Voice Note ($durationSec)",
                 messageType = "VOICE",
                 timestamp = System.currentTimeMillis(),
-                audioBase64 = voiceSnippet.audioBase64
+                audioBase64 = voiceSnippet.audioBase64,
+                transcription = voiceSnippet.transcription,
+                expiresAtTimestamp = expiresAt,
+                burnOnRead = burnOnRead
             )
             dbHelper.insertMessage(chatMsg)
         }
@@ -401,8 +570,8 @@ class RavenSocketTransport(
     }
 
     /**
-     * Automatically completes 2-way mutual link with a peer over local Wi-Fi socket,
-     * and also broadcasts across the Global Cellular Relay so remote peers connect simultaneously!
+     * Automatically completes 2-way mutual link with a peer over local Wi-Fi socket (if on same subnet)
+     * and across the Global Cellular Relay so remote peers connect simultaneously.
      */
     suspend fun sendMutualHandshake(
         targetIp: String,
@@ -415,18 +584,18 @@ class RavenSocketTransport(
             relaySuccess = globalRelay.sendCellularMutualHandshake(targetPeerId, targetPublicKey)
         }
 
-        if (targetIp.isBlank() || targetIp == "CELLULAR_RELAY") {
-            return@withContext Result.success(
-                RavenPeer(
-                    peerId = targetPeerId,
-                    displayName = targetPeerId.removePrefix("raven://"),
-                    publicKey = targetPublicKey,
-                    lastKnownIp = "CELLULAR_RELAY",
-                    lastSeenTimestamp = System.currentTimeMillis(),
-                    isTrusted = true,
-                    status = if (relaySuccess) RavenPeerStatus.PENDING_APPROVAL else RavenPeerStatus.CONNECTED
-                )
+        if (!isReachableLocalSubnet(targetIp)) {
+            val peerObj = RavenPeer(
+                peerId = RavenDatabaseHelper.normalizePeerId(targetPeerId),
+                displayName = targetPeerId.removePrefix("raven://"),
+                publicKey = targetPublicKey,
+                lastKnownIp = "CELLULAR_RELAY",
+                lastSeenTimestamp = System.currentTimeMillis(),
+                isTrusted = true,
+                status = if (relaySuccess) RavenPeerStatus.PENDING_APPROVAL else RavenPeerStatus.CONNECTED
             )
+            dbHelper.upsertPeer(peerObj)
+            return@withContext Result.success(peerObj)
         }
 
         try {
@@ -451,8 +620,8 @@ class RavenSocketTransport(
             }
 
             val socket = Socket()
-            socket.connect(InetSocketAddress(targetIp, port), 2_000)
-            socket.soTimeout = 3_000
+            socket.connect(InetSocketAddress(targetIp, port), 1_200)
+            socket.soTimeout = 2_000
 
             val writer = PrintWriter(socket.getOutputStream(), true)
             val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
@@ -464,7 +633,7 @@ class RavenSocketTransport(
             if (responseLine != null) {
                 val resp = JSONObject(responseLine)
                 if (resp.optString("status") == "OK_MUTUAL_LINK_ESTABLISHED") {
-                    val peerId = resp.getString("peerId")
+                    val peerId = RavenDatabaseHelper.normalizePeerId(resp.getString("peerId"))
                     val displayName = resp.optString("displayName", peerId)
                     val publicKey = resp.getString("publicKey")
                     val remoteIp = resp.optString("localIp", targetIp).ifBlank { targetIp }
@@ -487,11 +656,9 @@ class RavenSocketTransport(
                 Result.failure(Exception("No response from peer during mutual handshake."))
             }
         } catch (e: Exception) {
-            // Local IP socket unreachable (e.g. out-of-state cellular data test)
-            // If cellular relay handshake succeeded or targetPeerId exists, gracefully fall back to cellular relay peer!
             if (relaySuccess || targetPeerId.isNotBlank()) {
                 val cellularPeer = RavenPeer(
-                    peerId = targetPeerId,
+                    peerId = RavenDatabaseHelper.normalizePeerId(targetPeerId),
                     displayName = targetPeerId.removePrefix("raven://"),
                     publicKey = targetPublicKey,
                     lastKnownIp = "CELLULAR_RELAY",
@@ -511,11 +678,10 @@ class RavenSocketTransport(
      * Sends an acceptance confirmation packet to the peer once the local user clicks 'Accept'.
      */
     suspend fun sendAcceptanceConfirmation(peer: RavenPeer, port: Int = DEFAULT_MESH_PORT): Boolean = withContext(Dispatchers.IO) {
-        // Also dispatch over cellular relay so out-of-state peers receive it immediately
         globalRelay.sendCellularAcceptanceConfirmation(peer)
 
         val targetIp = peer.lastKnownIp
-        if (targetIp.isNullOrBlank() || targetIp == "CELLULAR_RELAY") return@withContext true
+        if (!isReachableLocalSubnet(targetIp)) return@withContext true
 
         try {
             val myCallSign = cryptoEngine.getRavenCallSign()
@@ -527,8 +693,8 @@ class RavenSocketTransport(
             }
 
             val socket = Socket()
-            socket.connect(InetSocketAddress(targetIp, port), 4_000)
-            socket.soTimeout = 4_000
+            socket.connect(InetSocketAddress(targetIp, port), 1_200)
+            socket.soTimeout = 1_500
 
             val writer = PrintWriter(socket.getOutputStream(), true)
             val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
@@ -549,8 +715,8 @@ class RavenSocketTransport(
         targetIp: String?,
         port: Int
     ): RavenSendResult = withContext(Dispatchers.IO) {
-        // 1. If target IP is a local subnet IP, attempt fast local TCP socket first
-        if (!targetIp.isNullOrBlank() && targetIp != "CELLULAR_RELAY") {
+        // 1. Only attempt local TCP socket if targetIp is on our active local Wi-Fi subnet (zero delay when out of state!)
+        if (isReachableLocalSubnet(targetIp)) {
             try {
                 val peerPubKey = cryptoEngine.decodePublicKey(peer.publicKey)
                 val sharedSecret = cryptoEngine.deriveSharedSecret(peerPubKey)
@@ -572,8 +738,8 @@ class RavenSocketTransport(
                 }
 
                 val socket = Socket()
-                socket.connect(InetSocketAddress(targetIp, port), 3_000)
-                socket.soTimeout = 4_000
+                socket.connect(InetSocketAddress(targetIp, port), 800)
+                socket.soTimeout = 1_200
 
                 val writer = PrintWriter(socket.getOutputStream(), true)
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
@@ -590,11 +756,11 @@ class RavenSocketTransport(
                     }
                 }
             } catch (_: Exception) {
-                // Local socket unreachable; fall through seamlessly to Global Cellular Relay
+                // Local socket unreachable; fall through immediately to Global Cellular Relay
             }
         }
 
-        // 2. Seamless Global Cellular / Internet Relay fallback (works across states and cell data!)
+        // 2. Instant Global Cellular / Internet Relay dispatch (0ms wait across states and 4G/5G)
         val relayResult = globalRelay.sendPacketToRemotePeer(peer, innerPayload)
         if (relayResult is RavenSendResult.Success) {
             dbHelper.upsertPeer(peer.copy(lastSeenTimestamp = System.currentTimeMillis()))

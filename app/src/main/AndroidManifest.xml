@@ -15,8 +15,13 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="com.android.vending.BILLING" />
 
-    <!-- Mind-to-Mind PTT (Push-To-Talk) Audio Capture for Raven Mesh Walkie-Talkie -->
+    <!-- Mind-to-Mind PTT (Push-To-Talk) Audio Capture & Audio Routing for Raven Mesh Walkie-Talkie -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- Optional: GPS Coordinates for Raven Mesh Dead Reckoning / Location Pin Drop -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!-- Optional: Off-Grid BLE Discovery & Advertising for Raven Mesh -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
@@ -31,6 +36,8 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
     <application
         android:name=".MessageBackupApp"

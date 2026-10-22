@@ -49,9 +49,14 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.GroupAdd
+import androidx.compose.material.icons.filled.Hearing
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -117,10 +122,10 @@ fun RavenIdentityDialog(
     val qrManager = remember { RavenQrManager(context) }
     val dbHelper = remember { RavenDatabaseHelper(context) }
     val socketTransport = remember { com.messagebackup.app.domain.mesh.RavenSocketTransport.getInstance(context, scope) }
-    val pttEngine = remember { com.messagebackup.app.domain.mesh.RavenVoicePttEngine(context) }
+    val pttEngine = remember { com.messagebackup.app.domain.mesh.RavenVoicePttEngine.getInstance(context) }
     val bleEngine = remember { com.messagebackup.app.domain.mesh.RavenBleMeshEngine(context, scope) }
 
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var myCallSign by remember { mutableStateOf(cryptoEngine.getRavenCallSign()) }
     var showEditNameDialog by remember { mutableStateOf(false) }
     var showEnterCodeDialog by remember { mutableStateOf(false) }
@@ -129,12 +134,20 @@ fun RavenIdentityDialog(
     var peerToDelete by remember { mutableStateOf<RavenPeer?>(null) }
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var peersList by remember { mutableStateOf<List<RavenPeer>>(emptyList()) }
+    var lastMessagesMap by remember { mutableStateOf<Map<String, com.messagebackup.app.data.local.RavenChatMessage>>(emptyMap()) }
     var isLoadingQr by remember { mutableStateOf(true) }
-    var activeChatPeer by remember { mutableStateOf<RavenPeer?>(null) }
+    var activeChatPeerId by rememberSaveable { mutableStateOf<String?>(null) }
+    val activeChatPeer = remember(peersList, activeChatPeerId) {
+        peersList.find { it.peerId == activeChatPeerId }
+    }
     var peerForDirectPing by remember { mutableStateOf<RavenPeer?>(null) }
-    var pingMessageText by remember { mutableStateOf("⚡ Raven Whisper: Greetings from Muninn!") }
+    var pingMessageText by remember { mutableStateOf("⚡ Raven Whisper: Greetings from MUNINN!") }
     var isSendingPing by remember { mutableStateOf(false) }
     var isRavenFlying by remember { mutableStateOf(false) }
+
+    // Audio & PTT Preferences
+    val isLoudspeaker by prefs.ravenAudioLoudspeaker.collectAsState()
+    val isPttAutoPlay by prefs.ravenPttAutoPlay.collectAsState()
 
     // Multi-Transport State
     val transportMode by prefs.ravenTransportMode.collectAsState()
@@ -146,6 +159,7 @@ fun RavenIdentityDialog(
     var isPttRecording by remember { mutableStateOf(false) }
     var pttTargetPeer by remember { mutableStateOf<RavenPeer?>(null) }
     var pttElapsedMs by remember { mutableStateOf(0L) }
+    var pttLiveTranscript by remember { mutableStateOf("") }
 
     LaunchedEffect(isPttRecording) {
         if (isPttRecording) {
@@ -159,12 +173,47 @@ fun RavenIdentityDialog(
         }
     }
 
+    fun refreshPeers() {
+        socketTransport.pollRelayImmediately()
+        scope.launch(Dispatchers.IO) {
+            val list = dbHelper.getAllPeers()
+            val lastMap = mutableMapOf<String, com.messagebackup.app.data.local.RavenChatMessage>()
+            for (p in list) {
+                dbHelper.getLastMessageForPeer(p.peerId)?.let { lastMsg ->
+                    lastMap[p.peerId] = lastMsg
+                }
+            }
+            withContext(Dispatchers.Main) {
+                peersList = list
+                lastMessagesMap = lastMap
+            }
+        }
+    }
+
+    var pttStreamSessionId by remember { mutableStateOf(0L) }
+
     fun startCardPtt(peer: RavenPeer) {
         if (isPttRecording) return
-        val started = pttEngine.startRecording()
+        pttLiveTranscript = ""
+        val sessionId = System.currentTimeMillis()
+        pttStreamSessionId = sessionId
+        val started = pttEngine.startRecording(
+            scope = scope,
+            onLiveChunkReady = { chunkB64, seq ->
+                socketTransport.sendLiveVoiceStreamChunk(
+                    peer = peer,
+                    chunkBase64 = chunkB64,
+                    sessionId = sessionId,
+                    seq = seq
+                )
+            }
+        )
         if (started) {
             pttTargetPeer = peer
             isPttRecording = true
+            pttEngine.transcribeLiveSpeech { text ->
+                if (text.isNotBlank()) pttLiveTranscript = text
+            }
         } else {
             Toast.makeText(context, "Microphone unavailable. Check permissions.", Toast.LENGTH_SHORT).show()
         }
@@ -175,17 +224,26 @@ fun RavenIdentityDialog(
         if (!isPttRecording) return
         isPttRecording = false
         pttTargetPeer = null
+        val capturedTranscript = pttLiveTranscript.takeIf { it.isNotBlank() }
+        val sessionId = pttStreamSessionId
         scope.launch(Dispatchers.IO) {
-            val snippet = pttEngine.stopRecording()
-            if (snippet != null) {
+            val rawSnippet = pttEngine.stopRecording()
+            if (rawSnippet != null) {
+                val snippet = if (!capturedTranscript.isNullOrBlank()) {
+                    rawSnippet.copy(transcription = capturedTranscript)
+                } else {
+                    rawSnippet
+                }
                 val res = socketTransport.sendVoiceSnippetToPeer(
                     peer = target,
-                    voiceSnippet = snippet
+                    voiceSnippet = snippet,
+                    sessionId = sessionId
                 )
                 withContext(Dispatchers.Main) {
                     when (res) {
                         is com.messagebackup.app.domain.mesh.RavenSendResult.Success -> {
                             isRavenFlying = true
+                            refreshPeers()
                             Toast.makeText(context, "🎙️ Walkie-Talkie voice delivered to ${target.displayName}!", Toast.LENGTH_SHORT).show()
                         }
                         is com.messagebackup.app.domain.mesh.RavenSendResult.Error -> {
@@ -306,18 +364,9 @@ fun RavenIdentityDialog(
         socketTransport.startServer()
     }
 
-    fun refreshPeers() {
-        socketTransport.pollRelayImmediately()
-        scope.launch(Dispatchers.IO) {
-            val list = dbHelper.getAllPeers()
-            withContext(Dispatchers.Main) {
-                peersList = list
-            }
-        }
-    }
-
     LaunchedEffect(Unit) {
         socketTransport.incomingMessages.collect { incoming ->
+            refreshPeers()
             Toast.makeText(
                 context,
                 "🪶 New Raven from ${incoming.senderDisplayName}:\n${incoming.messageText}",
@@ -328,6 +377,7 @@ fun RavenIdentityDialog(
 
     LaunchedEffect(Unit) {
         socketTransport.incomingVoiceStreams.collect { voice ->
+            refreshPeers()
             Toast.makeText(
                 context,
                 "🎙️ Incoming PTT from ${voice.senderDisplayName} (${voice.durationMs}ms)!",
@@ -339,7 +389,7 @@ fun RavenIdentityDialog(
     LaunchedEffect(Unit) {
         socketTransport.peerLinkedEvents.collect { linkedPeer ->
             refreshPeers()
-            selectedTab = 1
+            selectedTab = 0
             Toast.makeText(
                 context,
                 "🪶 Instant Link Established with ${linkedPeer.displayName}!",
@@ -426,7 +476,7 @@ fun RavenIdentityDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Navigation Tabs
+                // Navigation Tabs (Tab 0 = Friends List by default)
                 PrimaryTabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -437,9 +487,9 @@ fun RavenIdentityDialog(
                         onClick = { selectedTab = 0 },
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.People, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("My Sigil")
+                                Text("Friends (${peersList.size})")
                             }
                         }
                     )
@@ -448,9 +498,9 @@ fun RavenIdentityDialog(
                         onClick = { selectedTab = 1 },
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.People, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Peers (${peersList.size})")
+                                Text("My Sigil")
                             }
                         }
                     )
@@ -467,9 +517,9 @@ fun RavenIdentityDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                if (selectedTab == 0) {
+                if (selectedTab == 1) {
                     // My QR Sigil
                     Column(
                         modifier = Modifier
@@ -577,7 +627,7 @@ fun RavenIdentityDialog(
 
                                                 withContext(Dispatchers.Main) {
                                                     refreshPeers()
-                                                    selectedTab = 1
+                                                    selectedTab = 0
                                                     if (mutualConfirmed) {
                                                         Toast.makeText(
                                                             context,
@@ -656,13 +706,96 @@ fun RavenIdentityDialog(
 
                         Spacer(modifier = Modifier.height(16.dp))
                     }
-                } else if (selectedTab == 1) {
-                    // Peers List
+                } else if (selectedTab == 0) {
+                    // Friends & Peers List
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
                     ) {
+                        // Quick Walkie-Talkie Audio & PTT Mode Bar
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Loudspeaker vs Private Earpiece Chip
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isLoudspeaker) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        val next = !isLoudspeaker
+                                        prefs.setRavenAudioLoudspeaker(next)
+                                        Toast.makeText(
+                                            context,
+                                            if (next) "🔊 Loudspeaker Mode (Out Loud)" else "👂 Private Earpiece Mode",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isLoudspeaker) Icons.Default.VolumeUp else Icons.Default.Hearing,
+                                        contentDescription = null,
+                                        tint = if (isLoudspeaker) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isLoudspeaker) "🔊 Speaker Out Loud" else "👂 Private Earpiece",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isLoudspeaker) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                            }
+
+                            // Walkie-Talkie Auto-Play vs Silent Play-Button Mode Chip
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isPttAutoPlay) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        val next = !isPttAutoPlay
+                                        prefs.setRavenPttAutoPlay(next)
+                                        Toast.makeText(
+                                            context,
+                                            if (next) "📻 Walkie-Talkie Live Auto-Play ON" else "🔕 Silent PTT Mode (Play Button Only)",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPttAutoPlay) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff,
+                                        contentDescription = null,
+                                        tint = if (isPttAutoPlay) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isPttAutoPlay) "📻 Walkie Live" else "🔕 Silent Mode",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isPttAutoPlay) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
                         if (peersList.isEmpty()) {
                             Box(
                                 modifier = Modifier
@@ -681,17 +814,17 @@ fun RavenIdentityDialog(
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                                     )
                                     Text(
-                                        text = "No Linked Peers Yet",
+                                        text = "No Friends Linked Yet",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
-                                        text = "Scan a peer's Raven Sigil QR code to add them to your encrypted mesh.",
+                                        text = "Scan a friend's QR code, enter their code, or switch to 'My Sigil' to text them your code.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                         textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(horizontal = 32.dp)
+                                        modifier = Modifier.padding(horizontal = 28.dp)
                                     )
                                 }
                             }
@@ -703,8 +836,15 @@ fun RavenIdentityDialog(
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(peersList) { peer ->
+                                    val lastMsg = lastMessagesMap[peer.peerId]
                                     Card(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                if (peer.status == com.messagebackup.app.domain.mesh.RavenPeerStatus.CONNECTED) {
+                                                    activeChatPeerId = peer.peerId
+                                                }
+                                            },
                                         shape = RoundedCornerShape(16.dp),
                                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                                     ) {
@@ -722,18 +862,39 @@ fun RavenIdentityDialog(
                                                     verticalAlignment = Alignment.CenterVertically,
                                                     modifier = Modifier.weight(1f)
                                                 ) {
-                                                    Surface(
-                                                        shape = CircleShape,
-                                                        color = MaterialTheme.colorScheme.primaryContainer,
-                                                        modifier = Modifier.size(44.dp)
-                                                    ) {
-                                                        Box(contentAlignment = Alignment.Center) {
-                                                            Text(
-                                                                text = peer.displayName.take(2).uppercase(),
-                                                                fontWeight = FontWeight.Bold,
-                                                                fontSize = 16.sp,
-                                                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                                                            )
+                                                    Box {
+                                                        Surface(
+                                                            shape = CircleShape,
+                                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                                            modifier = Modifier.size(44.dp)
+                                                        ) {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Text(
+                                                                    text = peer.displayName.take(2).uppercase(),
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    fontSize = 16.sp,
+                                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                                )
+                                                            }
+                                                        }
+                                                        if (peer.unreadCount > 0) {
+                                                            Surface(
+                                                                shape = CircleShape,
+                                                                color = MaterialTheme.colorScheme.error,
+                                                                modifier = Modifier
+                                                                    .align(Alignment.TopEnd)
+                                                                    .size(18.dp)
+                                                            ) {
+                                                                Box(contentAlignment = Alignment.Center) {
+                                                                    Text(
+                                                                        text = peer.unreadCount.coerceAtMost(99).toString(),
+                                                                        style = MaterialTheme.typography.labelSmall,
+                                                                        fontSize = 9.sp,
+                                                                        fontWeight = FontWeight.Bold,
+                                                                        color = MaterialTheme.colorScheme.onError
+                                                                    )
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                     Spacer(modifier = Modifier.width(12.dp))
@@ -775,12 +936,24 @@ fun RavenIdentityDialog(
                                                             fontFamily = FontFamily.Monospace,
                                                             color = MaterialTheme.colorScheme.primary
                                                         )
-                                                        Text(
-                                                            text = "Fingerprint: ${peer.fingerprint()}",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            fontFamily = FontFamily.Monospace,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                                                        )
+                                                        if (lastMsg != null) {
+                                                            val prefix = if (lastMsg.isOutbound) "You: " else ""
+                                                            Text(
+                                                                text = prefix + lastMsg.messageText,
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                fontWeight = if (peer.unreadCount > 0) FontWeight.Bold else FontWeight.Normal,
+                                                                color = if (peer.unreadCount > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        } else {
+                                                            Text(
+                                                                text = "Fingerprint: ${peer.fingerprint()}",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                fontFamily = FontFamily.Monospace,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                                            )
+                                                        }
                                                     }
                                                 }
 
@@ -931,7 +1104,7 @@ fun RavenIdentityDialog(
                                                             )
                                                             Spacer(modifier = Modifier.width(6.dp))
                                                             Text(
-                                                                text = if (isThisPeerRecording) "Send ($elapsedSec)" else "Hold / Tap PTT",
+                                                                text = if (isThisPeerRecording) "Live ($elapsedSec)" else "Hold / Tap PTT",
                                                                 style = MaterialTheme.typography.labelLarge,
                                                                 color = if (isThisPeerRecording) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary
                                                             )
@@ -939,13 +1112,13 @@ fun RavenIdentityDialog(
                                                     }
 
                                                     OutlinedButton(
-                                                        onClick = { activeChatPeer = peer },
+                                                        onClick = { activeChatPeerId = peer.peerId },
                                                         shape = RoundedCornerShape(10.dp),
                                                         modifier = Modifier.weight(1f)
                                                     ) {
                                                         Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                                                         Spacer(modifier = Modifier.width(6.dp))
-                                                        Text("Message")
+                                                        Text(if (peer.unreadCount > 0) "Message (${peer.unreadCount})" else "Message")
                                                     }
                                                 }
                                             }
@@ -1646,7 +1819,9 @@ fun RavenIdentityDialog(
                         val verified = cryptoEngine.parseAndVerifyHandshake(inputFriendCodeText.trim())
                         if (verified != null) {
                             scope.launch(Dispatchers.IO) {
-                                val existing = dbHelper.getAllPeers().find { it.peerId == verified.callsign }
+                                val existing = dbHelper.getAllPeers().find {
+                                    RavenDatabaseHelper.normalizePeerId(it.peerId) == RavenDatabaseHelper.normalizePeerId(verified.callsign)
+                                }
                                 val newStatus = if (existing != null) {
                                     // If they were already in our contacts (e.g., they sent code, we paste back), mark CONNECTED!
                                     com.messagebackup.app.domain.mesh.RavenPeerStatus.CONNECTED
@@ -1679,7 +1854,7 @@ fun RavenIdentityDialog(
                                 withContext(Dispatchers.Main) {
                                     refreshPeers()
                                     showEnterCodeDialog = false
-                                    selectedTab = 1
+                                    selectedTab = 0
                                     if (mutualConfirmed) {
                                         Toast.makeText(
                                             context,
@@ -1835,9 +2010,8 @@ fun RavenIdentityDialog(
     activeChatPeer?.let { chatPeer ->
         RavenChatDialog(
             peer = chatPeer,
-            socketTransport = socketTransport,
             onDismiss = {
-                activeChatPeer = null
+                activeChatPeerId = null
                 refreshPeers()
             }
         )

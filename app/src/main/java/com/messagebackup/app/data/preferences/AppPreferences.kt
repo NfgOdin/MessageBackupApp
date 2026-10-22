@@ -80,6 +80,17 @@ class AppPreferences(context: Context) {
         private const val KEY_GOOGLE_ACCOUNT_NAME = "google_account_name"
         private const val KEY_GOOGLE_ACCOUNT_PHOTO_URL = "google_account_photo_url"
         private const val KEY_GOOGLE_ID_TOKEN = "google_id_token"
+
+        // Raven Mesh & Walkie-Talkie Master Settings
+        private const val KEY_RAVEN_MESH_ENABLED = "raven_mesh_enabled"
+        private const val KEY_RAVEN_AUDIO_LOUDSPEAKER = "raven_audio_loudspeaker"
+        private const val KEY_RAVEN_PTT_AUTO_PLAY = "raven_ptt_auto_play"
+        private const val KEY_LAST_RELAY_POLL_TS = "last_relay_poll_ts"
+        private const val KEY_PROCESSED_RELAY_IDS = "processed_relay_ids"
+
+        // O.D.I.N. Persistent History & Memory Capsule Settings
+        private const val KEY_ODIN_SAVE_HISTORY = "odin_save_history"
+        private const val KEY_MEMORY_CAPSULE_ENABLED = "memory_capsule_enabled"
     }
 
     private val _googleDriveAccount = MutableStateFlow(prefs.getString(KEY_GOOGLE_DRIVE_ACCOUNT, null))
@@ -259,6 +270,76 @@ class AppPreferences(context: Context) {
 
     private val _googleIdToken = MutableStateFlow(prefs.getString(KEY_GOOGLE_ID_TOKEN, "") ?: "")
     val googleIdToken: StateFlow<String> = _googleIdToken.asStateFlow()
+
+    private val _ravenMeshEnabled = MutableStateFlow(prefs.getBoolean(KEY_RAVEN_MESH_ENABLED, true))
+    val ravenMeshEnabled: StateFlow<Boolean> = _ravenMeshEnabled.asStateFlow()
+
+    // Default is true (Loudspeaker) per user preference
+    private val _ravenAudioLoudspeaker = MutableStateFlow(prefs.getBoolean(KEY_RAVEN_AUDIO_LOUDSPEAKER, true))
+    val ravenAudioLoudspeaker: StateFlow<Boolean> = _ravenAudioLoudspeaker.asStateFlow()
+
+    // Default is true (Walkie-Talkie live auto-play mode; false = Silent / play-button only)
+    private val _ravenPttAutoPlay = MutableStateFlow(prefs.getBoolean(KEY_RAVEN_PTT_AUTO_PLAY, true))
+    val ravenPttAutoPlay: StateFlow<Boolean> = _ravenPttAutoPlay.asStateFlow()
+
+    private val _odinSaveHistory = MutableStateFlow(prefs.getBoolean(KEY_ODIN_SAVE_HISTORY, true))
+    val odinSaveHistory: StateFlow<Boolean> = _odinSaveHistory.asStateFlow()
+
+    private val _memoryCapsuleEnabled = MutableStateFlow(prefs.getBoolean(KEY_MEMORY_CAPSULE_ENABLED, true))
+    val memoryCapsuleEnabled: StateFlow<Boolean> = _memoryCapsuleEnabled.asStateFlow()
+
+    fun setRavenMeshEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_RAVEN_MESH_ENABLED, enabled).apply()
+        _ravenMeshEnabled.value = enabled
+    }
+
+    fun setRavenAudioLoudspeaker(loudspeaker: Boolean) {
+        prefs.edit().putBoolean(KEY_RAVEN_AUDIO_LOUDSPEAKER, loudspeaker).apply()
+        _ravenAudioLoudspeaker.value = loudspeaker
+    }
+
+    fun setRavenPttAutoPlay(autoPlay: Boolean) {
+        prefs.edit().putBoolean(KEY_RAVEN_PTT_AUTO_PLAY, autoPlay).apply()
+        _ravenPttAutoPlay.value = autoPlay
+    }
+
+    fun setOdinSaveHistory(save: Boolean) {
+        prefs.edit().putBoolean(KEY_ODIN_SAVE_HISTORY, save).apply()
+        _odinSaveHistory.value = save
+    }
+
+    fun setMemoryCapsuleEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_MEMORY_CAPSULE_ENABLED, enabled).apply()
+        _memoryCapsuleEnabled.value = enabled
+    }
+
+    fun getLastRelayPollTimestampSeconds(): Long {
+        val saved = prefs.getLong(KEY_LAST_RELAY_POLL_TS, 0L)
+        return if (saved > 0L) saved else (System.currentTimeMillis() / 1000L) - 300L
+    }
+
+    fun setLastRelayPollTimestampSeconds(tsSec: Long) {
+        val current = prefs.getLong(KEY_LAST_RELAY_POLL_TS, 0L)
+        if (tsSec > current) {
+            prefs.edit().putLong(KEY_LAST_RELAY_POLL_TS, tsSec).apply()
+        }
+    }
+
+    fun getProcessedRelayIds(): Set<String> {
+        return prefs.getStringSet(KEY_PROCESSED_RELAY_IDS, emptySet()) ?: emptySet()
+    }
+
+    fun addProcessedRelayId(id: String) {
+        val current = (prefs.getStringSet(KEY_PROCESSED_RELAY_IDS, emptySet()) ?: emptySet()).toMutableSet()
+        if (current.size > 400) {
+            val trimmed = current.toList().takeLast(250).toMutableSet()
+            trimmed.add(id)
+            prefs.edit().putStringSet(KEY_PROCESSED_RELAY_IDS, trimmed).apply()
+        } else {
+            current.add(id)
+            prefs.edit().putStringSet(KEY_PROCESSED_RELAY_IDS, current).apply()
+        }
+    }
 
     fun setFastPaginationEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_FAST_PAGINATION_ENABLED, enabled).apply()
