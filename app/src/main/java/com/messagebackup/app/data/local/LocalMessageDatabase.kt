@@ -106,7 +106,8 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
                 sender TEXT NOT NULL,
                 text TEXT NOT NULL,
                 timestamp INTEGER NOT NULL,
-                is_error INTEGER DEFAULT 0
+                is_error INTEGER DEFAULT 0,
+                media_json TEXT
             )
             """.trimIndent()
         )
@@ -132,12 +133,11 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
             createExtraTables(db)
-        } else {
-            db.execSQL("DROP TABLE IF EXISTS threads")
-            db.execSQL("DROP TABLE IF EXISTS messages")
-            db.execSQL("DROP TABLE IF EXISTS attachments")
-            db.execSQL("DROP TABLE IF EXISTS vault_items")
-            onCreate(db)
+        }
+        if (oldVersion < 3) {
+            try {
+                db.execSQL("ALTER TABLE odin_chat_history ADD COLUMN media_json TEXT")
+            } catch (_: Exception) {}
         }
     }
 
@@ -455,7 +455,7 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
         val list = mutableListOf<com.messagebackup.app.domain.ai.OdinChatMessage>()
         val db = readableDatabase
         db.rawQuery(
-            "SELECT id, sender, text, timestamp, is_error FROM odin_chat_history WHERE thread_key = ? ORDER BY timestamp ASC",
+            "SELECT id, sender, text, timestamp, is_error, media_json FROM odin_chat_history WHERE thread_key = ? ORDER BY timestamp ASC",
             arrayOf(threadKey)
         )?.use { c ->
             val idIdx = c.getColumnIndexOrThrow("id")
@@ -463,6 +463,7 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
             val textIdx = c.getColumnIndexOrThrow("text")
             val tsIdx = c.getColumnIndexOrThrow("timestamp")
             val errIdx = c.getColumnIndexOrThrow("is_error")
+            val mediaJsonIdx = c.getColumnIndex("media_json")
 
             while (c.moveToNext()) {
                 val senderStr = c.getString(senderIdx) ?: "ODIN"
@@ -470,13 +471,40 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
                     com.messagebackup.app.domain.ai.OdinChatMessage.MessageSender.valueOf(senderStr)
                 }.getOrDefault(com.messagebackup.app.domain.ai.OdinChatMessage.MessageSender.ODIN)
 
+                val mediaItemsList = mutableListOf<com.messagebackup.app.model.VaultMediaItem>()
+                if (mediaJsonIdx >= 0 && !c.isNull(mediaJsonIdx)) {
+                    val jsonStr = c.getString(mediaJsonIdx)
+                    if (!jsonStr.isNullOrBlank()) {
+                        runCatching {
+                            val arr = org.json.JSONArray(jsonStr)
+                            for (i in 0 until arr.length()) {
+                                val obj = arr.getJSONObject(i)
+                                mediaItemsList.add(
+                                    com.messagebackup.app.model.VaultMediaItem(
+                                        partId = obj.optLong("partId"),
+                                        messageId = obj.optLong("messageId"),
+                                        threadId = obj.optLong("threadId"),
+                                        contactName = obj.optString("contactName"),
+                                        contactAddress = obj.optString("contactAddress"),
+                                        timestamp = obj.optLong("timestamp"),
+                                        contentType = obj.optString("contentType"),
+                                        fileName = obj.optString("fileName"),
+                                        uriString = obj.optString("uriString")
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
                 list.add(
                     com.messagebackup.app.domain.ai.OdinChatMessage(
                         id = c.getString(idIdx),
                         sender = senderEnum,
                         text = c.getString(textIdx) ?: "",
                         timestamp = c.getLong(tsIdx),
-                        isError = c.getInt(errIdx) == 1
+                        isError = c.getInt(errIdx) == 1,
+                        mediaItems = mediaItemsList
                     )
                 )
             }
@@ -486,6 +514,27 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
 
     suspend fun insertOdinChatMessage(threadKey: String, msg: com.messagebackup.app.domain.ai.OdinChatMessage) = withContext(Dispatchers.IO) {
         val db = writableDatabase
+        val mediaJsonStr = if (msg.mediaItems.isNotEmpty()) {
+            val arr = org.json.JSONArray()
+            for (item in msg.mediaItems) {
+                val obj = org.json.JSONObject().apply {
+                    put("partId", item.partId)
+                    put("messageId", item.messageId)
+                    put("threadId", item.threadId)
+                    put("contactName", item.contactName)
+                    put("contactAddress", item.contactAddress)
+                    put("timestamp", item.timestamp)
+                    put("contentType", item.contentType)
+                    put("fileName", item.fileName)
+                    put("uriString", item.uriString)
+                }
+                arr.put(obj)
+            }
+            arr.toString()
+        } else {
+            null
+        }
+
         val values = ContentValues().apply {
             put("id", msg.id)
             put("thread_key", threadKey)
@@ -493,6 +542,7 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
             put("text", msg.text)
             put("timestamp", msg.timestamp)
             put("is_error", if (msg.isError) 1 else 0)
+            put("media_json", mediaJsonStr)
         }
         db.insertWithOnConflict("odin_chat_history", null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
@@ -584,7 +634,7 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
 
     companion object {
         private const val DATABASE_NAME = "message_backup_cache.db"
-        private const val DATABASE_VERSION = 2
+        private const val DATABASE_VERSION = 3
 
         @Volatile
         private var instance: LocalMessageDatabase? = null

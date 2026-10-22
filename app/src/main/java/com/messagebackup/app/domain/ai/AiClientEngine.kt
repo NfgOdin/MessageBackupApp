@@ -39,7 +39,8 @@ data class OdinChatMessage(
     val sender: MessageSender,
     val text: String,
     val timestamp: Long = System.currentTimeMillis(),
-    val isError: Boolean = false
+    val isError: Boolean = false,
+    val mediaItems: List<com.messagebackup.app.model.VaultMediaItem> = emptyList()
 ) {
     enum class MessageSender {
         USER,
@@ -48,7 +49,10 @@ data class OdinChatMessage(
 }
 
 sealed class AiQueryResult {
-    data class Success(val responseText: String) : AiQueryResult()
+    data class Success(
+        val responseText: String,
+        val mediaItems: List<com.messagebackup.app.model.VaultMediaItem> = emptyList()
+    ) : AiQueryResult()
     data class Error(val errorMessage: String) : AiQueryResult()
 }
 
@@ -251,14 +255,14 @@ class AiClientEngine {
             when (providerType) {
                 AiProviderType.GEMINI -> {
                     if (geminiApiKey.isNotBlank()) {
-                        val primaryResult = queryGemini(systemInstruction, userPrompt, geminiApiKey, geminiModel, temperature, topP)
+                        val primaryResult = queryGemini(systemInstruction, userPrompt, geminiApiKey, geminiModel, temperature, topP, forensicReport)
                         if (primaryResult is AiQueryResult.Success) {
                             primaryResult
                         } else {
                             // If user's selected model failed (e.g. 503/404) and wasn't already flash-lite, try flash-lite first
                             val fallbackModel = "gemini-flash-lite-latest"
                             val retryResult = if (!geminiModel.trim().equals(fallbackModel, ignoreCase = true)) {
-                                queryGemini(systemInstruction, userPrompt, geminiApiKey, fallbackModel, temperature, topP)
+                                queryGemini(systemInstruction, userPrompt, geminiApiKey, fallbackModel, temperature, topP, forensicReport)
                             } else {
                                 primaryResult
                             }
@@ -296,13 +300,13 @@ class AiClientEngine {
                     if (openaiApiKey.isBlank()) {
                         return@withContext AiQueryResult.Error("OpenAI API Key is missing. Add your API key in O.D.I.N. Settings, or switch to Google Gemini / On-Device AI.")
                     }
-                    queryOpenAi(systemInstruction, userPrompt, openaiApiKey, openaiModel, temperature, topP)
+                    queryOpenAi(systemInstruction, userPrompt, openaiApiKey, openaiModel, temperature, topP, forensicReport)
                 }
                 AiProviderType.OLLAMA -> {
                     if (ollamaEndpoint.isBlank()) {
                         return@withContext AiQueryResult.Error("Local AI host endpoint is missing. Add your local IP (e.g. http://100.x.y.z:11434).")
                     }
-                    queryOllama(systemInstruction, userPrompt, ollamaEndpoint, ollamaModel, temperature, topP, numCtx)
+                    queryOllama(systemInstruction, userPrompt, ollamaEndpoint, ollamaModel, temperature, topP, numCtx, forensicReport)
                 }
                 AiProviderType.ON_DEVICE_NANO -> {
                     queryOnDeviceNano(context, baseInstruction, userPrompt, messages, targetContactName, forensicReport)
@@ -412,7 +416,10 @@ class AiClientEngine {
                     } else {
                         cloudAnswer
                     }
-                    return AiQueryResult.Success(finalOutput)
+                    return AiQueryResult.Success(
+                        responseText = finalOutput,
+                        mediaItems = forensicReport.matchedMediaItems
+                    )
                 }
             }
         } catch (_: Exception) {
@@ -429,7 +436,8 @@ class AiClientEngine {
         apiKey: String,
         modelName: String,
         temperature: Float,
-        topP: Float
+        topP: Float,
+        forensicReport: LocalForensicReport
     ): AiQueryResult {
         val cleanModel = modelName.trim().removePrefix("models/").ifBlank { "gemini-flash-lite-latest" }
 
@@ -492,7 +500,10 @@ class AiClientEngine {
                             parts.getJSONObject(0).optString("text", "").trim()
                         }
                         if (finalAnswer.isNotBlank()) {
-                            return AiQueryResult.Success(finalAnswer)
+                            return AiQueryResult.Success(
+                                responseText = finalAnswer,
+                                mediaItems = forensicReport.matchedMediaItems
+                            )
                         }
                     }
                 }
@@ -517,7 +528,8 @@ class AiClientEngine {
         apiKey: String,
         modelName: String,
         temperature: Float,
-        topP: Float
+        topP: Float,
+        forensicReport: LocalForensicReport
     ): AiQueryResult {
         val cleanModel = modelName.trim().ifBlank { "gpt-4o-mini" }
 
@@ -561,7 +573,10 @@ class AiClientEngine {
                     val message = firstChoice.optJSONObject("message")
                     val answer = message?.optString("content", "")?.trim()
                     if (!answer.isNullOrBlank()) {
-                        return AiQueryResult.Success(answer)
+                        return AiQueryResult.Success(
+                            responseText = answer,
+                            mediaItems = forensicReport.matchedMediaItems
+                        )
                     }
                 }
                 return AiQueryResult.Error("OpenAI returned an empty response.")
@@ -586,7 +601,8 @@ class AiClientEngine {
         model: String,
         temperature: Float,
         topP: Float,
-        numCtx: Int
+        numCtx: Int,
+        forensicReport: LocalForensicReport
     ): AiQueryResult {
         val cleanEndpoint = endpoint.trim().trimEnd('/')
         val url = URL("$cleanEndpoint/api/generate")
@@ -618,7 +634,10 @@ class AiClientEngine {
             val root = JSONObject(responseText)
             val answer = root.optString("response", "")
             if (answer.isNotBlank()) {
-                return AiQueryResult.Success(answer.trim())
+                return AiQueryResult.Success(
+                    responseText = answer.trim(),
+                    mediaItems = forensicReport.matchedMediaItems
+                )
             }
             return AiQueryResult.Error("Ollama returned an empty response.")
         } else {
@@ -702,7 +721,10 @@ class AiClientEngine {
                             } else {
                                 generatedText
                             }
-                            return@withContext AiQueryResult.Success(finalOutput)
+                            return@withContext AiQueryResult.Success(
+                                responseText = finalOutput,
+                                mediaItems = forensicReport.matchedMediaItems
+                            )
                         }
                     }
                 }
@@ -716,7 +738,10 @@ class AiClientEngine {
         }
 
         // 4. Deterministic On-Device Forensic Intelligence Engine (100% offline, instant, works even while AICore downloads weights)
-        AiQueryResult.Success(forensicReport.formattedUserResponse)
+        AiQueryResult.Success(
+            responseText = forensicReport.formattedUserResponse,
+            mediaItems = forensicReport.matchedMediaItems
+        )
     }
 
     private fun triggerBackgroundNanoDownload() {
@@ -748,7 +773,8 @@ class AiClientEngine {
         val hasMatches: Boolean,
         val rawSummaryForPrompt: String,
         val formattedUserResponse: String,
-        val isSummaryOrDraft: Boolean = false
+        val isSummaryOrDraft: Boolean = false,
+        val matchedMediaItems: List<com.messagebackup.app.model.VaultMediaItem> = emptyList()
     )
 
     /**
@@ -911,6 +937,25 @@ class AiClientEngine {
             lowerPrompt.contains("file") || lowerPrompt.contains("media")
 
         val matchedEntries = LinkedHashSet<String>()
+        val matchedMediaItems = mutableListOf<com.messagebackup.app.model.VaultMediaItem>()
+
+        fun extractMediaItemsFromMsg(msg: MessageItem) {
+            for (att in msg.attachments) {
+                matchedMediaItems.add(
+                    com.messagebackup.app.model.VaultMediaItem(
+                        partId = att.partId,
+                        messageId = msg.messageId,
+                        threadId = msg.threadId,
+                        contactName = msg.sender.ifBlank { contactLabel },
+                        contactAddress = msg.recipient.ifBlank { "" },
+                        timestamp = msg.timestamp,
+                        contentType = att.contentType,
+                        fileName = att.fileName,
+                        uriString = att.uriString
+                    )
+                )
+            }
+        }
 
         fun formatMsg(msg: MessageItem, prefixNote: String = ""): String {
             val dateStr = dateFormatter.format(Instant.ofEpochMilli(msg.timestamp))
@@ -1034,6 +1079,7 @@ class AiClientEngine {
                 val msg = messages[i]
                 if (msg.attachments.isNotEmpty()) {
                     matchedEntries.add(formatMsg(msg))
+                    extractMediaItemsFromMsg(msg)
                     if (matchedEntries.size >= 14) break
                 }
             }
@@ -1147,7 +1193,8 @@ class AiClientEngine {
             LocalForensicReport(
                 hasMatches = true,
                 rawSummaryForPrompt = joined,
-                formattedUserResponse = formatted
+                formattedUserResponse = formatted,
+                matchedMediaItems = matchedMediaItems
             )
         } else {
             val recentFallback = messages.takeLast(5).reversed().joinToString("\n") { msg ->

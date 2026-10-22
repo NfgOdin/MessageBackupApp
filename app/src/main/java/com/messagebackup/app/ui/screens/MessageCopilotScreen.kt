@@ -74,6 +74,17 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.asImageBitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import com.messagebackup.app.model.VaultMediaItem
+import com.messagebackup.app.ui.dialogs.MediaLightboxDialog
 import com.messagebackup.app.R
 import com.messagebackup.app.ads.AdManager
 import com.messagebackup.app.data.local.LocalMessageDatabase
@@ -186,6 +197,7 @@ fun MessageCopilotScreen(
     var showPromptSpendConfirm by remember { mutableStateOf(false) }
     var showRadarSpendConfirm by remember { mutableStateOf(false) }
     var showClearHistoryMenu by remember { mutableStateOf(false) }
+    var activeLightboxMedia by remember { mutableStateOf<Pair<List<VaultMediaItem>, Int>?>(null) }
 
     var showGuideDialog by remember { mutableStateOf(false) }
     var showArcadeDialog by remember { mutableStateOf(false) }
@@ -689,7 +701,10 @@ fun MessageCopilotScreen(
                     ChatBubble(
                         message = msg,
                         targetContactName = targetContactName,
-                        targetAddress = threads.firstOrNull { it.displayName == targetContactName || it.address == targetContactName }?.address
+                        targetAddress = threads.firstOrNull { it.displayName == targetContactName || it.address == targetContactName }?.address,
+                        onOpenMedia = { items, index ->
+                            activeLightboxMedia = Pair(items, index)
+                        }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -825,13 +840,22 @@ fun MessageCopilotScreen(
             }
         )
     }
+
+    activeLightboxMedia?.let { (mediaList, idx) ->
+        MediaLightboxDialog(
+            items = mediaList,
+            initialIndex = idx,
+            onDismiss = { activeLightboxMedia = null }
+        )
+    }
 }
 
 @Composable
 private fun ChatBubble(
     message: OdinChatMessage,
     targetContactName: String = "",
-    targetAddress: String? = null
+    targetAddress: String? = null,
+    onOpenMedia: (List<VaultMediaItem>, Int) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val isUser = message.sender == OdinChatMessage.MessageSender.USER
@@ -852,11 +876,26 @@ private fun ChatBubble(
         MaterialTheme.colorScheme.onSurfaceVariant
     }
 
-    // Determine if this ODIN response appears to suggest/draft a reply or contains actionable response text
     val isOdinResponse = !isUser && !message.isError
     val containsDraftOrReply = isOdinResponse && message.text.length > 5 &&
         !message.text.startsWith("Greetings!") &&
         !message.text.startsWith("Hail, traveler.")
+
+    val optionRegex = remember {
+        Regex("""(?:\*\*|###\s*)?Option\s*(\d+)[^:\n]*:?\s*(?:\*\*)?\s*\n?\s*"?([^"]+?)"?(?=\n\s*(?:\*\*|###\s*)?Option\s*\d+|\s*\Z)""", RegexOption.DOT_MATCHES_ALL)
+    }
+    val parsedOptions = remember(message.text) {
+        if (isOdinResponse && (message.text.contains("Option 1") || message.text.contains("Option 2"))) {
+            val matches = optionRegex.findAll(message.text).map { matchResult ->
+                val optNum = matchResult.groupValues[1]
+                val optContent = matchResult.groupValues[2].trim().removeSurrounding("\"").trim()
+                Pair(optNum, optContent)
+            }.filter { it.second.isNotBlank() }.toList()
+            if (matches.size >= 2) matches else emptyList()
+        } else {
+            emptyList()
+        }
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -870,13 +909,13 @@ private fun ChatBubble(
                 bottomEnd = if (isUser) 4.dp else 16.dp
             ),
             colors = CardDefaults.cardColors(containerColor = bgColor),
-            modifier = Modifier.fillMaxWidth(0.88f)
+            modifier = Modifier.fillMaxWidth(0.92f)
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 if (!isUser) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 4.dp)
+                        modifier = Modifier.padding(bottom = 6.dp)
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_odin_allfather),
@@ -893,11 +932,189 @@ private fun ChatBubble(
                         )
                     }
                 }
-                Text(
+
+                // Interactive Media Attachment Carousel for search results / attachments
+                if (message.mediaItems.isNotEmpty()) {
+                    Text(
+                        text = "📎 Matched Photos & Media (${message.mediaItems.size}):",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp)
+                    ) {
+                        items(message.mediaItems.size) { idx ->
+                            val item = message.mediaItems[idx]
+                            val bitmap = remember(item.uriString) {
+                                try {
+                                    context.contentResolver.openInputStream(Uri.parse(item.uriString))?.use {
+                                        BitmapFactory.decodeStream(it)
+                                    }
+                                } catch (ex: Exception) {
+                                    null
+                                }
+                            }
+
+                            Card(
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                ),
+                                modifier = Modifier
+                                    .size(width = 110.dp, height = 110.dp)
+                                    .clickable { onOpenMedia(message.mediaItems, idx) }
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    if (bitmap != null) {
+                                        Image(
+                                            bitmap = bitmap.asImageBitmap(),
+                                            contentDescription = item.fileName,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.AutoAwesome,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(28.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Surface(
+                                        color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f),
+                                        shape = RoundedCornerShape(topStart = 8.dp),
+                                        modifier = Modifier.align(Alignment.BottomEnd)
+                                    ) {
+                                        Text(
+                                            text = "🔍 View",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = androidx.compose.ui.graphics.Color.White,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Render Message Text with Clickable Web Links
+                ClickableMessageText(
                     text = message.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = textColor
+                    textColor = textColor
                 )
+
+                // If multiple reply options are found, render per-option action cards
+                if (parsedOptions.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "⚡ Select Reply Option:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        parsedOptions.forEach { (num, optionText) ->
+                            Card(
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text(
+                                        text = "Option $num",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "\"$optionText\"",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        // Copy Just This Option
+                                        AssistChip(
+                                            onClick = {
+                                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                val clip = android.content.ClipData.newPlainText("ODIN Option $num", optionText)
+                                                clipboard.setPrimaryClip(clip)
+                                                Toast.makeText(context, "Copied Option $num to clipboard! 📋", Toast.LENGTH_SHORT).show()
+                                            },
+                                            label = { Text("Copy Option $num", style = MaterialTheme.typography.labelSmall) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.ContentCopy,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        )
+
+                                        // Send Just This Option
+                                        AssistChip(
+                                            onClick = {
+                                                try {
+                                                    val sendIntent = if (!targetAddress.isNullOrBlank()) {
+                                                        android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+                                                            data = Uri.parse("smsto:$targetAddress")
+                                                            putExtra("sms_body", optionText)
+                                                        }
+                                                    } else {
+                                                        android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                            type = "text/plain"
+                                                            putExtra(android.content.Intent.EXTRA_TEXT, optionText)
+                                                        }
+                                                    }
+                                                    context.startActivity(sendIntent)
+                                                } catch (ex: Exception) {
+                                                    Toast.makeText(context, "Could not open messaging app: ${ex.message}", Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            label = {
+                                                Text(
+                                                    if (!targetAddress.isNullOrBlank()) "Send Option $num" else "SMS Option $num",
+                                                    style = MaterialTheme.typography.labelSmall
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.Sms,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 if (containsDraftOrReply) {
                     val scope = rememberCoroutineScope()
@@ -907,15 +1124,15 @@ private fun ChatBubble(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        // Copy to Clipboard chip
+                        // Copy All / Full text to Clipboard chip
                         AssistChip(
                             onClick = {
                                 val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                val clip = android.content.ClipData.newPlainText("ODIN Reply", message.text)
+                                val clip = android.content.ClipData.newPlainText("ODIN Full Reply", message.text)
                                 clipboard.setPrimaryClip(clip)
                                 Toast.makeText(context, "Copied to clipboard! 📋", Toast.LENGTH_SHORT).show()
                             },
-                            label = { Text("Copy", style = MaterialTheme.typography.labelSmall) },
+                            label = { Text("Copy All", style = MaterialTheme.typography.labelSmall) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.ContentCopy,
@@ -960,13 +1177,13 @@ private fun ChatBubble(
                             )
                         )
 
-                        // Open in Messages chip
+                        // Open in Messages chip (full text)
                         AssistChip(
                             onClick = {
                                 try {
                                     val sendIntent = if (!targetAddress.isNullOrBlank()) {
                                         android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
-                                            data = android.net.Uri.parse("smsto:$targetAddress")
+                                            data = Uri.parse("smsto:$targetAddress")
                                             putExtra("sms_body", message.text)
                                         }
                                     } else {
@@ -976,13 +1193,13 @@ private fun ChatBubble(
                                         }
                                     }
                                     context.startActivity(sendIntent)
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "Could not open messaging app: ${e.message}", Toast.LENGTH_SHORT).show()
+                                } catch (ex: Exception) {
+                                    Toast.makeText(context, "Could not open messaging app: ${ex.message}", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             label = {
                                 Text(
-                                    if (!targetAddress.isNullOrBlank()) "Send" else "SMS",
+                                    if (!targetAddress.isNullOrBlank()) "Send All" else "SMS All",
                                     style = MaterialTheme.typography.labelSmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -1005,3 +1222,79 @@ private fun ChatBubble(
         }
     }
 }
+
+@Composable
+private fun ClickableMessageText(
+    text: String,
+    textColor: androidx.compose.ui.graphics.Color
+) {
+    val context = LocalContext.current
+    val urlPattern = remember {
+        Regex("https?://[a-zA-Z0-9.-]+(?:/[^\\s]*)?")
+    }
+
+    val matches = remember(text) { urlPattern.findAll(text).toList() }
+
+    if (matches.isEmpty()) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = textColor
+        )
+    } else {
+        val primaryColor = MaterialTheme.colorScheme.primary
+        val bodyStyle = MaterialTheme.typography.bodyMedium
+        val annotatedString = remember(text, primaryColor) {
+            buildAnnotatedString {
+                var lastIdx = 0
+                for (match in matches) {
+                    val start = match.range.first
+                    val end = match.range.last + 1
+                    if (start > lastIdx) {
+                        append(text.substring(lastIdx, start))
+                    }
+                    val url = match.value
+                    val linkStart = length
+                    append(url)
+                    val linkEnd = length
+                    addStyle(
+                        style = SpanStyle(
+                            color = primaryColor,
+                            textDecoration = TextDecoration.Underline,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        start = linkStart,
+                        end = linkEnd
+                    )
+                    addStringAnnotation(
+                        tag = "URL",
+                        annotation = url,
+                        start = linkStart,
+                        end = linkEnd
+                    )
+                    lastIdx = end
+                }
+                if (lastIdx < text.length) {
+                    append(text.substring(lastIdx))
+                }
+            }
+        }
+
+        ClickableText(
+            text = annotatedString,
+            style = bodyStyle.copy(color = textColor),
+            onClick = { offset ->
+                annotatedString.getStringAnnotations(tag = "URL", start = offset, end = offset)
+                    .firstOrNull()?.let { annotation ->
+                        try {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(annotation.item))
+                            context.startActivity(intent)
+                        } catch (ex: Exception) {
+                            Toast.makeText(context, "Could not open link: ${ex.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+            }
+        )
+    }
+}
+

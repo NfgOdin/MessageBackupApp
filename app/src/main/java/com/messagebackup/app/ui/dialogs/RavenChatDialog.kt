@@ -114,6 +114,11 @@ import com.messagebackup.app.domain.mesh.RavenPeer
 import com.messagebackup.app.domain.mesh.RavenSendResult
 import com.messagebackup.app.domain.mesh.RavenSocketTransport
 import com.messagebackup.app.domain.mesh.RavenVoicePttEngine
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.mutableFloatStateOf
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.text.SimpleDateFormat
@@ -388,10 +393,10 @@ fun RavenChatDialog(
                         }
                         return@launch
                     }
-                    if (bytes.size > 4 * 1024 * 1024) {
+                    if (bytes.size > 25 * 1024 * 1024) {
                         withContext(Dispatchers.Main) {
                             isSending = false
-                            Toast.makeText(context, "File exceeds 4 MB Raven Parcel limit", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "File exceeds 25 MB Raven Parcel limit", Toast.LENGTH_LONG).show()
                         }
                         return@launch
                     }
@@ -994,7 +999,7 @@ fun RavenChatDialog(
                                     text = {
                                         Column {
                                             Text("Send File Parcel", fontWeight = FontWeight.SemiBold)
-                                            Text("Any document, ZIP, or audio (<4 MB)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                            Text("Any document, ZIP, or audio (<25 MB)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                         }
                                     },
                                     leadingIcon = { Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
@@ -1146,32 +1151,109 @@ fun RavenChatDialog(
         }
     }
 
-    // Full-screen Image Parcel Viewer Dialog
+    // Full-screen Image Parcel Viewer Dialog with Pinch-to-Zoom & Pan
     fullScreenImageBitmap?.let { bmp ->
-        Dialog(onDismissRequest = { fullScreenImageBitmap = null }) {
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surface,
+        Dialog(
+            onDismissRequest = { fullScreenImageBitmap = null },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false
+            )
+        ) {
+            var scale by remember { mutableFloatStateOf(1f) }
+            var offset by remember { mutableStateOf(Offset.Zero) }
+            val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+                scale = (scale * zoomChange).coerceIn(1f, 5f)
+                offset = if (scale > 1f) {
+                    Offset(offset.x + panChange.x, offset.y + panChange.y)
+                } else {
+                    Offset.Zero
+                }
+            }
+
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp)
+                    .fillMaxSize()
+                    .background(Color.Black)
             ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .transformable(state = transformState),
+                    contentAlignment = Alignment.Center
                 ) {
                     Image(
                         bitmap = bmp.asImageBitmap(),
-                        contentDescription = "Raven Encrypted Photo",
+                        contentDescription = "Raven Encrypted Photo Fullscreen",
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 460.dp)
-                            .clip(RoundedCornerShape(12.dp)),
+                            .fillMaxSize()
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offset.x,
+                                translationY = offset.y
+                            ),
                         contentScale = ContentScale.Fit
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(onClick = { fullScreenImageBitmap = null }) {
-                        Text("Close Preview")
+                }
+
+                // Top Controls: Title & Dismiss Button
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 24.dp)
+                        .align(Alignment.TopCenter),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Text(
+                            text = "Raven Photo (${bmp.width}x${bmp.height})",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { fullScreenImageBitmap = null },
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.6f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close Fullscreen",
+                            tint = Color.White
+                        )
+                    }
+                }
+
+                // Reset zoom pill if zoomed in
+                if (scale > 1.05f) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.7f),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 32.dp)
+                            .clickable {
+                                scale = 1f
+                                offset = Offset.Zero
+                            }
+                    ) {
+                        Text(
+                            text = "Reset Zoom (${String.format(Locale.US, "%.1fx", scale)})",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        )
                     }
                 }
             }
