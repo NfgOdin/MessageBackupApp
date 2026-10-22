@@ -1,23 +1,25 @@
-# Muninn: Message Memory & Vault — Google Play Store Listing
+# Muninn: Message Understanding & Neural Intelligence Navigation Nexus
 
 ---
 
 ### App Name (Title)
-**Muninn: SMS Backup & Vault**  
+**Muninn: Message Memory Vault**  
 *(28 / 30 characters)*
 
 ---
 
 ### Short Description
-**Private SMS/MMS backup, PDF & HTML exports, local AI intelligence & vault.**  
-*(76 / 80 characters)*
+**Message Understanding & Neural Intelligence Navigation Nexus. Private SMS Vault.**  
+*(79 / 80 characters)*
 
 ---
 
 ### Full Description
 *(Markdown format ready to paste into Google Play Console)*
 
-Muninn is your all-in-one private SMS & MMS message memory vault, export powerhouse, and intelligent message assistant. Back up years of precious conversations, export court-ready legal documents, and search your message archives using on-device artificial intelligence—with 100% local privacy.
+MUNINN: Message Understanding & Neural Intelligence Navigation Nexus
+
+In ancient lore, the Allfather Odin dispatched his sacred raven Muninn across the realms to remember all words, oaths, dates, and truths. Today, Muninn is your private digital memory vault—safeguarding your SMS & MMS messages, photos, and conversations with 100% on-device privacy, court-ready legal exports, and intelligent neural search.
 
 🛡️ ZERO DEVELOPER SERVERS — 100% LOCAL PRIVACY
 Your private text messages, photos, and contacts belong to you alone. Muninn operates entirely on your device:

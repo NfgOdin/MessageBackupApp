@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Muninn</string>
-    <string name="app_full_title">MUNINN: Memory &amp; Understanding through Norse Intelligence &amp; Neural Nexus</string>
+    <string name="app_full_title">MUNINN: Message Understanding &amp; Neural Intelligence Navigation Nexus</string>
     <string name="widget_stats_description">At-a-glance message count and conversation analytics.</string>
     <string name="widget_full_insights_description">Comprehensive conversation insights with top contacts and activity trends.</string>
     <string name="widget_odin_search_description">Instant 1-tap AI query and message search on your home screen.</string>

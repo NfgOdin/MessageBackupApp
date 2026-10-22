@@ -19,7 +19,7 @@ All required release files have been prepared and organized inside the `playstor
 ### Step A: Create App
 1. Go to **[Google Play Console](https://play.google.com/console/)**.
 2. Click **Create app**.
-3. **App name:** `Muninn: SMS Backup & Vault`
+3. **App name:** `Muninn: Message Memory Vault`
 4. **Default language:** `English (United States) - en-US`
 5. **App or game:** `App`
 6. **Free or paid:** `Free` (Contains optional in-app purchases and ads)
@@ -153,7 +153,7 @@ Create the following in-app products to match `BillingManager.kt`:
 4. **Release name:** `1.0.0 (10000)`
 5. **Release notes (en-US):**
    ```
-   Initial launch of Muninn: SMS Backup & Vault!
+   Initial launch of Muninn: Message Understanding & Neural Intelligence Navigation Nexus!
    • 100% on-device private SMS and MMS backup
    • Export to Court-Ready PDF, Interactive Offline HTML, CSV, and Plain Text
    • O.D.I.N. AI message copilot & Commitment Radar
