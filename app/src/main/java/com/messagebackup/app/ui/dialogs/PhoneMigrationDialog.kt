@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -154,6 +156,12 @@ fun PhoneMigrationDialog(
         }
     }
 
+    DisposableEffect(selectedTab) {
+        onDispose {
+            DirectLocalMigrationManager.stopServer()
+        }
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -200,6 +208,7 @@ fun PhoneMigrationDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    .imePadding()
             ) {
                 TabRow(selectedTabIndex = selectedTab) {
                     Tab(

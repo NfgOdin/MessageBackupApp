@@ -148,7 +148,7 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
     suspend fun getCachedThreads(): List<ConversationThread> = withContext(Dispatchers.IO) {
         val list = mutableListOf<ConversationThread>()
         val db = readableDatabase
-        db.rawQuery("SELECT thread_id, address, contact_name, snippet, timestamp, message_count, has_attachment FROM threads ORDER BY timestamp DESC", null)?.use { c ->
+        db.rawQuery("SELECT thread_id, address, contact_name, snippet, timestamp, message_count, has_attachment FROM threads ORDER BY timestamp DESC", null).use { c ->
             val idIdx = c.getColumnIndexOrThrow("thread_id")
             val addrIdx = c.getColumnIndexOrThrow("address")
             val nameIdx = c.getColumnIndexOrThrow("contact_name")
@@ -242,7 +242,7 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
         }
 
         val messageIds = mutableListOf<Long>()
-        db.rawQuery(query, args)?.use { c ->
+        db.rawQuery(query, args).use { c ->
             val idIdx = c.getColumnIndexOrThrow("message_id")
             val tidIdx = c.getColumnIndexOrThrow("thread_id")
             val typeIdx = c.getColumnIndexOrThrow("type")
@@ -278,7 +278,7 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
             val attachmentMap = mutableMapOf<Long, MutableList<MediaAttachment>>()
             for (chunk in messageIds.chunked(500)) {
                 val inClause = chunk.joinToString(",")
-                db.rawQuery("SELECT part_id, message_id, content_type, uri_string, file_name FROM attachments WHERE message_id IN ($inClause)", null)?.use { ac ->
+                db.rawQuery("SELECT part_id, message_id, content_type, uri_string, file_name FROM attachments WHERE message_id IN ($inClause)", null).use { ac ->
                     val pIdIdx = ac.getColumnIndexOrThrow("part_id")
                     val mIdIdx = ac.getColumnIndexOrThrow("message_id")
                     val ctIdx = ac.getColumnIndexOrThrow("content_type")
@@ -320,7 +320,7 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
         val db = readableDatabase
         var maxTime = 0L
         var count = 0
-        db.rawQuery("SELECT MAX(timestamp), COUNT(message_id) FROM messages WHERE thread_id = ?", arrayOf(threadId.toString()))?.use { c ->
+        db.rawQuery("SELECT MAX(timestamp), COUNT(message_id) FROM messages WHERE thread_id = ?", arrayOf(threadId.toString())).use { c ->
             if (c.moveToFirst()) {
                 maxTime = c.getLong(0)
                 count = c.getInt(1)
@@ -386,7 +386,7 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
         db.rawQuery(
             "SELECT part_id, message_id, thread_id, timestamp, content_type, file_name, uri_string, contact_name, contact_address FROM vault_items ORDER BY timestamp DESC",
             null
-        )?.use { c ->
+        ).use { c ->
             val pIdIdx = c.getColumnIndexOrThrow("part_id")
             val mIdIdx = c.getColumnIndexOrThrow("message_id")
             val tIdIdx = c.getColumnIndexOrThrow("thread_id")
@@ -457,7 +457,7 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
         db.rawQuery(
             "SELECT id, sender, text, timestamp, is_error, media_json FROM odin_chat_history WHERE thread_key = ? ORDER BY timestamp ASC",
             arrayOf(threadKey)
-        )?.use { c ->
+        ).use { c ->
             val idIdx = c.getColumnIndexOrThrow("id")
             val senderIdx = c.getColumnIndexOrThrow("sender")
             val textIdx = c.getColumnIndexOrThrow("text")
@@ -567,7 +567,7 @@ class LocalMessageDatabase private constructor(context: Context) : SQLiteOpenHel
         db.rawQuery(
             "SELECT id, message_id, thread_id, contact_name, sender, body, timestamp, source_type FROM starred_memories ORDER BY timestamp DESC",
             null
-        )?.use { c ->
+        ).use { c ->
             val idIdx = c.getColumnIndexOrThrow("id")
             val msgIdIdx = c.getColumnIndexOrThrow("message_id")
             val tIdIdx = c.getColumnIndexOrThrow("thread_id")

@@ -14,6 +14,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -135,12 +137,13 @@ fun MediaLightboxDialog(
                 LightboxMediaPage(item = item)
             }
 
-            // Top Control Bar Overlay
+            // Top Control Bar Overlay with Status Bar Insets Protection
             Surface(
                 color = Color.Black.copy(alpha = 0.6f),
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
+                    .statusBarsPadding()
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -187,12 +190,13 @@ fun MediaLightboxDialog(
                 }
             }
 
-            // Bottom Action Bar Overlay
+            // Bottom Action Bar Overlay with Navigation Bar Insets Protection
             Surface(
                 color = Color.Black.copy(alpha = 0.6f),
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
             ) {
                 Column(
                     modifier = Modifier
@@ -327,9 +331,9 @@ private fun LightboxMediaPage(item: VaultMediaItem) {
     var bitmap by remember(item.uriString) { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember(item.uriString) { mutableStateOf(item.category == MediaCategory.IMAGE) }
 
-    // Multi-touch Zoom & Pan Transformation state
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    // Multi-touch Zoom & Pan Transformation state keyed on the current item
+    var scale by remember(item.uriString) { mutableFloatStateOf(1f) }
+    var offset by remember(item.uriString) { mutableStateOf(Offset.Zero) }
 
     val transformState = rememberTransformableState { zoomChange, panChange, _ ->
         val newScale = (scale * zoomChange).coerceIn(1f, 5f)

@@ -950,13 +950,17 @@ private fun ChatBubble(
                     ) {
                         items(message.mediaItems.size) { idx ->
                             val item = message.mediaItems[idx]
-                            val bitmap = remember(item.uriString) {
-                                try {
-                                    context.contentResolver.openInputStream(Uri.parse(item.uriString))?.use {
-                                        BitmapFactory.decodeStream(it)
-                                    }
-                                } catch (ex: Exception) {
-                                    null
+                            var bitmap by remember(item.uriString) { mutableStateOf<android.graphics.Bitmap?>(null) }
+                            LaunchedEffect(item.uriString) {
+                                withContext(Dispatchers.IO) {
+                                    try {
+                                        context.contentResolver.openInputStream(Uri.parse(item.uriString))?.use { stream ->
+                                            val options = BitmapFactory.Options().apply {
+                                                inSampleSize = 2 // Optimized thumbnail downsampling for 60fps smooth scrolling
+                                            }
+                                            bitmap = BitmapFactory.decodeStream(stream, null, options)
+                                        }
+                                    } catch (_: Exception) {}
                                 }
                             }
 
@@ -970,9 +974,10 @@ private fun ChatBubble(
                                     .clickable { onOpenMedia(message.mediaItems, idx) }
                             ) {
                                 Box(modifier = Modifier.fillMaxSize()) {
-                                    if (bitmap != null) {
+                                    val loadedBitmap = bitmap
+                                    if (loadedBitmap != null) {
                                         Image(
-                                            bitmap = bitmap.asImageBitmap(),
+                                            bitmap = loadedBitmap.asImageBitmap(),
                                             contentDescription = item.fileName,
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.Crop

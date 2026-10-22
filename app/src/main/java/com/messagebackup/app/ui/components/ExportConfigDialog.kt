@@ -38,6 +38,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,24 +72,24 @@ fun ExportConfigDialog(
     onConfirmExport: (ExportOptions) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var selectedFormat by remember { mutableStateOf(initialFormat) }
-    var selectedTheme by remember { mutableStateOf(initialTheme) }
-    var selectedDateRange by remember { mutableStateOf(DateRangeFilter.ALL_TIME) }
-    var customStartDate by remember { mutableStateOf<Long?>(null) }
-    var customEndDate by remember { mutableStateOf<Long?>(null) }
-    var showDatePicker by remember { mutableStateOf(false) }
+    var selectedFormat by rememberSaveable { mutableStateOf(initialFormat) }
+    var selectedTheme by rememberSaveable { mutableStateOf(initialTheme) }
+    var selectedDateRange by rememberSaveable { mutableStateOf(DateRangeFilter.ALL_TIME) }
+    var customStartDate by rememberSaveable { mutableStateOf<Long?>(null) }
+    var customEndDate by rememberSaveable { mutableStateOf<Long?>(null) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
 
-    var selectedMaxPerFile by remember { mutableStateOf(initialMaxPerFile) }
-    var customSplitInput by remember(initialMaxPerFile) {
+    var selectedMaxPerFile by rememberSaveable { mutableStateOf(initialMaxPerFile) }
+    var customSplitInput by rememberSaveable(initialMaxPerFile) {
         mutableStateOf(if (initialMaxPerFile > 0) initialMaxPerFile.toString() else "")
     }
-    var includeMedia by remember { mutableStateOf(true) }
-    var destination by remember { mutableStateOf(initialDestination) }
-    var useZipPassword by remember { mutableStateOf(false) }
-    var zipPassword by remember { mutableStateOf("") }
-    var legalEvidenceMode by remember { mutableStateOf(false) }
-    var enableWatermark by remember { mutableStateOf(false) }
-    var watermarkText by remember { mutableStateOf("CONFIDENTIAL RECORD") }
+    var includeMedia by rememberSaveable { mutableStateOf(true) }
+    var destination by rememberSaveable { mutableStateOf(initialDestination) }
+    var useZipPassword by rememberSaveable { mutableStateOf(false) }
+    var zipPassword by rememberSaveable { mutableStateOf("") }
+    var legalEvidenceMode by rememberSaveable { mutableStateOf(false) }
+    var enableWatermark by rememberSaveable { mutableStateOf(false) }
+    var watermarkText by rememberSaveable { mutableStateOf("CONFIDENTIAL RECORD") }
 
     val context = LocalContext.current
     val prefs = remember { MessageBackupApp.instance.appPreferences }

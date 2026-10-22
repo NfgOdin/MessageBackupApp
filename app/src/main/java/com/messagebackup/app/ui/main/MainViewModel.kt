@@ -15,7 +15,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class ThreadSortOption(val displayName: String) {
     RECENT("Most Recent"),
@@ -598,6 +600,7 @@ class MainViewModel : ViewModel() {
                 statsProgressPct = 5,
                 statsProgressMessage = "Indexing conversations..."
             )
+            withContext(Dispatchers.Default) {
             val threads = if (targetThread != null) listOf(targetThread) else _uiState.value.threads
             val totalThreads = threads.size
             val totalMessages = threads.sumOf { it.messageCount.toLong() }
@@ -857,6 +860,7 @@ class MainViewModel : ViewModel() {
                 statsProgressPct = 100,
                 statsProgressMessage = "Complete!"
             )
+            }
         }
     }
 
@@ -1026,15 +1030,20 @@ class MainViewModel : ViewModel() {
 
                 var successCount = 0
                 val total = messagesWithFallbackAddress.size
-                for ((index, pair) in messagesWithFallbackAddress.withIndex()) {
-                    val (msg, fallbackAddress) = pair
-                    val pct = if (total > 0) (((index + 1).toFloat() / total.toFloat()) * 100f).toInt().coerceIn(0, 100) else 0
-                    _uiState.value = _uiState.value.copy(
-                        restoreProgressPct = pct,
-                        restoreProgressMessage = "Restoring message ${index + 1} of $total ($pct%)..."
-                    )
-                    val inserted = app.currentTelephonyRepository.insertSmsMessage(msg, fallbackAddress)
-                    if (inserted) successCount++
+                withContext(Dispatchers.IO) {
+                    for ((index, pair) in messagesWithFallbackAddress.withIndex()) {
+                        val (msg, fallbackAddress) = pair
+                        val inserted = app.currentTelephonyRepository.insertSmsMessage(msg, fallbackAddress)
+                        if (inserted) successCount++
+
+                        if (index % 25 == 0 || index == total - 1) {
+                            val pct = if (total > 0) (((index + 1).toFloat() / total.toFloat()) * 100f).toInt().coerceIn(0, 100) else 0
+                            _uiState.value = _uiState.value.copy(
+                                restoreProgressPct = pct,
+                                restoreProgressMessage = "Restoring message ${index + 1} of $total ($pct%)..."
+                            )
+                        }
+                    }
                 }
 
                 _uiState.value = _uiState.value.copy(

@@ -24,6 +24,10 @@ import com.messagebackup.app.model.MessageItem
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.compose.runtime.remember
+
+private val messageTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
+    .withZone(ZoneId.systemDefault())
 
 /**
  * Chat bubble component displaying a single SMS or MMS message within a conversation view,
@@ -38,9 +42,9 @@ fun MessageBubble(
     modifier: Modifier = Modifier
 ) {
     val isOutgoing = (message.direction == MessageDirection.OUTGOING)
-    val dateFormatter = DateTimeFormatter.ofPattern("h:mm a")
-        .withZone(ZoneId.systemDefault())
-    val timeStr = dateFormatter.format(Instant.ofEpochMilli(message.timestamp))
+    val timeStr = remember(message.timestamp) {
+        messageTimeFormatter.format(Instant.ofEpochMilli(message.timestamp))
+    }
 
     val bubbleShape = if (isOutgoing) {
         RoundedCornerShape(16.dp, 16.dp, 2.dp, 16.dp)

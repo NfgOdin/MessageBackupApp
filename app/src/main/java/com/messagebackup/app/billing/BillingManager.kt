@@ -110,7 +110,11 @@ class BillingManager(
                 }
 
                 override fun onBillingServiceDisconnected() {
-                    // Retry connection on next request
+                    // Exponential backoff reconnect
+                    coroutineScope.launch {
+                        kotlinx.coroutines.delay(2_000)
+                        startConnection()
+                    }
                 }
             })
         } catch (_: Exception) {
@@ -248,6 +252,9 @@ class BillingManager(
     override fun onPurchasesUpdated(billingResult: BillingResult, purchases: MutableList<Purchase>?) {
         if (billingResult.responseCode == BillingClient.BillingResponseCode.OK && purchases != null) {
             handlePurchasesList(purchases)
+        } else if (billingResult.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
+            // User already owns this non-consumable, automatically re-query and restore entitlement
+            queryPurchases()
         }
     }
 

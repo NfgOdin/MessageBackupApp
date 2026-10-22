@@ -438,14 +438,43 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
         db.update(TABLE_MESSAGES, values, "$COL_MSG_ID = ?", arrayOf(messageId.toString()))
     }
 
+    private fun deleteBlobFileIfPresent(storedValue: String?) {
+        if (storedValue != null && storedValue.startsWith("@blobfile:")) {
+            try {
+                val fileName = storedValue.removePrefix("@blobfile:")
+                val file = java.io.File(java.io.File(appContext.filesDir, "raven_blobs"), fileName)
+                if (file.exists()) {
+                    file.delete()
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     fun deleteMessageById(messageId: Long) {
         val db = writableDatabase
+        // Delete any offloaded disk blobs before removing row
+        db.rawQuery("SELECT $COL_MSG_AUDIO_BASE64, $COL_MSG_ATTACHMENT_BASE64 FROM $TABLE_MESSAGES WHERE $COL_MSG_ID = ?", arrayOf(messageId.toString())).use { c ->
+            if (c.moveToFirst()) {
+                deleteBlobFileIfPresent(c.getString(0))
+                deleteBlobFileIfPresent(c.getString(1))
+            }
+        }
         db.delete(TABLE_MESSAGES, "$COL_MSG_ID = ?", arrayOf(messageId.toString()))
     }
 
     fun purgeExpiredMessages(): Int {
         val db = writableDatabase
         val now = System.currentTimeMillis()
+        // Delete any offloaded disk blobs before deleting expired rows
+        db.rawQuery(
+            "SELECT $COL_MSG_AUDIO_BASE64, $COL_MSG_ATTACHMENT_BASE64 FROM $TABLE_MESSAGES WHERE $COL_MSG_EXPIRES_AT > 0 AND $COL_MSG_EXPIRES_AT <= ?",
+            arrayOf(now.toString())
+        ).use { c ->
+            while (c.moveToNext()) {
+                deleteBlobFileIfPresent(c.getString(0))
+                deleteBlobFileIfPresent(c.getString(1))
+            }
+        }
         return db.delete(
             TABLE_MESSAGES,
             "$COL_MSG_EXPIRES_AT > 0 AND $COL_MSG_EXPIRES_AT <= ?",
@@ -526,6 +555,18 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
         val db = writableDatabase
         val cleanId = peerId.removePrefix("raven://").trim().lowercase()
         val withPrefix = "raven://$cleanId"
+
+        // Delete any offloaded disk blobs for this peer before removing rows
+        db.rawQuery(
+            "SELECT $COL_MSG_AUDIO_BASE64, $COL_MSG_ATTACHMENT_BASE64 FROM $TABLE_MESSAGES WHERE LOWER($COL_MSG_PEER_ID) = ? OR LOWER($COL_MSG_PEER_ID) = ? OR LOWER($COL_MSG_PEER_ID) LIKE ?",
+            arrayOf(cleanId, withPrefix, "%$cleanId%")
+        ).use { c ->
+            while (c.moveToNext()) {
+                deleteBlobFileIfPresent(c.getString(0))
+                deleteBlobFileIfPresent(c.getString(1))
+            }
+        }
+
         return db.delete(
             TABLE_MESSAGES,
             "LOWER($COL_MSG_PEER_ID) = ? OR LOWER($COL_MSG_PEER_ID) = ? OR LOWER($COL_MSG_PEER_ID) LIKE ?",

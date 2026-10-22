@@ -91,6 +91,16 @@ object DirectLocalMigrationManager {
         return bitmap
     }
 
+    @Volatile
+    private var activeServerSocket: ServerSocket? = null
+
+    fun stopServer() {
+        try {
+            activeServerSocket?.close()
+        } catch (_: Exception) {}
+        activeServerSocket = null
+    }
+
     /**
      * Sender Service: Listens for an incoming connection and streams the backup file directly.
      */
@@ -100,43 +110,40 @@ object DirectLocalMigrationManager {
         onClientConnected: (clientIp: String) -> Unit,
         onProgress: (sentBytes: Long, totalBytes: Long) -> Unit
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        var serverSocket: ServerSocket? = null
+        stopServer()
         try {
-            serverSocket = ServerSocket(port)
+            val serverSocket = ServerSocket(port).also { activeServerSocket = it }
             serverSocket.soTimeout = 120_000 // 2 minute pairing timeout
 
-            val socket = serverSocket.accept()
-            onClientConnected(socket.inetAddress.hostAddress ?: "Unknown Client")
+            serverSocket.accept().use { socket ->
+                onClientConnected(socket.inetAddress?.hostAddress ?: "Unknown Client")
 
-            val totalBytes = file.length()
-            val input = BufferedInputStream(FileInputStream(file))
-            val output = BufferedOutputStream(socket.getOutputStream())
+                val totalBytes = file.length()
+                BufferedInputStream(FileInputStream(file)).use { input ->
+                    BufferedOutputStream(socket.getOutputStream()).use { output ->
+                        // Write 8-byte file length header
+                        val lengthBytes = java.nio.ByteBuffer.allocate(8).putLong(totalBytes).array()
+                        output.write(lengthBytes)
+                        output.flush()
 
-            // Write 8-byte file length header
-            val lengthBytes = java.nio.ByteBuffer.allocate(8).putLong(totalBytes).array()
-            output.write(lengthBytes)
-            output.flush()
+                        val buffer = ByteArray(64 * 1024) // 64 KB buffer for high Wi-Fi throughput
+                        var bytesRead: Int
+                        var sentBytes = 0L
 
-            val buffer = ByteArray(64 * 1024) // 64 KB buffer for high Wi-Fi throughput
-            var bytesRead: Int
-            var sentBytes = 0L
-
-            while (input.read(buffer).also { bytesRead = it } != -1) {
-                output.write(buffer, 0, bytesRead)
-                sentBytes += bytesRead
-                onProgress(sentBytes, totalBytes)
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            sentBytes += bytesRead
+                            onProgress(sentBytes, totalBytes)
+                        }
+                        output.flush()
+                    }
+                }
             }
-            output.flush()
-
-            socket.close()
-            input.close()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         } finally {
-            try {
-                serverSocket?.close()
-            } catch (_: Exception) {}
+            stopServer()
         }
     }
 
@@ -150,46 +157,43 @@ object DirectLocalMigrationManager {
         onProgress: (receivedBytes: Long, totalBytes: Long) -> Unit
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
-            val socket = Socket(host, port)
-            socket.soTimeout = 60_000
+            Socket(host, port).use { socket ->
+                socket.soTimeout = 60_000
 
-            val input = BufferedInputStream(socket.getInputStream())
-            val output = BufferedOutputStream(FileOutputStream(outputDestinationFile))
+                BufferedInputStream(socket.getInputStream()).use { input ->
+                    BufferedOutputStream(FileOutputStream(outputDestinationFile)).use { output ->
+                        // Read 8-byte header for total length
+                        val lengthHeader = ByteArray(8)
+                        var headerBytesRead = 0
+                        while (headerBytesRead < 8) {
+                            val r = input.read(lengthHeader, headerBytesRead, 8 - headerBytesRead)
+                            if (r == -1) break
+                            headerBytesRead += r
+                        }
 
-            // Read 8-byte header for total length
-            val lengthHeader = ByteArray(8)
-            var headerBytesRead = 0
-            while (headerBytesRead < 8) {
-                val r = input.read(lengthHeader, headerBytesRead, 8 - headerBytesRead)
-                if (r == -1) break
-                headerBytesRead += r
+                        val totalBytes = if (headerBytesRead == 8) {
+                            java.nio.ByteBuffer.wrap(lengthHeader).long
+                        } else {
+                            -1L
+                        }
+
+                        val buffer = ByteArray(64 * 1024)
+                        var bytesRead: Int
+                        var totalReceived = 0L
+
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            totalReceived += bytesRead
+                            onProgress(totalReceived, totalBytes)
+                        }
+                        output.flush()
+
+                        if (totalBytes > 0 && totalReceived < totalBytes) {
+                            return@withContext Result.failure(Exception("Transfer interrupted ($totalReceived / $totalBytes bytes received)."))
+                        }
+                    }
+                }
             }
-
-            val totalBytes = if (headerBytesRead == 8) {
-                java.nio.ByteBuffer.wrap(lengthHeader).long
-            } else {
-                -1L
-            }
-
-            val buffer = ByteArray(64 * 1024)
-            var bytesRead: Int
-            var totalReceived = 0L
-
-            while (input.read(buffer).also { bytesRead = it } != -1) {
-                output.write(buffer, 0, bytesRead)
-                totalReceived += bytesRead
-                onProgress(totalReceived, totalBytes)
-            }
-            output.flush()
-
-            socket.close()
-            output.close()
-            input.close()
-
-            if (totalBytes > 0 && totalReceived < totalBytes) {
-                return@withContext Result.failure(Exception("Transfer interrupted ($totalReceived / $totalBytes bytes received)."))
-            }
-
             Result.success(outputDestinationFile)
         } catch (e: Exception) {
             Result.failure(e)

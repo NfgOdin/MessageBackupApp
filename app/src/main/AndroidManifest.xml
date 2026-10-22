@@ -42,9 +42,18 @@
     <uses-feature android:name="android.hardware.location" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
+    <!-- Package visibility declarations for On-Device AI (Gemini Nano) and Cloud storage apps -->
+    <queries>
+        <package android:name="com.google.android.aicore" />
+        <package android:name="com.google.android.apps.docs" />
+        <package android:name="com.microsoft.skydrive" />
+        <package android:name="com.dropbox.android" />
+    </queries>
+
     <application
         android:name=".MessageBackupApp"
         android:allowBackup="true"
+        android:largeHeap="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:usesCleartextTraffic="true"
