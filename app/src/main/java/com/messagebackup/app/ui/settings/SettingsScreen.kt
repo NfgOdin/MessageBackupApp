@@ -3004,7 +3004,7 @@ Rules:
 
                     Column(modifier = Modifier.padding(14.dp)) {
                         Text(
-                            text = "MUNINN v1.0.0",
+                            text = "MUNINN v${com.messagebackup.app.BuildConfig.VERSION_NAME}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface
