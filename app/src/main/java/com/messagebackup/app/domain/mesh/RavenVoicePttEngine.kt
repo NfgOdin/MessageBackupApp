@@ -47,6 +47,30 @@ class RavenVoicePttEngine(context: Context) {
 
     private val appContext = context.applicationContext
     private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val powerManager = appContext.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+    private var pttWakeLock: android.os.PowerManager.WakeLock? = null
+
+    private fun acquirePttWakeLock() {
+        try {
+            if (pttWakeLock == null) {
+                pttWakeLock = powerManager.newWakeLock(
+                    android.os.PowerManager.PARTIAL_WAKE_LOCK,
+                    "Muninn:RavenPttAudioWakeLock"
+                )
+            }
+            if (pttWakeLock?.isHeld == false) {
+                pttWakeLock?.acquire(25_000L)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun releasePttWakeLock() {
+        try {
+            if (pttWakeLock?.isHeld == true) {
+                pttWakeLock?.release()
+            }
+        } catch (_: Exception) {}
+    }
 
     companion object {
         private const val STREAM_SAMPLE_RATE = 8000 // 8kHz wideband walkie-talkie rate for ultra-fast cellular frames
@@ -396,7 +420,7 @@ class RavenVoicePttEngine(context: Context) {
 
     /**
      * Plays an inbound or saved voice transmission through either Loudspeaker (default) or Private Earpiece.
-     * Prefaces with a tactical walkie-talkie start squelch chime and concludes with a subtle Roger beep.
+     * Prefaces with the iconic Nextel/Boost Mobile 3-burst alert chirp and concludes with a subtle Roger beep.
      */
     suspend fun playInboundVoice(
         audioBase64: String,
@@ -404,15 +428,16 @@ class RavenVoicePttEngine(context: Context) {
         playSquelchTones: Boolean = true
     ) = withContext(Dispatchers.IO) {
         stopPlayback()
+        acquirePttWakeLock()
         var tempFile: File? = null
         var mediaPlayer: MediaPlayer? = null
 
         try {
             configureAudioRouting(useLoudspeaker)
 
-            // 1. Play subtle opening squelch tone (720Hz blip, 40ms)
+            // 1. Play signature Nextel / Boost Mobile inbound 3-burst chirp!
             if (playSquelchTones) {
-                playTone(frequency = 720, durationMs = 40, volume = 0.22f, useLoudspeaker = useLoudspeaker)
+                playNextelInboundChirp(useLoudspeaker = useLoudspeaker)
             }
 
             // 2. Write temp file and play voice payload
@@ -473,8 +498,36 @@ class RavenVoicePttEngine(context: Context) {
                     activeTempPlaybackFile = null
                 }
                 restoreAudioRouting()
+                releasePttWakeLock()
             }
         }
+    }
+
+    /**
+     * Plays the iconic 3-burst rising Nextel / Boost Mobile "chirp-chirp-chirp"
+     * alert loudly through the speaker before incoming audio begins.
+     */
+    fun playNextelInboundChirp(useLoudspeaker: Boolean = true) {
+        try {
+            acquirePttWakeLock()
+            configureAudioRouting(useLoudspeaker)
+            playTone(frequency = 1200, durationMs = 35, volume = 0.82f, useLoudspeaker = useLoudspeaker)
+            Thread.sleep(18)
+            playTone(frequency = 1550, durationMs = 35, volume = 0.88f, useLoudspeaker = useLoudspeaker)
+            Thread.sleep(18)
+            playTone(frequency = 1950, durationMs = 50, volume = 0.94f, useLoudspeaker = useLoudspeaker)
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Plays the classic Nextel talk-permit double-beep when PTT button is keyed down.
+     */
+    fun playNextelTalkPermitChirp(useLoudspeaker: Boolean = true) {
+        try {
+            playTone(frequency = 1080, durationMs = 30, volume = 0.55f, useLoudspeaker = useLoudspeaker)
+            Thread.sleep(15)
+            playTone(frequency = 1380, durationMs = 35, volume = 0.60f, useLoudspeaker = useLoudspeaker)
+        } catch (_: Exception) {}
     }
 
     /**

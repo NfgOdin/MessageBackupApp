@@ -185,6 +185,10 @@ fun RavenChatDialog(
             withContext(Dispatchers.Main) {
                 messagesList = msgs
             }
+            val latestInbound = msgs.lastOrNull { !it.isOutbound }
+            if (latestInbound != null) {
+                socketTransport.sendReadReceipt(peer, latestInbound.timestamp)
+            }
         }
     }
 
@@ -1541,11 +1545,17 @@ fun RavenMessageBubble(
                         color = textColor.copy(alpha = 0.7f)
                     )
                     if (isOutbound) {
+                        val (statusText, statusColor) = when (msg.deliveryStatus) {
+                            "READ" -> Pair("✓✓ Seen", androidx.compose.ui.graphics.Color(0xFF06B6D4))
+                            "DELIVERED" -> Pair("✓✓ Delivered", MaterialTheme.colorScheme.primary)
+                            else -> Pair("✓ Sent", textColor.copy(alpha = 0.7f))
+                        }
                         Text(
-                            text = "✓ E2EE",
+                            text = statusText,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                             fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.primary
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            color = statusColor
                         )
                     }
                 }

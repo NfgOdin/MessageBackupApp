@@ -593,14 +593,23 @@ class TelephonyRepositoryImpl(
     }
 
     private fun parseMmsParts(mmsId: Long): Pair<String, List<MediaAttachment>> {
-        val partUri = Uri.parse("content://mms/$mmsId/part")
         val projection = arrayOf("_id", "ct", "text", "_data", "name", "cl")
         var cursor: Cursor? = null
         val bodyBuilder = StringBuilder()
         val attachments = mutableListOf<MediaAttachment>()
 
         try {
+            // 1. Try canonical part URI for this MMS
+            var partUri = Uri.parse("content://mms/$mmsId/part")
             cursor = contentResolver.query(partUri, projection, null, null, null)
+
+            // 2. Fallback query if content://mms/$mmsId/part returned 0 rows (common for sent MMS on many Android builds)
+            if (cursor == null || cursor.count == 0) {
+                cursor?.close()
+                partUri = Uri.parse("content://mms/part")
+                cursor = contentResolver.query(partUri, projection, "mid = ?", arrayOf(mmsId.toString()), null)
+            }
+
             cursor?.let {
                 val idIdx = it.getColumnIndexOrThrow("_id")
                 val ctIdx = it.getColumnIndex("ct")
@@ -611,14 +620,22 @@ class TelephonyRepositoryImpl(
 
                 while (it.moveToNext()) {
                     val partId = it.getLong(idIdx)
-                    val contentType = if (ctIdx != -1) it.getString(ctIdx) ?: "" else ""
+                    val rawContentType = if (ctIdx != -1) it.getString(ctIdx) ?: "" else ""
+                    val contentType = rawContentType.trim()
                     val text = if (textIdx != -1) it.getString(textIdx) else null
                     val data = if (dataIdx != -1) it.getString(dataIdx) else null
                     val name = if (nameIdx != -1) it.getString(nameIdx) else null
                     val cl = if (clIdx != -1) it.getString(clIdx) else null
 
+                    val ctLower = contentType.lowercase()
+
+                    // Skip SMIL layout presentation
+                    if (ctLower.contains("smil")) {
+                        continue
+                    }
+
                     // Text part
-                    if (contentType.equals("text/plain", ignoreCase = true)) {
+                    if (ctLower.equals("text/plain", ignoreCase = true)) {
                         if (text != null) {
                             bodyBuilder.append(text)
                         } else if (data != null) {
@@ -629,12 +646,17 @@ class TelephonyRepositoryImpl(
                                 bodyBuilder.append(textFromStream)
                             }
                         }
-                    } else if (contentType.startsWith("image/") || contentType.startsWith("audio/") || contentType.startsWith("video/")) {
-                        // Media attachment: always prefix with partId to guarantee uniqueness in zip entries
-                        val extension = getExtensionForMime(contentType)
-                        val rawName = name ?: cl
-                        val fileName = if (rawName != null && rawName.isNotBlank()) {
-                            "${partId}_$rawName"
+                    } else if (ctLower.isNotBlank() || data != null || name != null || cl != null) {
+                        // Media attachment: images, video, audio, APKs, ZIPs, PDFs, documents, or arbitrary binaries!
+                        val rawName = name ?: cl ?: (data?.substringAfterLast('/'))
+                        val extension = if (!rawName.isNullOrBlank() && rawName.contains('.')) {
+                            rawName.substringAfterLast('.').lowercase()
+                        } else {
+                            getExtensionForMime(contentType)
+                        }
+
+                        val fileName = if (!rawName.isNullOrBlank()) {
+                            if (rawName.contains('.')) "${partId}_$rawName" else "${partId}_${rawName}.$extension"
                         } else {
                             "mms_part_${partId}.$extension"
                         }
@@ -642,7 +664,7 @@ class TelephonyRepositoryImpl(
                         attachments.add(
                             MediaAttachment(
                                 partId = partId,
-                                contentType = contentType,
+                                contentType = if (contentType.isNotBlank()) contentType else "application/octet-stream",
                                 uriString = "content://mms/part/$partId",
                                 fileName = fileName
                             )
@@ -818,15 +840,27 @@ class TelephonyRepositoryImpl(
     }
 
     private fun getExtensionForMime(mimeType: String): String {
-        return when (mimeType.lowercase()) {
+        val lower = mimeType.lowercase().trim().substringBefore(';')
+        return when (lower) {
             "image/jpeg", "image/jpg" -> "jpg"
             "image/png" -> "png"
             "image/gif" -> "gif"
             "image/webp" -> "webp"
+            "image/heic", "image/heif" -> "heic"
             "audio/amr" -> "amr"
             "audio/aac" -> "aac"
             "audio/mp3", "audio/mpeg" -> "mp3"
+            "audio/m4a", "audio/x-m4a", "audio/mp4" -> "m4a"
+            "audio/wav", "audio/x-wav" -> "wav"
+            "audio/ogg", "audio/opus" -> "opus"
             "video/mp4" -> "mp4"
+            "video/3gpp", "video/3gp" -> "3gp"
+            "video/quicktime" -> "mov"
+            "video/webm" -> "webm"
+            "application/vnd.android.package-archive" -> "apk"
+            "application/zip", "application/x-zip-compressed" -> "zip"
+            "application/pdf" -> "pdf"
+            "text/vcard", "text/x-vcard" -> "vcf"
             else -> "bin"
         }
     }

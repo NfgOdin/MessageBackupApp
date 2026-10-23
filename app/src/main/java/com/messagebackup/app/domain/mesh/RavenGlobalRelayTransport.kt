@@ -478,15 +478,26 @@ class RavenGlobalRelayTransport(
                 )
             )
 
+            if (packetType == "READ_RECEIPT") {
+                val upToTs = innerMsg.optLong("up_to_ts", timestamp)
+                dbHelper.markOutboundMessagesAsRead(senderPeer.peerId, upToTs)
+                return@withContext
+            }
+
             // Handle Live Sub-Second Walkie-Talkie Audio Stream Chunk
             if (packetType == "PTT_STREAM_CHUNK") {
+                val packetChannel = innerMsg.optInt("channel", 1)
+                val myChannel = try { MessageBackupApp.instance.appPreferences.ravenRadioChannel.value } catch (_: Exception) { 1 }
+                val isSquelchMuted = try { MessageBackupApp.instance.appPreferences.ravenRadioSquelchMute.value } catch (_: Exception) { false }
+                val isChannelMatch = (packetChannel == myChannel || packetChannel == 1)
+
                 val isFresh = kotlin.math.abs(System.currentTimeMillis() - timestamp) < 15_000L
                 val isAutoPlayEnabled = try {
                     MessageBackupApp.instance.appPreferences.ravenPttAutoPlay.value
                 } catch (_: Exception) {
                     true
                 }
-                if (isFresh && isAutoPlayEnabled) {
+                if (isFresh && isAutoPlayEnabled && isChannelMatch && !isSquelchMuted) {
                     val chunkB64 = innerMsg.optString("chunk_b64", "")
                     val sessionId = innerMsg.optLong("session_id", 0L)
                     if (chunkB64.isNotBlank()) {
@@ -504,6 +515,7 @@ class RavenGlobalRelayTransport(
                 val audioBase64 = innerMsg.getString("audio_base64")
                 val durationMs = innerMsg.optLong("duration_ms", 0L)
                 val sessionId = innerMsg.optLong("session_id", 0L)
+                val packetChannel = innerMsg.optInt("channel", 1)
                 val transcription = innerMsg.optString("transcription", "").ifBlank { null }
                 val durationSec = String.format(java.util.Locale.US, "%.1fs", durationMs / 1000f)
 
@@ -518,10 +530,18 @@ class RavenGlobalRelayTransport(
                     audioBase64 = audioBase64,
                     transcription = transcription,
                     expiresAtTimestamp = expiresAt,
-                    burnOnRead = burnOnRead
+                    burnOnRead = burnOnRead,
+                    deliveryStatus = "READ"
                 )
                 dbHelper.insertMessage(chatMsg)
                 dbHelper.incrementUnreadCount(senderPeer.peerId)
+
+                RavenNotificationHelper.getInstance(context).postIncomingMessageNotification(
+                    senderCallsign = senderCallSign,
+                    senderDisplayName = senderPeer.displayName,
+                    messageText = "Voice Transmission ($durationSec)",
+                    messageType = "VOICE"
+                )
 
                 _incomingVoiceStreams.emit(
                     RavenIncomingVoice(
@@ -533,8 +553,10 @@ class RavenGlobalRelayTransport(
                     )
                 )
 
-                // Only auto-play if packet is fresh (<20s old), Walkie-Talkie Auto-Play is ON,
-                // and it wasn't already played live via PTT_STREAM_CHUNK!
+                val myChannel = try { MessageBackupApp.instance.appPreferences.ravenRadioChannel.value } catch (_: Exception) { 1 }
+                val isSquelchMuted = try { MessageBackupApp.instance.appPreferences.ravenRadioSquelchMute.value } catch (_: Exception) { false }
+                val isChannelMatch = (packetChannel == myChannel || packetChannel == 1)
+
                 val isFresh = kotlin.math.abs(System.currentTimeMillis() - timestamp) < 20_000L
                 val isAutoPlay = try {
                     MessageBackupApp.instance.appPreferences.ravenPttAutoPlay.value
@@ -545,7 +567,7 @@ class RavenGlobalRelayTransport(
                     streamedAudioSessions.contains(sessionId)
                 }
 
-                if (isFresh && isAutoPlay && !alreadyStreamed) {
+                if (isFresh && isAutoPlay && !alreadyStreamed && isChannelMatch && !isSquelchMuted) {
                     scope.launch(Dispatchers.IO) {
                         voicePttEngine.playInboundVoice(audioBase64)
                     }
@@ -568,10 +590,18 @@ class RavenGlobalRelayTransport(
                     attachmentName = attName,
                     attachmentMimeType = attMime,
                     expiresAtTimestamp = expiresAt,
-                    burnOnRead = burnOnRead
+                    burnOnRead = burnOnRead,
+                    deliveryStatus = "DELIVERED"
                 )
                 dbHelper.insertMessage(chatMsg)
                 dbHelper.incrementUnreadCount(senderPeer.peerId)
+
+                RavenNotificationHelper.getInstance(context).postIncomingMessageNotification(
+                    senderCallsign = senderCallSign,
+                    senderDisplayName = senderPeer.displayName,
+                    messageText = if (!attName.isNullOrBlank()) attName else messageText,
+                    messageType = packetType
+                )
 
                 _incomingMessages.emit(
                     RavenIncomingMessage(

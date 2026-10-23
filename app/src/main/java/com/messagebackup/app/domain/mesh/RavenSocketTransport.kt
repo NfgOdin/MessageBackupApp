@@ -304,13 +304,25 @@ class RavenSocketTransport(
                 )
             )
 
+            if (packetType == "READ_RECEIPT") {
+                val upToTs = innerMsg.optLong("up_to_ts", timestamp)
+                dbHelper.markOutboundMessagesAsRead(senderPeer.peerId, upToTs)
+                writer.println(JSONObject().apply { put("status", "OK_ACK") })
+                return@withContext
+            }
+
             if (packetType == "PTT_STREAM_CHUNK") {
+                val packetChannel = innerMsg.optInt("channel", 1)
+                val myChannel = try { MessageBackupApp.instance.appPreferences.ravenRadioChannel.value } catch (_: Exception) { 1 }
+                val isSquelchMuted = try { MessageBackupApp.instance.appPreferences.ravenRadioSquelchMute.value } catch (_: Exception) { false }
+                val isChannelMatch = (packetChannel == myChannel || packetChannel == 1)
+
                 val isAutoPlay = try {
                     MessageBackupApp.instance.appPreferences.ravenPttAutoPlay.value
                 } catch (_: Exception) {
                     true
                 }
-                if (isAutoPlay) {
+                if (isAutoPlay && isChannelMatch && !isSquelchMuted) {
                     val chunkB64 = innerMsg.optString("chunk_b64", "")
                     if (chunkB64.isNotBlank()) {
                         voicePttEngine.playLiveStreamChunk(chunkB64)
@@ -323,6 +335,7 @@ class RavenSocketTransport(
             if (packetType == "PTT_VOICE") {
                 val audioBase64 = innerMsg.getString("audio_base64")
                 val durationMs = innerMsg.optLong("duration_ms", 0L)
+                val packetChannel = innerMsg.optInt("channel", 1)
                 val transcription = innerMsg.optString("transcription", "").ifBlank { null }
                 val durationSec = String.format(java.util.Locale.US, "%.1fs", durationMs / 1000f)
 
@@ -337,10 +350,18 @@ class RavenSocketTransport(
                     audioBase64 = audioBase64,
                     transcription = transcription,
                     expiresAtTimestamp = expiresAt,
-                    burnOnRead = burnOnRead
+                    burnOnRead = burnOnRead,
+                    deliveryStatus = "READ"
                 )
                 dbHelper.insertMessage(chatMsg)
                 dbHelper.incrementUnreadCount(senderPeer.peerId)
+
+                RavenNotificationHelper.getInstance(context).postIncomingMessageNotification(
+                    senderCallsign = senderCallSign,
+                    senderDisplayName = senderPeer.displayName,
+                    messageText = "Voice Transmission ($durationSec)",
+                    messageType = "VOICE"
+                )
 
                 _incomingVoiceStreams.emit(
                     RavenIncomingVoice(
@@ -352,12 +373,16 @@ class RavenSocketTransport(
                     )
                 )
 
+                val myChannel = try { MessageBackupApp.instance.appPreferences.ravenRadioChannel.value } catch (_: Exception) { 1 }
+                val isSquelchMuted = try { MessageBackupApp.instance.appPreferences.ravenRadioSquelchMute.value } catch (_: Exception) { false }
+                val isChannelMatch = (packetChannel == myChannel || packetChannel == 1)
+
                 val isAutoPlay = try {
                     MessageBackupApp.instance.appPreferences.ravenPttAutoPlay.value
                 } catch (_: Exception) {
                     true
                 }
-                if (isAutoPlay) {
+                if (isAutoPlay && isChannelMatch && !isSquelchMuted) {
                     scope.launch(Dispatchers.IO) {
                         voicePttEngine.playInboundVoice(audioBase64)
                     }
@@ -380,10 +405,18 @@ class RavenSocketTransport(
                     attachmentName = attName,
                     attachmentMimeType = attMime,
                     expiresAtTimestamp = expiresAt,
-                    burnOnRead = burnOnRead
+                    burnOnRead = burnOnRead,
+                    deliveryStatus = "DELIVERED"
                 )
                 dbHelper.insertMessage(chatMsg)
                 dbHelper.incrementUnreadCount(senderPeer.peerId)
+
+                RavenNotificationHelper.getInstance(context).postIncomingMessageNotification(
+                    senderCallsign = senderCallSign,
+                    senderDisplayName = senderPeer.displayName,
+                    messageText = if (!attName.isNullOrBlank()) attName else messageText,
+                    messageType = packetType
+                )
 
                 _incomingMessages.emit(
                     RavenIncomingMessage(
@@ -441,9 +474,11 @@ class RavenSocketTransport(
                 messageType = messageType,
                 timestamp = System.currentTimeMillis(),
                 expiresAtTimestamp = expiresAt,
-                burnOnRead = burnOnRead
+                burnOnRead = burnOnRead,
+                deliveryStatus = "DELIVERED"
             )
             dbHelper.insertMessage(chatMsg)
+            RavenNotificationHelper.getInstance(context).playSentTick()
         }
         result
     }
@@ -492,11 +527,31 @@ class RavenSocketTransport(
                 attachmentName = attachmentName,
                 attachmentMimeType = attachmentMimeType,
                 expiresAtTimestamp = expiresAt,
-                burnOnRead = burnOnRead
+                burnOnRead = burnOnRead,
+                deliveryStatus = "DELIVERED"
             )
             dbHelper.insertMessage(chatMsg)
+            RavenNotificationHelper.getInstance(context).playSentTick()
         }
         result
+    }
+
+    /**
+     * Dispatches an authenticated Read Receipt packet to notify the peer that their message was viewed.
+     */
+    suspend fun sendReadReceipt(peer: RavenPeer, upToTimestamp: Long) = withContext(Dispatchers.IO) {
+        val sendReceipts = try {
+            MessageBackupApp.instance.appPreferences.ravenSendReadReceipts.value
+        } catch (_: Exception) { true }
+        if (!sendReceipts) return@withContext
+
+        val payload = JSONObject().apply {
+            put("type", "READ_RECEIPT")
+            put("up_to_ts", upToTimestamp)
+            put("ts", System.currentTimeMillis())
+        }.toString()
+
+        sendRawPayloadToPeer(peer, payload, peer.lastKnownIp, DEFAULT_MESH_PORT)
     }
 
     /**
@@ -564,9 +619,11 @@ class RavenSocketTransport(
                 audioBase64 = voiceSnippet.audioBase64,
                 transcription = voiceSnippet.transcription,
                 expiresAtTimestamp = expiresAt,
-                burnOnRead = burnOnRead
+                burnOnRead = burnOnRead,
+                deliveryStatus = "DELIVERED"
             )
             dbHelper.insertMessage(chatMsg)
+            RavenNotificationHelper.getInstance(context).playSentTick()
         }
         result
     }

@@ -68,6 +68,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -466,12 +467,12 @@ fun RavenIdentityDialog(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "Raven Mesh Identity",
+                                text = "The Unkindness",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Decentralized E2EE Peer Network",
+                                text = "Tactical Raven Mesh & Walkie-Talkie Radio",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -498,7 +499,7 @@ fun RavenIdentityDialog(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.People, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Friends (${peersList.size})")
+                                Text("Flock (${peersList.size})")
                             }
                         }
                     )
@@ -518,9 +519,9 @@ fun RavenIdentityDialog(
                         onClick = { selectedTab = 2 },
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(transportMode.icon, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Radios")
+                                Text("Radio Hub")
                             }
                         }
                     )
@@ -1217,16 +1218,240 @@ fun RavenIdentityDialog(
                         }
                     }
                 } else if (selectedTab == 2) {
-                    // Tab 2: Multi-Transport Radio Mesh Manager
+                    // Tab 2: Tactical Radio Hub & Multi-Transport Engine
+                    val currentRadioChannel by prefs.ravenRadioChannel.collectAsState()
+                    val isLoudspeaker by prefs.ravenAudioLoudspeaker.collectAsState()
+                    val isSquelchMuted by prefs.ravenRadioSquelchMute.collectAsState()
+                    val pttEngine = remember { com.messagebackup.app.domain.mesh.RavenVoicePttEngine.getInstance(context) }
+                    var isTransmittingRadio by remember { mutableStateOf(false) }
+                    var radioElapsedSeconds by remember { mutableIntStateOf(0) }
+                    var isBackgroundMonitoring by rememberSaveable { mutableStateOf(false) }
+
+                    LaunchedEffect(isTransmittingRadio) {
+                        if (isTransmittingRadio) {
+                            radioElapsedSeconds = 0
+                            while (isTransmittingRadio && radioElapsedSeconds < 20) {
+                                kotlinx.coroutines.delay(1000)
+                                radioElapsedSeconds++
+                            }
+                            if (isTransmittingRadio && radioElapsedSeconds >= 20) {
+                                // 20-second Time-Out Timer (TOT) reached!
+                                isTransmittingRadio = false
+                                pttEngine.cancelRecording()
+                                Toast.makeText(context, "20s Time-Out Timer: Floor released", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
                             .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
+                        // Tactical Radio Station Card
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // Channel Selector Row
+                                val channelNorseName = when (currentRadioChannel) {
+                                    1 -> "Bifrost (Public Hail)"
+                                    2 -> "Valhalla (General)"
+                                    3 -> "Midgard (Squad 1)"
+                                    4 -> "Asgard (Squad 2)"
+                                    else -> "Unkindness Freq $currentRadioChannel"
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            val prev = if (currentRadioChannel > 1) currentRadioChannel - 1 else 16
+                                            prefs.setRavenRadioChannel(prev)
+                                            if (isBackgroundMonitoring) {
+                                                com.messagebackup.app.domain.mesh.RavenRadioForegroundService.startService(context, prev)
+                                            }
+                                        }
+                                    ) {
+                                        Text("<", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    }
+
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = "CHANNEL $currentRadioChannel",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = channelNorseName,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            val next = if (currentRadioChannel < 16) currentRadioChannel + 1 else 1
+                                            prefs.setRavenRadioChannel(next)
+                                            if (isBackgroundMonitoring) {
+                                                com.messagebackup.app.domain.mesh.RavenRadioForegroundService.startService(context, next)
+                                            }
+                                        }
+                                    ) {
+                                        Text(">", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+
+                                // Audio VU Meter Visualizer (Simulated amplitude waveform)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(32.dp)
+                                        .background(Color.Black.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val barCount = 20
+                                    for (i in 0 until barCount) {
+                                        val isActive = isTransmittingRadio && (i % 3 != 0 || radioElapsedSeconds % 2 == 0)
+                                        val barHeight = if (isActive) (10 + ((i * 7) % 18)).dp else 4.dp
+                                        val barColor = if (!isActive) Color.Gray.copy(alpha = 0.3f)
+                                        else if (i > 15) MaterialTheme.colorScheme.error
+                                        else if (i > 10) MaterialTheme.colorScheme.tertiary
+                                        else MaterialTheme.colorScheme.primary
+
+                                        Box(
+                                            modifier = Modifier
+                                                .width(4.dp)
+                                                .height(barHeight)
+                                                .background(barColor, RoundedCornerShape(2.dp))
+                                        )
+                                    }
+                                }
+
+                                // Giant PTT Walkie-Talkie Button
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (isTransmittingRadio) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                    shadowElevation = 8.dp,
+                                    modifier = Modifier
+                                        .size(105.dp)
+                                        .clickable {
+                                            checkAndRequestAudioPermission {
+                                                if (isTransmittingRadio) {
+                                                    isTransmittingRadio = false
+                                                    pttEngine.cancelRecording()
+                                                } else {
+                                                    val started = pttEngine.startRecording()
+                                                    if (started) {
+                                                        isTransmittingRadio = true
+                                                        pttEngine.playNextelTalkPermitChirp(isLoudspeaker)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                ) {
+                                    Column(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isTransmittingRadio) Icons.Default.Mic else Icons.Default.VolumeUp,
+                                            contentDescription = "Push To Talk",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = if (isTransmittingRadio) "${20 - radioElapsedSeconds}s TX" else "PTT",
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 13.sp,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = if (isTransmittingRadio) "LIVE BROADCASTING ON CH $currentRadioChannel" else "Tap button to key Boost Mobile PTT Walkie-Talkie",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isTransmittingRadio) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                // Audio Routing & Squelch Controls
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("Loudspeaker", style = MaterialTheme.typography.bodySmall)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Switch(
+                                            checked = isLoudspeaker,
+                                            onCheckedChange = { prefs.setRavenAudioLoudspeaker(it) }
+                                        )
+                                    }
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("Squelch Mute", style = MaterialTheme.typography.bodySmall)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Switch(
+                                            checked = isSquelchMuted,
+                                            onCheckedChange = { prefs.setRavenRadioSquelchMute(it) }
+                                        )
+                                    }
+                                }
+
+                                // Background Monitoring Service Switch
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Background Radio Monitor", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                        Text("Keep radio alive when screen is off or app minimized", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Switch(
+                                        checked = isBackgroundMonitoring,
+                                        onCheckedChange = { active ->
+                                            isBackgroundMonitoring = active
+                                            if (active) {
+                                                com.messagebackup.app.domain.mesh.RavenRadioForegroundService.startService(context, currentRadioChannel)
+                                                Toast.makeText(context, "Raven Radio Foreground Service active", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                com.messagebackup.app.domain.mesh.RavenRadioForegroundService.stopService(context)
+                                                Toast.makeText(context, "Raven Radio Foreground Service stopped", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
                         Text(
-                            text = "Raven Multi-Transport Engine",
+                            text = "Multi-Transport Radio Engine",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )

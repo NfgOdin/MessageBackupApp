@@ -191,6 +191,7 @@ fun MainScreen(
         }
     }
     var showRavenMeshDialog by rememberSaveable { mutableStateOf(false) }
+    var activeConversationMediaItem by remember { mutableStateOf<com.messagebackup.app.model.VaultMediaItem?>(null) }
 
     LaunchedEffect(ravenMeshEnabled, showRavenMeshDialog) {
         socketTransport.setMeshEnabled(ravenMeshEnabled)
@@ -1584,6 +1585,19 @@ fun MainScreen(
                                             if (!isAdsRemoved) {
                                                 viewModel.adManager.loadRewardedAd(activity)
                                             }
+                                        },
+                                        onAttachmentClick = { att ->
+                                            activeConversationMediaItem = com.messagebackup.app.model.VaultMediaItem(
+                                                partId = att.partId,
+                                                messageId = message.messageId,
+                                                threadId = message.threadId,
+                                                contactName = message.sender,
+                                                contactAddress = message.sender,
+                                                timestamp = message.timestamp,
+                                                contentType = att.contentType,
+                                                fileName = att.fileName,
+                                                uriString = att.uriString
+                                            )
                                         }
                                     )
                                 }
@@ -2091,6 +2105,14 @@ fun MainScreen(
             adManager = viewModel.adManager,
             isAdsRemoved = isAdsRemoved,
             onDismiss = { showRavenMeshDialog = false }
+        )
+    }
+
+    activeConversationMediaItem?.let { mediaItem ->
+        com.messagebackup.app.ui.dialogs.MediaLightboxDialog(
+            items = listOf(mediaItem),
+            initialIndex = 0,
+            onDismiss = { activeConversationMediaItem = null }
         )
     }
 

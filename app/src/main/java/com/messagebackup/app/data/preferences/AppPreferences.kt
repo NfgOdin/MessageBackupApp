@@ -85,6 +85,10 @@ class AppPreferences(context: Context) {
         private const val KEY_RAVEN_MESH_ENABLED = "raven_mesh_enabled"
         private const val KEY_RAVEN_AUDIO_LOUDSPEAKER = "raven_audio_loudspeaker"
         private const val KEY_RAVEN_PTT_AUTO_PLAY = "raven_ptt_auto_play"
+        private const val KEY_RAVEN_SEND_READ_RECEIPTS = "raven_send_read_receipts"
+        private const val KEY_RAVEN_RADIO_CHANNEL = "raven_radio_channel"
+        private const val KEY_RAVEN_RADIO_SQUELCH_MUTE = "raven_radio_squelch_mute"
+        private const val KEY_RAVEN_NOTIFICATION_SOUND = "raven_notification_sound"
         private const val KEY_LAST_RELAY_POLL_TS = "last_relay_poll_ts"
         private const val KEY_PROCESSED_RELAY_IDS = "processed_relay_ids"
 
@@ -282,6 +286,22 @@ class AppPreferences(context: Context) {
     private val _ravenPttAutoPlay = MutableStateFlow(prefs.getBoolean(KEY_RAVEN_PTT_AUTO_PLAY, true))
     val ravenPttAutoPlay: StateFlow<Boolean> = _ravenPttAutoPlay.asStateFlow()
 
+    // Default is true (Send seen/read reports to peers)
+    private val _ravenSendReadReceipts = MutableStateFlow(prefs.getBoolean(KEY_RAVEN_SEND_READ_RECEIPTS, true))
+    val ravenSendReadReceipts: StateFlow<Boolean> = _ravenSendReadReceipts.asStateFlow()
+
+    // Tactical Walkie-Talkie Channel (Default: Channel 1 Bifrost)
+    private val _ravenRadioChannel = MutableStateFlow(prefs.getInt(KEY_RAVEN_RADIO_CHANNEL, 1))
+    val ravenRadioChannel: StateFlow<Int> = _ravenRadioChannel.asStateFlow()
+
+    // Radio Squelch Mute (true = complete radio silence, false = normal monitoring)
+    private val _ravenRadioSquelchMute = MutableStateFlow(prefs.getBoolean(KEY_RAVEN_RADIO_SQUELCH_MUTE, false))
+    val ravenRadioSquelchMute: StateFlow<Boolean> = _ravenRadioSquelchMute.asStateFlow()
+
+    // Notification Sound & Heads-up Tones for The Unkindness
+    private val _ravenNotificationSound = MutableStateFlow(prefs.getBoolean(KEY_RAVEN_NOTIFICATION_SOUND, true))
+    val ravenNotificationSound: StateFlow<Boolean> = _ravenNotificationSound.asStateFlow()
+
     private val _odinSaveHistory = MutableStateFlow(prefs.getBoolean(KEY_ODIN_SAVE_HISTORY, true))
     val odinSaveHistory: StateFlow<Boolean> = _odinSaveHistory.asStateFlow()
 
@@ -301,6 +321,27 @@ class AppPreferences(context: Context) {
     fun setRavenPttAutoPlay(autoPlay: Boolean) {
         prefs.edit().putBoolean(KEY_RAVEN_PTT_AUTO_PLAY, autoPlay).apply()
         _ravenPttAutoPlay.value = autoPlay
+    }
+
+    fun setRavenSendReadReceipts(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_RAVEN_SEND_READ_RECEIPTS, enabled).apply()
+        _ravenSendReadReceipts.value = enabled
+    }
+
+    fun setRavenRadioChannel(channel: Int) {
+        val clamped = channel.coerceIn(1, 16)
+        prefs.edit().putInt(KEY_RAVEN_RADIO_CHANNEL, clamped).apply()
+        _ravenRadioChannel.value = clamped
+    }
+
+    fun setRavenRadioSquelchMute(muted: Boolean) {
+        prefs.edit().putBoolean(KEY_RAVEN_RADIO_SQUELCH_MUTE, muted).apply()
+        _ravenRadioSquelchMute.value = muted
+    }
+
+    fun setRavenNotificationSound(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_RAVEN_NOTIFICATION_SOUND, enabled).apply()
+        _ravenNotificationSound.value = enabled
     }
 
     fun setOdinSaveHistory(save: Boolean) {

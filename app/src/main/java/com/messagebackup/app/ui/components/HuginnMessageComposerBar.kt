@@ -3,7 +3,12 @@ package com.messagebackup.app.ui.components
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.telephony.SmsManager
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -191,9 +196,9 @@ fun HuginnMessageComposerBar(
     }
 
     var isHuginnFlying by remember { mutableStateOf(false) }
+    var pendingDirectSmsText by remember { mutableStateOf("") }
 
-    fun dispatchSms(textToSend: String) {
-        if (textToSend.isBlank()) return
+    fun sendSmsViaIntentFallback(textToSend: String) {
         val recipientAddress = thread.address
         try {
             val smsIntent = Intent(Intent.ACTION_SENDTO).apply {
@@ -209,6 +214,74 @@ fun HuginnMessageComposerBar(
             focusManager.clearFocus()
         } catch (e: Exception) {
             Toast.makeText(context, "Could not open messaging app: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun sendSmsDirectly(textToSend: String) {
+        if (textToSend.isBlank()) return
+        val recipientAddress = thread.address
+        try {
+            val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                context.getSystemService(SmsManager::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                SmsManager.getDefault()
+            }
+
+            val parts = smsManager.divideMessage(textToSend)
+            if (parts.size > 1) {
+                smsManager.sendMultipartTextMessage(recipientAddress, null, parts, null, null)
+            } else {
+                smsManager.sendTextMessage(recipientAddress, null, textToSend, null, null)
+            }
+
+            // Immediately register into Telephony Sent table so the message shows in the conversation thread
+            try {
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.Telephony.Sms.ADDRESS, recipientAddress)
+                    put(android.provider.Telephony.Sms.BODY, textToSend)
+                    put(android.provider.Telephony.Sms.DATE, System.currentTimeMillis())
+                    put(android.provider.Telephony.Sms.DATE_SENT, System.currentTimeMillis())
+                    put(android.provider.Telephony.Sms.READ, 1)
+                    put(android.provider.Telephony.Sms.SEEN, 1)
+                    put(android.provider.Telephony.Sms.TYPE, android.provider.Telephony.Sms.MESSAGE_TYPE_SENT)
+                }
+                context.contentResolver.insert(android.provider.Telephony.Sms.Sent.CONTENT_URI, values)
+            } catch (_: Exception) {}
+
+            isHuginnFlying = true
+            textInput = ""
+            thoughtSuggestion = null
+            showThoughtSheet = false
+            focusManager.clearFocus()
+            Toast.makeText(context, "🦅 Huginn dispatched text directly", Toast.LENGTH_SHORT).show()
+        } catch (_: Exception) {
+            sendSmsViaIntentFallback(textToSend)
+        }
+    }
+
+    val smsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            sendSmsDirectly(pendingDirectSmsText)
+        } else {
+            sendSmsViaIntentFallback(pendingDirectSmsText)
+        }
+    }
+
+    fun dispatchSms(textToSend: String) {
+        if (textToSend.isBlank()) return
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.SEND_SMS
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        if (hasPermission) {
+            sendSmsDirectly(textToSend)
+        } else {
+            pendingDirectSmsText = textToSend
+            smsPermissionLauncher.launch(android.Manifest.permission.SEND_SMS)
         }
     }
 

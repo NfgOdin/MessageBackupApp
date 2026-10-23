@@ -3,12 +3,21 @@
 
     <!-- Permissions required for reading SMS and MMS data for Backup and Export -->
     <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
 
     <!-- Optional permission: Resolve sender phone numbers to local contact names -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
-    <!-- Optional permission: Notify user when scheduled background auto-backup completes (Android 13+) -->
+    <!-- Notifications & Vibration for The Unkindness Mesh & Radio (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Background Radio Keep-Alive, WakeLock & Foreground Services for Boost Mobile Walkie-Talkie -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
 
     <!-- Permissions required by AdMob, UMP Consent, and Google Play Billing -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -140,6 +149,12 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_quick_actions_info" />
         </receiver>
+
+        <!-- The Unkindness Tactical Radio & Walkie-Talkie Background Audio Engine -->
+        <service
+            android:name=".domain.mesh.RavenRadioForegroundService"
+            android:foregroundServiceType="microphone|mediaPlayback|connectedDevice"
+            android:exported="false" />
 
     </application>
 

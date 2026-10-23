@@ -46,7 +46,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
 
     companion object {
         private const val DATABASE_NAME = "raven_mesh.db"
-        private const val DATABASE_VERSION = 5
+        private const val DATABASE_VERSION = 6
 
         const val TABLE_PEERS = "raven_peers"
         const val COL_PEER_ID = "peer_id"               // Canonical lowercase "raven://callsign"
@@ -76,6 +76,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
         const val COL_MSG_TRANSCRIPTION = "transcription_text"
         const val COL_MSG_EXPIRES_AT = "expires_at_timestamp"
         const val COL_MSG_BURN_ON_READ = "burn_on_read"
+        const val COL_MSG_DELIVERY_STATUS = "delivery_status"
 
         fun normalizePeerId(rawPeerId: String): String {
             val clean = rawPeerId.removePrefix("raven://").trim().lowercase()
@@ -117,7 +118,8 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
                 $COL_MSG_ATTACHMENT_MIME TEXT,
                 $COL_MSG_TRANSCRIPTION TEXT,
                 $COL_MSG_EXPIRES_AT INTEGER DEFAULT 0,
-                $COL_MSG_BURN_ON_READ INTEGER DEFAULT 0
+                $COL_MSG_BURN_ON_READ INTEGER DEFAULT 0,
+                $COL_MSG_DELIVERY_STATUS TEXT DEFAULT 'SENT'
             )
             """.trimIndent()
         )
@@ -187,6 +189,11 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
                     db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $col")
                 } catch (_: Exception) {}
             }
+        }
+        if (oldVersion < 6) {
+            try {
+                db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $COL_MSG_DELIVERY_STATUS TEXT DEFAULT 'SENT'")
+            } catch (_: Exception) {}
         }
     }
 
@@ -426,8 +433,37 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
             put(COL_MSG_TRANSCRIPTION, msg.transcription)
             put(COL_MSG_EXPIRES_AT, msg.expiresAtTimestamp)
             put(COL_MSG_BURN_ON_READ, if (msg.burnOnRead) 1 else 0)
+            put(COL_MSG_DELIVERY_STATUS, msg.deliveryStatus)
         }
         return db.insert(TABLE_MESSAGES, null, values)
+    }
+
+    fun updateMessageDeliveryStatus(peerId: String, timestamp: Long, status: String) {
+        val db = writableDatabase
+        val canonicalId = normalizePeerId(peerId)
+        val values = ContentValues().apply {
+            put(COL_MSG_DELIVERY_STATUS, status)
+        }
+        db.update(
+            TABLE_MESSAGES,
+            values,
+            "LOWER($COL_MSG_PEER_ID) = ? AND $COL_MSG_TIMESTAMP = ?",
+            arrayOf(canonicalId, timestamp.toString())
+        )
+    }
+
+    fun markOutboundMessagesAsRead(peerId: String, upToTimestamp: Long) {
+        val db = writableDatabase
+        val canonicalId = normalizePeerId(peerId)
+        val values = ContentValues().apply {
+            put(COL_MSG_DELIVERY_STATUS, "READ")
+        }
+        db.update(
+            TABLE_MESSAGES,
+            values,
+            "LOWER($COL_MSG_PEER_ID) = ? AND $COL_MSG_IS_OUTBOUND = 1 AND $COL_MSG_TIMESTAMP <= ?",
+            arrayOf(canonicalId, upToTimestamp.toString())
+        )
     }
 
     fun updateMessageTranscription(messageId: Long, transcription: String) {
@@ -515,6 +551,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
             val idxTrans = c.getColumnIndex(COL_MSG_TRANSCRIPTION)
             val idxExp = c.getColumnIndex(COL_MSG_EXPIRES_AT)
             val idxBurn = c.getColumnIndex(COL_MSG_BURN_ON_READ)
+            val idxStatus = c.getColumnIndex(COL_MSG_DELIVERY_STATUS)
 
             while (c.moveToNext()) {
                 val rawAudio = if (idxAudio != -1 && !c.isNull(idxAudio)) c.getString(idxAudio) else null
@@ -526,6 +563,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
                 val trans = if (idxTrans != -1 && !c.isNull(idxTrans)) c.getString(idxTrans) else null
                 val exp = if (idxExp != -1 && !c.isNull(idxExp)) c.getLong(idxExp) else 0L
                 val burn = if (idxBurn != -1 && !c.isNull(idxBurn)) c.getInt(idxBurn) == 1 else false
+                val status = if (idxStatus != -1 && !c.isNull(idxStatus)) c.getString(idxStatus) else "SENT"
 
                 messages.add(
                     RavenChatMessage(
@@ -543,7 +581,8 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
                         attachmentMimeType = attMime,
                         transcription = trans,
                         expiresAtTimestamp = exp,
-                        burnOnRead = burn
+                        burnOnRead = burn,
+                        deliveryStatus = status
                     )
                 )
             }
@@ -593,5 +632,6 @@ data class RavenChatMessage(
     val attachmentMimeType: String? = null,
     val transcription: String? = null,
     val expiresAtTimestamp: Long = 0L,
-    val burnOnRead: Boolean = false
+    val burnOnRead: Boolean = false,
+    val deliveryStatus: String = "SENT"
 )
