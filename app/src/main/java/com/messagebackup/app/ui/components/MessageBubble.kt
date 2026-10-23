@@ -32,20 +32,30 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import com.messagebackup.app.model.MediaAttachment
 import com.messagebackup.app.model.MessageDirection
 import com.messagebackup.app.model.MessageItem
@@ -54,6 +64,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val messageTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
@@ -71,8 +82,11 @@ fun MessageBubble(
     showExclusionToggle: Boolean = false,
     onToggleExclude: () -> Unit = {},
     onAttachmentClick: ((MediaAttachment) -> Unit)? = null,
+    onSwipeToReply: ((MessageItem) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val coroutineScope = rememberCoroutineScope()
+    val offsetX = remember { Animatable(0f) }
     val isOutgoing = (message.direction == MessageDirection.OUTGOING)
     val timeStr = remember(message.timestamp) {
         messageTimeFormatter.format(Instant.ofEpochMilli(message.timestamp))
@@ -114,79 +128,122 @@ fun MessageBubble(
             )
         }
 
-        Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = if (isOutgoing) Alignment.End else Alignment.Start
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .pointerInput(onSwipeToReply) {
+                    if (onSwipeToReply == null) return@pointerInput
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            coroutineScope.launch {
+                                if (abs(offsetX.value) > 90f) {
+                                    onSwipeToReply(message)
+                                }
+                                offsetX.animateTo(0f, spring())
+                            }
+                        },
+                        onDragCancel = {
+                            coroutineScope.launch { offsetX.animateTo(0f, spring()) }
+                        },
+                        onHorizontalDrag = { _, dragAmount ->
+                            coroutineScope.launch {
+                                val current = offsetX.value
+                                val newOffset = (current + dragAmount).coerceIn(-140f, 140f)
+                                offsetX.snapTo(newOffset)
+                            }
+                        }
+                    )
+                }
         ) {
-            if (!isOutgoing) {
-                Text(
-                    text = message.sender,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
+            if (onSwipeToReply != null && abs(offsetX.value) > 20f) {
+                val isSwipingRight = offsetX.value > 0
+                androidx.compose.material3.Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Reply,
+                    contentDescription = "Reply",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .align(if (isSwipingRight) Alignment.CenterStart else Alignment.CenterEnd)
+                        .padding(horizontal = 8.dp)
+                        .size(22.dp)
                 )
             }
 
-            Surface(
-                shape = bubbleShape,
-                color = bubbleColor,
-                modifier = Modifier.widthIn(max = 290.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset { IntOffset(offsetX.value.roundToInt(), 0) },
+                horizontalAlignment = if (isOutgoing) Alignment.End else Alignment.Start
             ) {
-                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    // Message text body
-                    if (message.body.isNotBlank()) {
-                        Text(
-                            text = message.body,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = textColor
-                        )
-                    }
+                if (!isOutgoing) {
+                    Text(
+                        text = message.sender,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
+                    )
+                }
 
-                    // Attachments list (Photos, APKs, ZIP archives, Video, Audio, Docs)
-                    if (message.attachments.isNotEmpty()) {
-                        for (att in message.attachments) {
-                            if (message.body.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                            }
-                            AttachmentPreviewCard(
-                                attachment = att,
-                                textColor = textColor,
-                                onClick = { onAttachmentClick?.invoke(att) }
-                            )
-                        }
-                    } else if (message.body.isBlank() && message.type == MessageType.MMS) {
-                        // Fallback indicator so empty MMS bodies never produce blank message bubbles
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 2.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Attachment,
-                                contentDescription = "MMS Attachment",
-                                tint = textColor.copy(alpha = 0.85f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
+                Surface(
+                    shape = bubbleShape,
+                    color = bubbleColor,
+                    modifier = Modifier.widthIn(max = 290.dp)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        // Message text body
+                        if (message.body.isNotBlank()) {
                             Text(
-                                text = "📎 Multimedia Attachment",
+                                text = message.body,
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontStyle = FontStyle.Italic,
-                                color = textColor.copy(alpha = 0.85f)
+                                color = textColor
                             )
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                        // Attachments list (Photos, APKs, ZIP archives, Video, Audio, Docs)
+                        if (message.attachments.isNotEmpty()) {
+                            for (att in message.attachments) {
+                                if (message.body.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                }
+                                AttachmentPreviewCard(
+                                    attachment = att,
+                                    textColor = textColor,
+                                    onClick = { onAttachmentClick?.invoke(att) }
+                                )
+                            }
+                        } else if (message.body.isBlank() && message.type == MessageType.MMS) {
+                            // Fallback indicator so empty MMS bodies never produce blank message bubbles
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Attachment,
+                                    contentDescription = "MMS Attachment",
+                                    tint = textColor.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "📎 Multimedia Attachment",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontStyle = FontStyle.Italic,
+                                    color = textColor.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
 
-                    Row(
-                        modifier = Modifier.align(Alignment.End),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = timeStr,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = textColor.copy(alpha = 0.75f)
-                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(
+                            modifier = Modifier.align(Alignment.End),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = timeStr,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = textColor.copy(alpha = 0.75f)
+                            )
+                        }
                     }
                 }
             }

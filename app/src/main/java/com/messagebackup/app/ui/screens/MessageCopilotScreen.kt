@@ -1,7 +1,12 @@
 package com.messagebackup.app.ui.screens
 
 import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,12 +37,15 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Radar
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
@@ -58,6 +66,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -66,6 +75,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import java.util.Locale
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -126,7 +136,7 @@ fun MessageCopilotScreen(
     androidx.activity.compose.BackHandler(onBack = onNavigateBack)
 
     val context = LocalContext.current
-    val activity = context as Activity
+    val activity = context as? Activity ?: (context as? android.content.ContextWrapper)?.baseContext as? Activity ?: (context as Activity)
     val scope = rememberCoroutineScope()
     val aiEngine = remember { AiClientEngine() }
     val localDb = remember { LocalMessageDatabase.getInstance(context) }
@@ -205,6 +215,37 @@ fun MessageCopilotScreen(
     var showProviderQuickMenu by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
     var isThinking by remember { mutableStateOf(false) }
+
+    var tts by remember { mutableStateOf<TextToSpeech?>(null) }
+    var speakingMessageId by remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(Unit) {
+        var localTts: TextToSpeech? = null
+        localTts = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                localTts?.language = Locale.getDefault()
+                tts = localTts
+            }
+        }
+        onDispose {
+            try {
+                localTts?.stop()
+                localTts?.shutdown()
+            } catch (_: Exception) {}
+        }
+    }
+
+    val speechRecognizerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val text = spoken?.firstOrNull()
+            if (!text.isNullOrBlank()) {
+                inputText = if (inputText.isBlank()) text else "$inputText $text"
+            }
+        }
+    }
 
     val greetingMessage = remember(targetContactName) {
         val greeting = if (targetContactName == "All Conversations" || targetContactName.isBlank()) {
@@ -702,6 +743,17 @@ fun MessageCopilotScreen(
                         message = msg,
                         targetContactName = targetContactName,
                         targetAddress = threads.firstOrNull { it.displayName == targetContactName || it.address == targetContactName }?.address,
+                        isSpeaking = (speakingMessageId == msg.id),
+                        onSpeakToggle = {
+                            if (speakingMessageId == msg.id) {
+                                tts?.stop()
+                                speakingMessageId = null
+                            } else {
+                                tts?.stop()
+                                speakingMessageId = msg.id
+                                tts?.speak(msg.text, TextToSpeech.QUEUE_FLUSH, null, msg.id)
+                            }
+                        },
                         onOpenMedia = { items, index ->
                             activeLightboxMedia = Pair(items, index)
                         }
@@ -752,7 +804,27 @@ fun MessageCopilotScreen(
                         shape = RoundedCornerShape(20.dp)
                     )
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    IconButton(
+                        onClick = {
+                            try {
+                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to O.D.I.N. Allfather...")
+                                }
+                                speechRecognizerLauncher.launch(intent)
+                            } catch (_: Exception) {
+                                Toast.makeText(context, "Voice recognition not available on this device", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "Speak to Odin",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
 
                     IconButton(
                         onClick = { sendPrompt(inputText) },
@@ -855,6 +927,8 @@ private fun ChatBubble(
     message: OdinChatMessage,
     targetContactName: String = "",
     targetAddress: String? = null,
+    isSpeaking: Boolean = false,
+    onSpeakToggle: (() -> Unit)? = null,
     onOpenMedia: (List<VaultMediaItem>, Int) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
@@ -915,21 +989,40 @@ private fun ChatBubble(
                 if (!isUser) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 6.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp)
                     ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_odin_allfather),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "O.D.I.N.",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_odin_allfather),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "O.D.I.N.",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        if (!message.isError && onSpeakToggle != null) {
+                            IconButton(
+                                onClick = onSpeakToggle,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                    contentDescription = if (isSpeaking) "Stop Speaking" else "Speak Aloud",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
                 }
 

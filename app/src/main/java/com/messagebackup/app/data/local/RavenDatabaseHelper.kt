@@ -46,7 +46,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
 
     companion object {
         private const val DATABASE_NAME = "raven_mesh.db"
-        private const val DATABASE_VERSION = 6
+        private const val DATABASE_VERSION = 7
 
         const val TABLE_PEERS = "raven_peers"
         const val COL_PEER_ID = "peer_id"               // Canonical lowercase "raven://callsign"
@@ -77,6 +77,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
         const val COL_MSG_EXPIRES_AT = "expires_at_timestamp"
         const val COL_MSG_BURN_ON_READ = "burn_on_read"
         const val COL_MSG_DELIVERY_STATUS = "delivery_status"
+        const val COL_MSG_REACTION = "reaction_emoji"
 
         fun normalizePeerId(rawPeerId: String): String {
             val clean = rawPeerId.removePrefix("raven://").trim().lowercase()
@@ -119,7 +120,8 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
                 $COL_MSG_TRANSCRIPTION TEXT,
                 $COL_MSG_EXPIRES_AT INTEGER DEFAULT 0,
                 $COL_MSG_BURN_ON_READ INTEGER DEFAULT 0,
-                $COL_MSG_DELIVERY_STATUS TEXT DEFAULT 'SENT'
+                $COL_MSG_DELIVERY_STATUS TEXT DEFAULT 'SENT',
+                $COL_MSG_REACTION TEXT DEFAULT NULL
             )
             """.trimIndent()
         )
@@ -195,6 +197,21 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
                 db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $COL_MSG_DELIVERY_STATUS TEXT DEFAULT 'SENT'")
             } catch (_: Exception) {}
         }
+        if (oldVersion < 7) {
+            try {
+                db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $COL_MSG_REACTION TEXT DEFAULT NULL")
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun scheduleVaultSnapshot() {
+        try {
+            java.util.concurrent.Executors.newSingleThreadExecutor().execute {
+                runCatching {
+                    com.messagebackup.app.domain.mesh.UnkindnessVaultManager(appContext).saveVault()
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     /**
@@ -251,7 +268,11 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
             }
             val result = db.insertWithOnConflict(TABLE_PEERS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
             db.setTransactionSuccessful()
-            result != -1L
+            val success = result != -1L
+            if (success) {
+                scheduleVaultSnapshot()
+            }
+            success
         } finally {
             db.endTransaction()
         }
@@ -406,11 +427,15 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
         val canonicalId = normalizePeerId(peerId)
         val clean = peerId.removePrefix("raven://").trim().lowercase()
         deleteMessagesForPeer(peerId)
-        return db.delete(
+        val deleted = db.delete(
             TABLE_PEERS,
             "LOWER($COL_PEER_ID) = ? OR LOWER($COL_PEER_ID) = ?",
             arrayOf(canonicalId, clean)
         ) > 0
+        if (deleted) {
+            scheduleVaultSnapshot()
+        }
+        return deleted
     }
 
     fun insertMessage(msg: RavenChatMessage): Long {
@@ -434,8 +459,30 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
             put(COL_MSG_EXPIRES_AT, msg.expiresAtTimestamp)
             put(COL_MSG_BURN_ON_READ, if (msg.burnOnRead) 1 else 0)
             put(COL_MSG_DELIVERY_STATUS, msg.deliveryStatus)
+            put(COL_MSG_REACTION, msg.reactionEmoji)
         }
         return db.insert(TABLE_MESSAGES, null, values)
+    }
+
+    fun updateMessageReaction(messageId: Long, reactionEmoji: String?): Boolean {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put(COL_MSG_REACTION, reactionEmoji)
+        }
+        return db.update(TABLE_MESSAGES, values, "$COL_MSG_ID = ?", arrayOf(messageId.toString())) > 0
+    }
+
+    fun updateMessageReactionByTimestamp(senderCallsign: String, timestamp: Long, reactionEmoji: String?): Boolean {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put(COL_MSG_REACTION, reactionEmoji)
+        }
+        return db.update(
+            TABLE_MESSAGES,
+            values,
+            "LOWER($COL_MSG_SENDER_CALLSIGN) = ? AND ABS($COL_MSG_TIMESTAMP - ?) < 5000",
+            arrayOf(senderCallsign.lowercase().trim(), timestamp.toString())
+        ) > 0
     }
 
     fun updateMessageDeliveryStatus(peerId: String, timestamp: Long, status: String) {
@@ -552,6 +599,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
             val idxExp = c.getColumnIndex(COL_MSG_EXPIRES_AT)
             val idxBurn = c.getColumnIndex(COL_MSG_BURN_ON_READ)
             val idxStatus = c.getColumnIndex(COL_MSG_DELIVERY_STATUS)
+            val idxReaction = c.getColumnIndex(COL_MSG_REACTION)
 
             while (c.moveToNext()) {
                 val rawAudio = if (idxAudio != -1 && !c.isNull(idxAudio)) c.getString(idxAudio) else null
@@ -564,6 +612,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
                 val exp = if (idxExp != -1 && !c.isNull(idxExp)) c.getLong(idxExp) else 0L
                 val burn = if (idxBurn != -1 && !c.isNull(idxBurn)) c.getInt(idxBurn) == 1 else false
                 val status = if (idxStatus != -1 && !c.isNull(idxStatus)) c.getString(idxStatus) else "SENT"
+                val reaction = if (idxReaction != -1 && !c.isNull(idxReaction)) c.getString(idxReaction) else null
 
                 messages.add(
                     RavenChatMessage(
@@ -582,7 +631,8 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
                         transcription = trans,
                         expiresAtTimestamp = exp,
                         burnOnRead = burn,
-                        deliveryStatus = status
+                        deliveryStatus = status,
+                        reactionEmoji = reaction
                     )
                 )
             }
@@ -633,5 +683,6 @@ data class RavenChatMessage(
     val transcription: String? = null,
     val expiresAtTimestamp: Long = 0L,
     val burnOnRead: Boolean = false,
-    val deliveryStatus: String = "SENT"
+    val deliveryStatus: String = "SENT",
+    val reactionEmoji: String? = null
 )

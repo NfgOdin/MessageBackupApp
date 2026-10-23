@@ -32,6 +32,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -218,11 +221,19 @@ fun MainScreen(
     var pendingProtectedAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val previewLazyListState = rememberLazyListState()
 
+    var replyingToMessage by remember { mutableStateOf<com.messagebackup.app.model.MessageItem?>(null) }
+    var showExecutiveBriefDialog by remember { mutableStateOf(false) }
+    var executiveBriefText by remember { mutableStateOf<String?>(null) }
+    var isGeneratingBrief by remember { mutableStateOf(false) }
+
     var lastScrolledThreadId by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(uiState.selectedThreadForPreview?.threadId) {
         if (uiState.selectedThreadForPreview == null) {
             lastScrolledThreadId = null
         }
+        replyingToMessage = null
+        showExecutiveBriefDialog = false
+        executiveBriefText = null
     }
     LaunchedEffect(uiState.selectedThreadForPreview?.threadId, uiState.previewMessages.size) {
         val currentThreadId = uiState.selectedThreadForPreview?.threadId
@@ -618,6 +629,56 @@ fun MainScreen(
                             )
                         }
                         IconButton(onClick = {
+                            showExecutiveBriefDialog = true
+                            if (executiveBriefText == null && !isGeneratingBrief) {
+                                isGeneratingBrief = true
+                                scope.launch(Dispatchers.IO) {
+                                    val contactName = uiState.selectedThreadForPreview?.displayName ?: "Conversation"
+                                    val prompt = "Provide a high-impact 'Executive Brief' of this conversation with $contactName in exactly 3 concise, clear bullet points. Focus on key decisions, pending obligations, and current status."
+                                    val provider = try {
+                                        com.messagebackup.app.domain.ai.AiProviderType.valueOf(prefs.aiProvider.value)
+                                    } catch (e: Exception) {
+                                        com.messagebackup.app.domain.ai.AiProviderType.GEMINI
+                                    }
+                                    val res = aiEngine.queryOdin(
+                                        userPrompt = prompt,
+                                        messages = uiState.previewMessages.takeLast(40),
+                                        targetContactName = contactName,
+                                        providerType = provider,
+                                        geminiApiKey = prefs.geminiApiKey.value,
+                                        geminiModel = prefs.geminiModel.value,
+                                        openaiApiKey = prefs.openaiApiKey.value,
+                                        openaiModel = prefs.openaiModel.value,
+                                        ollamaEndpoint = prefs.ollamaEndpoint.value,
+                                        ollamaModel = prefs.ollamaModel.value,
+                                        temperature = 0.3f,
+                                        topP = 0.9f,
+                                        numCtx = 2048,
+                                        customSystemPrompt = "You are O.D.I.N. Executive Brief assistant. Provide exactly 3 high-impact bullet points summarizing the messages accurately.",
+                                        context = context
+                                    )
+                                    withContext(Dispatchers.Main) {
+                                        isGeneratingBrief = false
+                                        when (res) {
+                                            is com.messagebackup.app.domain.ai.AiQueryResult.Success -> {
+                                                executiveBriefText = res.responseText.trim()
+                                            }
+                                            is com.messagebackup.app.domain.ai.AiQueryResult.Error -> {
+                                                executiveBriefText = "• ${uiState.previewMessages.size} messages analyzed in archive.\n• Latest dispatch from $contactName: \"${uiState.previewMessages.lastOrNull()?.body?.take(50) ?: "No text"}\"\n• (AI summary offline: configure Gemini or Ollama in Settings to enable live neural briefs)."
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "Executive Brief",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        IconButton(onClick = {
                             viewModel.loadStatistics()
                             viewModel.adManager.showRewardedAd(
                                 activity = activity,
@@ -785,6 +846,56 @@ fun MainScreen(
                                 modifier = Modifier.size(22.dp)
                             )
                         }
+                        IconButton(onClick = {
+                            showExecutiveBriefDialog = true
+                            if (executiveBriefText == null && !isGeneratingBrief) {
+                                isGeneratingBrief = true
+                                scope.launch(Dispatchers.IO) {
+                                    val contactName = uiState.selectedThreadForPreview?.displayName ?: "Conversation"
+                                    val prompt = "Provide a high-impact 'Executive Brief' of this conversation with $contactName in exactly 3 concise, clear bullet points. Focus on key decisions, pending obligations, and current status."
+                                    val provider = try {
+                                        com.messagebackup.app.domain.ai.AiProviderType.valueOf(prefs.aiProvider.value)
+                                    } catch (e: Exception) {
+                                        com.messagebackup.app.domain.ai.AiProviderType.GEMINI
+                                    }
+                                    val res = aiEngine.queryOdin(
+                                        userPrompt = prompt,
+                                        messages = uiState.previewMessages.takeLast(40),
+                                        targetContactName = contactName,
+                                        providerType = provider,
+                                        geminiApiKey = prefs.geminiApiKey.value,
+                                        geminiModel = prefs.geminiModel.value,
+                                        openaiApiKey = prefs.openaiApiKey.value,
+                                        openaiModel = prefs.openaiModel.value,
+                                        ollamaEndpoint = prefs.ollamaEndpoint.value,
+                                        ollamaModel = prefs.ollamaModel.value,
+                                        temperature = 0.3f,
+                                        topP = 0.9f,
+                                        numCtx = 2048,
+                                        customSystemPrompt = "You are O.D.I.N. Executive Brief assistant. Provide exactly 3 high-impact bullet points summarizing the messages accurately.",
+                                        context = context
+                                    )
+                                    withContext(Dispatchers.Main) {
+                                        isGeneratingBrief = false
+                                        when (res) {
+                                            is com.messagebackup.app.domain.ai.AiQueryResult.Success -> {
+                                                executiveBriefText = res.responseText.trim()
+                                            }
+                                            is com.messagebackup.app.domain.ai.AiQueryResult.Error -> {
+                                                executiveBriefText = "• ${uiState.previewMessages.size} messages analyzed in archive.\n• Latest dispatch from $contactName: \"${uiState.previewMessages.lastOrNull()?.body?.take(50) ?: "No text"}\"\n• (AI summary offline: configure Gemini or Ollama in Settings to enable live neural briefs)."
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "Executive Brief",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                         if (ravenMeshEnabled) {
                             IconButton(onClick = { showRavenMeshDialog = true }) {
                                 BadgedBox(
@@ -801,7 +912,7 @@ fun MainScreen(
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_flying_raven),
-                                        contentDescription = "Raven Mesh Network",
+                                        contentDescription = "The Unkindness Network",
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(22.dp)
                                     )
@@ -846,12 +957,12 @@ fun MainScreen(
                                     text = {
                                         Column {
                                             Text(
-                                                text = "Raven Mesh Identity",
+                                                text = "The Unkindness",
                                                 color = MaterialTheme.colorScheme.onSurface,
                                                 fontWeight = FontWeight.SemiBold
                                             )
                                             Text(
-                                                text = "Decentralized E2EE Peer Network & Sigil",
+                                                text = "Decentralized E2EE Flock & Sigil Network",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
@@ -999,7 +1110,9 @@ fun MainScreen(
                         prefs = prefs,
                         aiEngine = aiEngine,
                         isAdsRemoved = isAdsRemoved,
-                        onRequireCredits = { showRewardArcade = true }
+                        onRequireCredits = { showRewardArcade = true },
+                        quotedMessage = replyingToMessage,
+                        onClearQuotedMessage = { replyingToMessage = null }
                     )
                 }
                 AdBannerView(isAdsRemoved = isAdsRemoved)
@@ -1598,6 +1711,9 @@ fun MainScreen(
                                                 fileName = att.fileName,
                                                 uriString = att.uriString
                                             )
+                                        },
+                                        onSwipeToReply = { msg ->
+                                            replyingToMessage = msg
                                         }
                                     )
                                 }
@@ -2144,6 +2260,20 @@ fun MainScreen(
         )
     }
 
+    if (showExecutiveBriefDialog && uiState.selectedThreadForPreview != null) {
+        val contactName = uiState.selectedThreadForPreview?.displayName ?: "Conversation"
+        ExecutiveBriefDialog(
+            contactName = contactName,
+            briefText = executiveBriefText,
+            isLoading = isGeneratingBrief,
+            onOpenCopilot = {
+                showExecutiveBriefDialog = false
+                runWithOdinLock { viewModel.setCopilotOpen(true) }
+            },
+            onDismiss = { showExecutiveBriefDialog = false }
+        )
+    }
+
     if (showOnboarding) {
         com.messagebackup.app.ui.dialogs.OnboardingWalkthroughDialog(
             onComplete = {
@@ -2348,7 +2478,7 @@ private fun SendExcerptToRavenDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "Forward ${messagesToForward.size} selected message(s) from $contactName over end-to-end encrypted Raven Mesh:",
+                    text = "Forward ${messagesToForward.size} selected message(s) from $contactName over The Unkindness encrypted network:",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2359,7 +2489,7 @@ private fun SendExcerptToRavenDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "No connected Raven friends yet. Pair with a friend in Raven Mesh first!",
+                            text = "No Flock peers linked yet. Pair with a peer in The Unkindness first!",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(12.dp)
                         )
@@ -2431,6 +2561,98 @@ private fun SendExcerptToRavenDialog(
         confirmButton = {
             TextButton(onClick = onDismiss, enabled = !isSending) {
                 Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun ExecutiveBriefDialog(
+    contactName: String,
+    briefText: String?,
+    isLoading: Boolean,
+    onOpenCopilot: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Executive Brief • $contactName",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) {
+                if (isLoading) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 24.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(
+                            text = "O.D.I.N. synthesizing 3-bullet brief...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(
+                                text = briefText ?: "No summary available.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                lineHeight = 20.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row {
+                if (!isLoading && briefText != null) {
+                    TextButton(onClick = {
+                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(briefText))
+                        android.widget.Toast.makeText(context, "Brief copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Copy")
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                Button(onClick = onOpenCopilot) {
+                    Text("Ask O.D.I.N.")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
             }
         }
     )

@@ -39,9 +39,21 @@ class RavenCryptoEngine(private val context: Context) {
     private val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     /**
-     * Retrieves or generates the hardware-backed EC KeyPair for this device's Raven identity.
+     * Retrieves or generates the EC KeyPair for this device's Raven identity.
+     * Prioritizes software keypair if restored from Runic Seed Vault or software fallback.
      */
     fun getOrCreateIdentityKeyPair(): KeyPair {
+        val pubB64 = sharedPrefs.getString("fallback_ec_pub", null)
+        val privB64 = sharedPrefs.getString("fallback_ec_priv", null)
+        if (!pubB64.isNullOrBlank() && !privB64.isNullOrBlank()) {
+            try {
+                val kf = java.security.KeyFactory.getInstance("EC")
+                val pub = kf.generatePublic(java.security.spec.X509EncodedKeySpec(Base64.decode(pubB64, Base64.NO_WRAP)))
+                val priv = kf.generatePrivate(java.security.spec.PKCS8EncodedKeySpec(Base64.decode(privB64, Base64.NO_WRAP)))
+                return KeyPair(pub, priv)
+            } catch (_: Exception) {}
+        }
+
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
 
         if (keyStore.containsAlias(KEY_ALIAS_IDENTITY)) {
@@ -73,6 +85,57 @@ class RavenCryptoEngine(private val context: Context) {
         }
 
         return getOrCreateSoftwareFallbackKeyPair()
+    }
+
+    /**
+     * Imports an identity keypair and callsign moniker from the Runic Seed Vault.
+     */
+    fun importIdentity(moniker: String, pubB64: String, privB64: String) {
+        try {
+            val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+            if (keyStore.containsAlias(KEY_ALIAS_IDENTITY)) {
+                keyStore.deleteEntry(KEY_ALIAS_IDENTITY)
+            }
+        } catch (_: Exception) {}
+
+        sharedPrefs.edit()
+            .putString(PREF_CALLSIGN_MONIKER, moniker)
+            .putBoolean(PREF_HAS_CUSTOMIZED_CALLSIGN, true)
+            .putString("fallback_ec_pub", pubB64)
+            .putString("fallback_ec_priv", privB64)
+            .apply()
+    }
+
+    /**
+     * Returns an exportable (Base64 pub, Base64 priv) keypair.
+     * If the current key is hardware-locked and non-exportable, migrates to an exportable EC keypair
+     * so that the user's Runic Seed Vault can safely back it up and restore it anywhere.
+     */
+    fun getExportableKeyPair(): Pair<String, String> {
+        val pubB64 = sharedPrefs.getString("fallback_ec_pub", null)
+        val privB64 = sharedPrefs.getString("fallback_ec_priv", null)
+        if (!pubB64.isNullOrBlank() && !privB64.isNullOrBlank()) {
+            return Pair(pubB64, privB64)
+        }
+
+        val kp = getOrCreateIdentityKeyPair()
+        val privBytes = kp.private.encoded
+        if (privBytes != null) {
+            val privEnc = Base64.encodeToString(privBytes, Base64.NO_WRAP)
+            val pubEnc = Base64.encodeToString(kp.public.encoded, Base64.NO_WRAP)
+            sharedPrefs.edit()
+                .putString("fallback_ec_pub", pubEnc)
+                .putString("fallback_ec_priv", privEnc)
+                .apply()
+            return Pair(pubEnc, privEnc)
+        }
+
+        // Generate and persist exportable fallback keypair
+        val softwareKp = getOrCreateSoftwareFallbackKeyPair()
+        return Pair(
+            Base64.encodeToString(softwareKp.public.encoded, Base64.NO_WRAP),
+            Base64.encodeToString(softwareKp.private.encoded, Base64.NO_WRAP)
+        )
     }
 
     private fun getOrCreateSoftwareFallbackKeyPair(): KeyPair {

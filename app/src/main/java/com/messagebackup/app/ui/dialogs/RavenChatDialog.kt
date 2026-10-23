@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -168,6 +169,7 @@ fun RavenChatDialog(
     var showLokisMistMenu by remember { mutableStateOf(false) }
     var ephemeralTtlSec by remember { mutableIntStateOf(dbHelper.getEphemeralTtlForPeer(peer.peerId)) }
     var fullScreenImageBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var reactionTargetMessage by remember { mutableStateOf<RavenChatMessage?>(null) }
 
     val listState = rememberLazyListState()
 
@@ -848,6 +850,9 @@ fun RavenChatDialog(
                                             dbHelper.deleteMessageById(msg.id)
                                             loadMessages()
                                         }
+                                    },
+                                    onLongPress = {
+                                        reactionTargetMessage = msg
                                     }
                                 )
                             }
@@ -1290,6 +1295,41 @@ fun RavenChatDialog(
             }
         )
     }
+
+    if (reactionTargetMessage != null) {
+        val target = reactionTargetMessage!!
+        Dialog(onDismissRequest = { reactionTargetMessage = null }) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shadowElevation = 8.dp,
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    listOf("👍", "❤️", "⚡", "🦅", "🛡️", "🔥").forEach { emoji ->
+                        Text(
+                            text = emoji,
+                            fontSize = 28.sp,
+                            modifier = Modifier
+                                .clickable {
+                                    reactionTargetMessage = null
+                                    scope.launch(Dispatchers.IO) {
+                                        dbHelper.updateMessageReaction(target.id, emoji)
+                                        socketTransport.sendReaction(peer, target.timestamp, emoji)
+                                        loadMessages()
+                                    }
+                                }
+                                .padding(4.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -1298,7 +1338,8 @@ fun RavenMessageBubble(
     isPlaying: Boolean = false,
     onPlayAudio: (String) -> Unit = {},
     onImageClick: (Bitmap) -> Unit = {},
-    onBurnNow: () -> Unit = {}
+    onBurnNow: () -> Unit = {},
+    onLongPress: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isOutbound = msg.isOutbound
@@ -1335,7 +1376,13 @@ fun RavenMessageBubble(
         Surface(
             shape = bubbleShape,
             color = bubbleColor,
-            modifier = Modifier.widthIn(min = 60.dp, max = 300.dp),
+            modifier = Modifier
+                .widthIn(min = 60.dp, max = 300.dp)
+                .pointerInput(msg.id) {
+                    detectTapGestures(
+                        onLongPress = { onLongPress() }
+                    )
+                },
             tonalElevation = 1.dp
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -1559,6 +1606,22 @@ fun RavenMessageBubble(
                         )
                     }
                 }
+            }
+        }
+
+        if (!msg.reactionEmoji.isNullOrBlank()) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 3.dp,
+                modifier = Modifier
+                    .offset(y = (-10).dp, x = if (isOutbound) (-8).dp else 8.dp)
+            ) {
+                Text(
+                    text = msg.reactionEmoji,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
             }
         }
     }

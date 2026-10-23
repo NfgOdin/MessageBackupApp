@@ -1,6 +1,7 @@
 package com.messagebackup.app.domain.mesh
 
 import android.content.Context
+import android.os.Build
 import com.messagebackup.app.MessageBackupApp
 import com.messagebackup.app.data.local.RavenChatMessage
 import com.messagebackup.app.data.local.RavenDatabaseHelper
@@ -311,6 +312,38 @@ class RavenSocketTransport(
                 return@withContext
             }
 
+            if (packetType == "MESSAGE_REACTION") {
+                val targetMsgTs = innerMsg.optLong("msg_timestamp", 0L)
+                val emoji = innerMsg.optString("reaction", "").ifBlank { null }
+                dbHelper.updateMessageReactionByTimestamp(senderCallSign, targetMsgTs, emoji)
+                writer.println(JSONObject().apply { put("status", "OK_ACK") })
+                return@withContext
+            }
+
+            if (packetType == "EMERGENCY_BEACON") {
+                val packetChannel = innerMsg.optInt("channel", 1)
+                val gps = innerMsg.optString("gps", "")
+                voicePttEngine.playGjallarhornSiren()
+
+                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                val sosPattern = longArrayOf(0, 150, 100, 150, 100, 150, 200, 400, 150, 400, 150, 400, 200, 150, 100, 150, 100, 150)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator?.vibrate(android.os.VibrationEffect.createWaveform(sosPattern, -1))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator?.vibrate(sosPattern, -1)
+                }
+
+                val body = if (gps.isNotBlank()) "🚨 EMERGENCY GJALLARHORN BEACON on CH $packetChannel! Location: $gps" else "🚨 EMERGENCY GJALLARHORN BEACON on CH $packetChannel!"
+                RavenNotificationHelper.getInstance(context).postIncomingMessageNotification(
+                    senderCallsign = senderCallSign,
+                    senderDisplayName = "🚨 S.O.S.: ${senderPeer.displayName}",
+                    messageText = body
+                )
+                writer.println(JSONObject().apply { put("status", "OK_ACK") })
+                return@withContext
+            }
+
             if (packetType == "PTT_STREAM_CHUNK") {
                 val packetChannel = innerMsg.optInt("channel", 1)
                 val myChannel = try { MessageBackupApp.instance.appPreferences.ravenRadioChannel.value } catch (_: Exception) { 1 }
@@ -384,7 +417,13 @@ class RavenSocketTransport(
                 }
                 if (isAutoPlay && isChannelMatch && !isSquelchMuted) {
                     scope.launch(Dispatchers.IO) {
-                        voicePttEngine.playInboundVoice(audioBase64)
+                        voicePttEngine.playInboundVoice(
+                            audioBase64 = audioBase64,
+                            senderCallsign = senderCallSign,
+                            senderName = senderPeer.displayName,
+                            channel = packetChannel,
+                            durationSec = (durationMs / 1000).toInt().coerceAtLeast(1)
+                        )
                     }
                 }
             } else {
@@ -552,6 +591,43 @@ class RavenSocketTransport(
         }.toString()
 
         sendRawPayloadToPeer(peer, payload, peer.lastKnownIp, DEFAULT_MESH_PORT)
+    }
+
+    suspend fun sendReaction(peer: RavenPeer, messageTimestamp: Long, emoji: String) = withContext(Dispatchers.IO) {
+        val payload = JSONObject().apply {
+            put("type", "MESSAGE_REACTION")
+            put("msg_timestamp", messageTimestamp)
+            put("reaction", emoji)
+            put("ts", System.currentTimeMillis())
+        }.toString()
+
+        if (isReachableLocalSubnet(peer.lastKnownIp)) {
+            sendRawPayloadToPeer(peer, payload, peer.lastKnownIp, DEFAULT_MESH_PORT)
+        } else {
+            globalRelay.sendPacketToRemotePeer(peer, payload)
+        }
+    }
+
+    suspend fun broadcastEmergencyBeacon(channel: Int, gpsCoords: String = "") = withContext(Dispatchers.IO) {
+        val myCallsign = cryptoEngine.getRavenCallSign()
+        val peers = dbHelper.getAllPeers().filter { it.isTrusted }
+        val payload = JSONObject().apply {
+            put("type", "EMERGENCY_BEACON")
+            put("channel", channel)
+            put("gps", gpsCoords)
+            put("sender", myCallsign)
+            put("ts", System.currentTimeMillis())
+        }.toString()
+
+        for (peer in peers) {
+            launch {
+                if (isReachableLocalSubnet(peer.lastKnownIp)) {
+                    sendRawPayloadToPeer(peer, payload, peer.lastKnownIp, DEFAULT_MESH_PORT)
+                } else {
+                    globalRelay.sendPacketToRemotePeer(peer, payload)
+                }
+            }
+        }
     }
 
     /**

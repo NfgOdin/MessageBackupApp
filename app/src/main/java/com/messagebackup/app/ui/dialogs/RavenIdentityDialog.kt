@@ -55,6 +55,11 @@ import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.Lock
+import com.messagebackup.app.domain.mesh.UnkindnessVaultManager
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Button
@@ -154,6 +159,12 @@ fun RavenIdentityDialog(
     var pingMessageText by remember { mutableStateOf("⚡ Raven Whisper: Greetings from MUNINN!") }
     var isSendingPing by remember { mutableStateOf(false) }
     var isRavenFlying by remember { mutableStateOf(false) }
+
+    val vaultManager = remember { UnkindnessVaultManager(context) }
+    var showRunicPhraseDialog by remember { mutableStateOf(false) }
+    var showRestoreVaultDialog by remember { mutableStateOf(false) }
+    var restoreInputWords by remember { mutableStateOf("") }
+    var hasPersistentVaultOnDisk by remember { mutableStateOf(vaultManager.hasVaultOnDevice()) }
 
     // Audio & PTT Preferences
     val isLoudspeaker by prefs.ravenAudioLoudspeaker.collectAsState()
@@ -286,7 +297,7 @@ fun RavenIdentityDialog(
         } else {
             pendingBleAction = null
             permissionDialogTitle = "Bluetooth Permissions Required"
-            permissionDialogMessage = "Raven Mesh off-grid radio beacons require Nearby Devices / Bluetooth permissions to discover and broadcast to peers. Please grant them in App Settings."
+            permissionDialogMessage = "The Unkindness off-grid radio beacons require Nearby Devices / Bluetooth permissions to discover and broadcast to peers. Please grant them in App Settings."
         }
     }
 
@@ -472,7 +483,7 @@ fun RavenIdentityDialog(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Tactical Raven Mesh & Walkie-Talkie Radio",
+                                text = "Decentralized E2EE Flock & Radio Network",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -585,7 +596,7 @@ fun RavenIdentityDialog(
                                 } else if (qrBitmap != null) {
                                     Image(
                                         bitmap = qrBitmap!!.asImageBitmap(),
-                                        contentDescription = "Raven Mesh QR Sigil",
+                                        contentDescription = "The Unkindness QR Sigil",
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .padding(16.dp)
@@ -684,10 +695,10 @@ fun RavenIdentityDialog(
                                     )
                                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
-                                        putExtra(Intent.EXTRA_SUBJECT, "Connect with me on MUNINN Raven Mesh")
+                                        putExtra(Intent.EXTRA_SUBJECT, "Connect with me on The Unkindness (Muninn)")
                                         putExtra(
                                             Intent.EXTRA_TEXT,
-                                            "Let's link on MUNINN Raven Mesh for encrypted off-grid chat & walkie-talkie! Copy this connection code into your app:\n\n$textCode"
+                                            "Let's link on The Unkindness for encrypted off-grid chat & walkie-talkie! Copy this connection code into your app:\n\n$textCode"
                                         )
                                     }
                                     context.startActivity(Intent.createChooser(shareIntent, "Share Raven Code via..."))
@@ -714,6 +725,68 @@ fun RavenIdentityDialog(
                             }
                         }
 
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Runic Seed Vault Card (survives app uninstallation)
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Runic Seed Vault (Zero-Loss Backup)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Your identity, callsign, and Flock are encrypted in Documents/Muninn/ and backed up to Google Drive. Keep your 12 words safe to restore after any uninstall.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { showRunicPhraseDialog = true },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("12 Words", fontSize = 12.sp)
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            val res = vaultManager.saveVault()
+                                            if (res.isSuccess) {
+                                                Toast.makeText(context, "🛡️ Vault snapshot saved to Documents/Muninn!", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                Toast.makeText(context, "Error saving vault: ${res.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text("Backup Now", fontSize = 12.sp)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                TextButton(
+                                    onClick = {
+                                        restoreInputWords = ""
+                                        showRestoreVaultDialog = true
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Restore From 12 Words / Another Device", fontSize = 12.sp)
+                                }
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(16.dp))
                     }
                 } else if (selectedTab == 0) {
@@ -723,6 +796,35 @@ fun RavenIdentityDialog(
                             .fillMaxWidth()
                             .weight(1f)
                     ) {
+                        if (peersList.isEmpty() && hasPersistentVaultOnDisk) {
+                            Card(
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Text("🛡️ Previous Unkindness Sigil Detected!", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "An encrypted Sigil vault was found in your device storage. Would you like to restore your Flock, callsign, and encryption keys?",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = {
+                                            restoreInputWords = ""
+                                            showRestoreVaultDialog = true
+                                        },
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Restore Flock & Sigil Now")
+                                    }
+                                }
+                            }
+                        }
                         // Quick Walkie-Talkie Audio & PTT Mode Bar
                         Row(
                             modifier = Modifier
@@ -1447,6 +1549,90 @@ fun RavenIdentityDialog(
                                         }
                                     )
                                 }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Gjallarhorn S.O.S. Emergency Distress Button
+                                Button(
+                                    onClick = {
+                                        scope.launch(Dispatchers.IO) {
+                                            pttEngine.playGjallarhornSiren(isLoudspeaker)
+                                            socketTransport.broadcastEmergencyBeacon(currentRadioChannel)
+                                            withContext(Dispatchers.Main) {
+                                                Toast.makeText(context, "🚨 GJALLARHORN S.O.S. Transmitted Across All Channels!", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                    },
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("GJALLARHORN S.O.S. BEACON", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Battery Keep-Alive Settings Helper
+                                OutlinedButton(
+                                    onClick = {
+                                        try {
+                                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {
+                                            try {
+                                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                    data = Uri.parse("package:${context.packageName}")
+                                                }
+                                                context.startActivity(intent)
+                                            } catch (_: Exception) {}
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.BatteryChargingFull, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Unrestricted Battery: Keep Radio Alive", fontSize = 11.sp)
+                                }
+
+                                // Radio Tape / Rewind Log
+                                val recentBursts by pttEngine.recentRadioBursts.collectAsState()
+                                if (recentBursts.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Text("📻 Radio Rewind Log", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        recentBursts.take(5).forEach { burst ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 3.dp)
+                                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text("${burst.senderName} • CH ${burst.channel}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                                    val ago = ((System.currentTimeMillis() - burst.timestamp) / 1000).coerceAtLeast(1)
+                                                    Text("${ago}s ago • ${burst.durationSec}s audio", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                                IconButton(
+                                                    onClick = {
+                                                        scope.launch(Dispatchers.IO) {
+                                                            pttEngine.replayBurst(burst, isLoudspeaker)
+                                                        }
+                                                    },
+                                                    modifier = Modifier.size(30.dp)
+                                                ) {
+                                                    Icon(Icons.Default.PlayArrow, contentDescription = "Replay", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -1924,7 +2110,7 @@ fun RavenIdentityDialog(
                 runeSymbol = "ᛟ",
                 costAmount = 1,
                 currentBalance = aiCredits,
-                actionDescription = "Spend 1 Othala Rune to engrave and propagate your custom Call-Sign moniker into the Raven mesh.",
+                actionDescription = "Spend 1 Othala Rune to engrave and propagate your custom Call-Sign moniker into The Unkindness.",
                 prefs = prefs,
                 onConfirm = {
                     showRenameConfirmDialog = false
@@ -2234,6 +2420,128 @@ fun RavenIdentityDialog(
             },
             dismissButton = {
                 TextButton(onClick = { peerToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 12-Word Runic Seed Phrase Display Dialog
+    if (showRunicPhraseDialog) {
+        val mnemonic = remember { vaultManager.getOrGenerateUserMnemonic() }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showRunicPhraseDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Key, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("12-Word Runic Recovery Phrase", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Write these 12 words down in order. They are the cryptographic master key that restores your Unkindness identity and Flock even after uninstallation.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            for (i in 0 until 12 step 2) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("${i + 1}. ${mnemonic.getOrNull(i) ?: ""}", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    if (i + 1 < 12) {
+                                        Text("${i + 2}. ${mnemonic.getOrNull(i + 1) ?: ""}", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = {
+                            val clipMgr = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("Runic Phrase", mnemonic.joinToString(" "))
+                            clipMgr.setPrimaryClip(clip)
+                            Toast.makeText(context, "12 words copied to clipboard", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Copy Phrase to Clipboard", fontSize = 12.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showRunicPhraseDialog = false }) {
+                    Text("I Have Saved My Phrase")
+                }
+            }
+        )
+    }
+
+    // Restore Vault Dialog
+    if (showRestoreVaultDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showRestoreVaultDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Restore Flock & Sigil", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter your 12-word Runic recovery phrase separated by spaces to unlock your encrypted identity and restore all friends.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    androidx.compose.material3.OutlinedTextField(
+                        value = restoreInputWords,
+                        onValueChange = { restoreInputWords = it },
+                        label = { Text("12 Words") },
+                        placeholder = { Text("word1 word2 word3 ...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val words = restoreInputWords.trim().split("\\s+".toRegex()).map { it.lowercase() }
+                        if (words.size != 12) {
+                            Toast.makeText(context, "Please enter all 12 words", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        val res = vaultManager.restoreVault(words)
+                        if (res.isSuccess) {
+                            showRestoreVaultDialog = false
+                            myCallSign = cryptoEngine.getRavenCallSign()
+                            refreshPeers()
+                            hasPersistentVaultOnDisk = true
+                            Toast.makeText(context, "🛡️ Unkindness restored! (${res.getOrNull()} peers restored)", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(context, "Restore failed: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                ) {
+                    Text("Unlock & Restore")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreVaultDialog = false }) {
                     Text("Cancel")
                 }
             }

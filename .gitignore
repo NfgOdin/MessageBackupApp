@@ -18,3 +18,5 @@ local.properties
 release-keystore.jks
 *.log
 .kotlin/
+
+playstore/*.apk

@@ -2231,7 +2231,7 @@ Rules:
                             )
                             Column {
                                 Text(
-                                    text = "Raven Mesh & Walkie-Talkie",
+                                    text = "The Unkindness & Walkie-Talkie",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -2256,7 +2256,7 @@ Rules:
                                     com.messagebackup.app.domain.mesh.RavenSocketTransport.getInstance(context, scope).setMeshEnabled(enabled)
                                     Toast.makeText(
                                         context,
-                                        if (enabled) "🪶 Raven Mesh enabled!" else "Raven Mesh disabled and hidden from main screen.",
+                                        if (enabled) "🪶 The Unkindness enabled!" else "The Unkindness disabled and hidden from main screen.",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
@@ -2277,7 +2277,7 @@ Rules:
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
-                            text = "When Raven Mesh is disabled, the Raven icon and menu items are completely hidden and background mesh relays are stopped.",
+                            text = "When The Unkindness is disabled, the flock icon and menu items are completely hidden and background relays are stopped.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

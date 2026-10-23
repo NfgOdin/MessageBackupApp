@@ -484,6 +484,36 @@ class RavenGlobalRelayTransport(
                 return@withContext
             }
 
+            if (packetType == "MESSAGE_REACTION") {
+                val targetMsgTs = innerMsg.optLong("msg_timestamp", 0L)
+                val emoji = innerMsg.optString("reaction", "").ifBlank { null }
+                dbHelper.updateMessageReactionByTimestamp(senderCallSign, targetMsgTs, emoji)
+                return@withContext
+            }
+
+            if (packetType == "EMERGENCY_BEACON") {
+                val packetChannel = innerMsg.optInt("channel", 1)
+                val gps = innerMsg.optString("gps", "")
+                voicePttEngine.playGjallarhornSiren()
+
+                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                val sosPattern = longArrayOf(0, 150, 100, 150, 100, 150, 200, 400, 150, 400, 150, 400, 200, 150, 100, 150, 100, 150)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    vibrator?.vibrate(android.os.VibrationEffect.createWaveform(sosPattern, -1))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator?.vibrate(sosPattern, -1)
+                }
+
+                val body = if (gps.isNotBlank()) "🚨 EMERGENCY GJALLARHORN BEACON on CH $packetChannel! Location: $gps" else "🚨 EMERGENCY GJALLARHORN BEACON on CH $packetChannel!"
+                RavenNotificationHelper.getInstance(context).postIncomingMessageNotification(
+                    senderCallsign = senderCallSign,
+                    senderDisplayName = "🚨 S.O.S.: ${senderPeer.displayName}",
+                    messageText = body
+                )
+                return@withContext
+            }
+
             // Handle Live Sub-Second Walkie-Talkie Audio Stream Chunk
             if (packetType == "PTT_STREAM_CHUNK") {
                 val packetChannel = innerMsg.optInt("channel", 1)
@@ -569,7 +599,13 @@ class RavenGlobalRelayTransport(
 
                 if (isFresh && isAutoPlay && !alreadyStreamed && isChannelMatch && !isSquelchMuted) {
                     scope.launch(Dispatchers.IO) {
-                        voicePttEngine.playInboundVoice(audioBase64)
+                        voicePttEngine.playInboundVoice(
+                            audioBase64 = audioBase64,
+                            senderCallsign = senderCallSign,
+                            senderName = senderPeer.displayName,
+                            channel = packetChannel,
+                            durationSec = (durationMs / 1000).toInt().coerceAtLeast(1)
+                        )
                     }
                 }
             } else {
@@ -649,6 +685,34 @@ class RavenGlobalRelayTransport(
             }
         } catch (e: Exception) {
             RavenSendResult.Error("Cellular delivery failed: ${e.message}")
+        }
+    }
+
+    suspend fun sendReaction(peer: RavenPeer, messageTimestamp: Long, emoji: String) = withContext(Dispatchers.IO) {
+        val payload = JSONObject().apply {
+            put("type", "MESSAGE_REACTION")
+            put("msg_timestamp", messageTimestamp)
+            put("reaction", emoji)
+            put("ts", System.currentTimeMillis())
+        }.toString()
+        sendPacketToRemotePeer(peer, payload)
+    }
+
+    suspend fun broadcastEmergencyBeacon(channel: Int, gpsCoords: String = "") = withContext(Dispatchers.IO) {
+        val myCallsign = cryptoEngine.getRavenCallSign()
+        val peers = dbHelper.getAllPeers().filter { it.isTrusted }
+        val payload = JSONObject().apply {
+            put("type", "EMERGENCY_BEACON")
+            put("channel", channel)
+            put("gps", gpsCoords)
+            put("sender", myCallsign)
+            put("ts", System.currentTimeMillis())
+        }.toString()
+
+        for (peer in peers) {
+            launch {
+                sendPacketToRemotePeer(peer, payload)
+            }
         }
     }
 

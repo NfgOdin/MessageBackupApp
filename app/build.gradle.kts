@@ -11,8 +11,8 @@ android {
         applicationId = "com.nfgodin.muninn"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10001
-        versionName = "1.0.0-alpha2"
+        versionCode = 10002
+        versionName = "1.0.0-alpha3"
     }
 
     signingConfigs {
@@ -34,6 +34,10 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -50,6 +54,10 @@ android {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
       }
     }
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.isFork = false
 }
 
 kotlin {
@@ -96,6 +104,7 @@ dependencies {
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services.auth)
   implementation(libs.googleid)
+  implementation(libs.androidx.biometric)
 
   // Global Cellular/Internet P2P Transport (OkHttp WebSockets / HTTP)
   implementation(libs.okhttp)

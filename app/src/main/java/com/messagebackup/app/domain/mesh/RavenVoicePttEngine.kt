@@ -27,10 +27,23 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.sin
+
+data class RadioBurstRecord(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val senderCallsign: String,
+    val senderName: String,
+    val channel: Int,
+    val timestamp: Long = System.currentTimeMillis(),
+    val durationSec: Int,
+    val audioBase64: String
+)
 
 /**
  * High-performance audio recording, live low-latency chunked streaming, and speaker/earpiece
@@ -100,6 +113,9 @@ class RavenVoicePttEngine(context: Context) {
     private var speechRecognizer: SpeechRecognizer? = null
     @Volatile
     private var latestRecognizedTranscript: String = ""
+
+    private val _recentRadioBursts = MutableStateFlow<List<RadioBurstRecord>>(emptyList())
+    val recentRadioBursts: StateFlow<List<RadioBurstRecord>> = _recentRadioBursts.asStateFlow()
 
     private fun isLoudspeakerPreferred(): Boolean {
         return try {
@@ -419,14 +435,54 @@ class RavenVoicePttEngine(context: Context) {
     }
 
     /**
+     * Records a radio burst into the recent rewind buffer (keeps last 10).
+     */
+    fun recordRadioBurst(
+        senderCallsign: String,
+        senderName: String,
+        channel: Int,
+        durationSec: Int,
+        audioBase64: String
+    ) {
+        val record = RadioBurstRecord(
+            senderCallsign = senderCallsign,
+            senderName = senderName,
+            channel = channel,
+            timestamp = System.currentTimeMillis(),
+            durationSec = durationSec.coerceAtLeast(1),
+            audioBase64 = audioBase64
+        )
+        val current = _recentRadioBursts.value.toMutableList()
+        current.add(0, record)
+        if (current.size > 10) {
+            _recentRadioBursts.value = current.take(10)
+        } else {
+            _recentRadioBursts.value = current
+        }
+    }
+
+    /**
      * Plays an inbound or saved voice transmission through either Loudspeaker (default) or Private Earpiece.
      * Prefaces with the iconic Nextel/Boost Mobile 3-burst alert chirp and concludes with a subtle Roger beep.
      */
     suspend fun playInboundVoice(
         audioBase64: String,
         useLoudspeaker: Boolean = isLoudspeakerPreferred(),
-        playSquelchTones: Boolean = true
+        playSquelchTones: Boolean = true,
+        senderCallsign: String = "Radio",
+        senderName: String = "Flock",
+        channel: Int = 1,
+        durationSec: Int = 0
     ) = withContext(Dispatchers.IO) {
+        // Record burst in rewind tape
+        recordRadioBurst(
+            senderCallsign = senderCallsign,
+            senderName = senderName,
+            channel = channel,
+            durationSec = durationSec,
+            audioBase64 = audioBase64
+        )
+
         stopPlayback()
         acquirePttWakeLock()
         var tempFile: File? = null
@@ -477,9 +533,10 @@ class RavenVoicePttEngine(context: Context) {
             mediaPlayer.start()
             playbackComplete.await()
 
-            // 3. Play concluding "Roger" blip (880Hz, 35ms)
+            // 3. Play concluding "Roger" blip (880Hz, 35ms) and authentic squelch tail click
             if (playSquelchTones) {
                 playTone(frequency = 880, durationMs = 35, volume = 0.18f, useLoudspeaker = useLoudspeaker)
+                playSquelchTailClick(useLoudspeaker = useLoudspeaker)
             }
         } catch (_: Exception) {
             // Playback interrupted or failed
@@ -575,6 +632,44 @@ class RavenVoicePttEngine(context: Context) {
             audioTrack.stop()
             audioTrack.release()
         } catch (_: Exception) {}
+    }
+
+    /**
+     * Plays a high-intensity 2-tone alternating emergency distress siren (Gjallarhorn).
+     */
+    fun playGjallarhornSiren(useLoudspeaker: Boolean = true) {
+        try {
+            acquirePttWakeLock()
+            configureAudioRouting(useLoudspeaker)
+            for (cycle in 0 until 4) {
+                playTone(frequency = 960, durationMs = 110, volume = 0.95f, useLoudspeaker = useLoudspeaker)
+                playTone(frequency = 1440, durationMs = 110, volume = 0.95f, useLoudspeaker = useLoudspeaker)
+            }
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Plays authentic tactical radio squelch tail click when remote party unkeys the mic.
+     */
+    fun playSquelchTailClick(useLoudspeaker: Boolean = true) {
+        try {
+            playTone(frequency = 420, durationMs = 20, volume = 0.12f, useLoudspeaker = useLoudspeaker)
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Replays a radio burst from the rewind history.
+     */
+    suspend fun replayBurst(record: RadioBurstRecord, useLoudspeaker: Boolean = isLoudspeakerPreferred()) {
+        playInboundVoice(
+            audioBase64 = record.audioBase64,
+            useLoudspeaker = useLoudspeaker,
+            playSquelchTones = true,
+            senderCallsign = record.senderCallsign,
+            senderName = record.senderName,
+            channel = record.channel,
+            durationSec = record.durationSec
+        )
     }
 
     /**
