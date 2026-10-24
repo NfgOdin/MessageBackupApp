@@ -1493,12 +1493,23 @@ fun RavenMessageBubble(
                                         val safeName = (msg.attachmentName ?: "raven_parcel.bin").replace(Regex("[^a-zA-Z0-9._-]"), "_")
                                         val file = File(dir, safeName).apply { writeBytes(bytes) }
                                         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                            type = msg.attachmentMimeType ?: "*/*"
-                                            putExtra(Intent.EXTRA_STREAM, uri)
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        val isApk = (msg.attachmentMimeType ?: "").contains("package-archive") || safeName.endsWith(".apk", ignoreCase = true)
+                                        val resolvedMime = if (isApk) "application/vnd.android.package-archive" else (msg.attachmentMimeType ?: "*/*")
+                                        try {
+                                            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                                                setDataAndType(uri, resolvedMime)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            }
+                                            context.startActivity(viewIntent)
+                                        } catch (_: Exception) {
+                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                type = resolvedMime
+                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(Intent.createChooser(shareIntent, "Save or Open Parcel"))
                                         }
-                                        context.startActivity(Intent.createChooser(shareIntent, "Save or Open Raven Parcel"))
                                     } catch (e: Exception) {
                                         Toast.makeText(context, "Could not open file: ${e.message}", Toast.LENGTH_SHORT).show()
                                     }

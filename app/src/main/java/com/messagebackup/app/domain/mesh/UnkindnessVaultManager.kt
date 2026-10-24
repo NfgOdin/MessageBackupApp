@@ -251,16 +251,22 @@ class UnkindnessVaultManager(private val context: Context) {
      * using the 12-word Runic mnemonic.
      */
     fun restoreVault(mnemonicWords: List<String>): Result<Int> {
+        val encryptedBytes = readVaultBytes()
+            ?: return Result.failure(IllegalStateException("No Unkindness Vault file found on device"))
+        return restoreVaultFromBytes(encryptedBytes, mnemonicWords)
+    }
+
+    /**
+     * Restores Sigil identity, radio settings, and all Flock contacts from raw encrypted vault bytes
+     * (e.g. read from local storage, Google Drive cloud backup, or SAF Document Picker).
+     */
+    fun restoreVaultFromBytes(encryptedBytes: ByteArray, mnemonicWords: List<String>): Result<Int> {
         return try {
             if (mnemonicWords.size != 12) {
                 return Result.failure(IllegalArgumentException("Recovery phrase must be exactly 12 words"))
             }
 
             val secretKey = deriveSecretKey(mnemonicWords)
-
-            // Attempt to read encrypted bytes from Documents first, then internal filesDir
-            val encryptedBytes = readVaultBytes()
-                ?: return Result.failure(IllegalStateException("No Unkindness Vault file found on device"))
 
             if (encryptedBytes.size <= GCM_IV_LENGTH) {
                 return Result.failure(IllegalStateException("Vault file is corrupted or too small"))
@@ -302,7 +308,7 @@ class UnkindnessVaultManager(private val context: Context) {
                     val peerId = pObj.getString("peer_id")
                     val displayName = pObj.getString("display_name")
                     val peerPublicKey = pObj.getString("public_key")
-                    val lastKnownIp = pObj.optString("last_known_ip", null).takeIf { !it.isNullOrBlank() }
+                    val lastKnownIp = pObj.optString("last_known_ip", "").takeIf { it.isNotBlank() }
                     val lastSeen = pObj.optLong("last_seen_timestamp", System.currentTimeMillis())
                     val isTrusted = pObj.optBoolean("is_trusted", true)
                     val avatarColor = pObj.optString("avatar_color", "#0284c7")
@@ -388,12 +394,30 @@ class UnkindnessVaultManager(private val context: Context) {
                 val resolver = context.contentResolver
                 val contentUri = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
 
-                // Delete any existing entry to prevent duplicates
-                resolver.delete(
+                var existingUri: android.net.Uri? = null
+                resolver.query(
                     contentUri,
+                    arrayOf(MediaStore.MediaColumns._ID),
                     "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
-                    arrayOf(VAULT_FILE_NAME)
-                )
+                    arrayOf(VAULT_FILE_NAME),
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val id = cursor.getLong(0)
+                        existingUri = android.content.ContentUris.withAppendedId(contentUri, id)
+                    }
+                }
+
+                existingUri?.let { targetUri ->
+                    try {
+                        resolver.openOutputStream(targetUri, "wt")?.use { os ->
+                            os.write(bytes)
+                        }
+                        return
+                    } catch (_: Exception) {
+                        try { resolver.delete(targetUri, null, null) } catch (_: Exception) {}
+                    }
+                }
 
                 val values = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, VAULT_FILE_NAME)

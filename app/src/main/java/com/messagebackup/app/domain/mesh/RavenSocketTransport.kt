@@ -92,6 +92,7 @@ class RavenSocketTransport(
 
     private var serverSocket: ServerSocket? = null
     private var serverJob: Job? = null
+    private val streamedAudioSessions = HashSet<Long>()
 
     private val _incomingMessages = MutableSharedFlow<RavenIncomingMessage>(extraBufferCapacity = 64)
     val incomingMessages: SharedFlow<RavenIncomingMessage> = _incomingMessages.asSharedFlow()
@@ -357,6 +358,13 @@ class RavenSocketTransport(
                 }
                 if (isAutoPlay && isChannelMatch && !isSquelchMuted) {
                     val chunkB64 = innerMsg.optString("chunk_b64", "")
+                    val sessionId = innerMsg.optLong("session_id", 0L)
+                    if (sessionId != 0L) {
+                        synchronized(streamedAudioSessions) {
+                            if (streamedAudioSessions.size > 100) streamedAudioSessions.clear()
+                            streamedAudioSessions.add(sessionId)
+                        }
+                    }
                     if (chunkB64.isNotBlank()) {
                         voicePttEngine.playLiveStreamChunk(chunkB64)
                     }
@@ -415,7 +423,12 @@ class RavenSocketTransport(
                 } catch (_: Exception) {
                     true
                 }
-                if (isAutoPlay && isChannelMatch && !isSquelchMuted) {
+                val sessionId = innerMsg.optLong("session_id", 0L)
+                val isFresh = kotlin.math.abs(System.currentTimeMillis() - timestamp) < 20_000L
+                val alreadyStreamed = sessionId != 0L && synchronized(streamedAudioSessions) {
+                    streamedAudioSessions.contains(sessionId)
+                }
+                if (isFresh && isAutoPlay && !alreadyStreamed && isChannelMatch && !isSquelchMuted) {
                     scope.launch(Dispatchers.IO) {
                         voicePttEngine.playInboundVoice(
                             audioBase64 = audioBase64,

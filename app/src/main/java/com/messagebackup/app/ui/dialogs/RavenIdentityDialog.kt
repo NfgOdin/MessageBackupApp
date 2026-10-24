@@ -165,6 +165,23 @@ fun RavenIdentityDialog(
     var showRestoreVaultDialog by remember { mutableStateOf(false) }
     var restoreInputWords by remember { mutableStateOf("") }
     var hasPersistentVaultOnDisk by remember { mutableStateOf(vaultManager.hasVaultOnDevice()) }
+    var pickedVaultBytes by remember { mutableStateOf<ByteArray?>(null) }
+    val pickSigilFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                if (bytes != null && bytes.isNotEmpty()) {
+                    pickedVaultBytes = bytes
+                    showRestoreVaultDialog = true
+                    Toast.makeText(context, "Sigil file selected! Enter 12 words to decrypt.", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Could not read file: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     // Audio & PTT Preferences
     val isLoudspeaker by prefs.ravenAudioLoudspeaker.collectAsState()
@@ -2515,6 +2532,13 @@ fun RavenIdentityDialog(
                         modifier = Modifier.fillMaxWidth(),
                         maxLines = 3
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { pickSigilFileLauncher.launch(arrayOf("*/*")) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (pickedVaultBytes != null) "Sigil File Attached (Ready)" else "Browse for Sigil File (.sigil)")
+                    }
                 }
             },
             confirmButton = {
@@ -2525,9 +2549,10 @@ fun RavenIdentityDialog(
                             Toast.makeText(context, "Please enter all 12 words", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
-                        val res = vaultManager.restoreVault(words)
+                        val res = if (pickedVaultBytes != null) vaultManager.restoreVaultFromBytes(pickedVaultBytes!!, words) else vaultManager.restoreVault(words)
                         if (res.isSuccess) {
                             showRestoreVaultDialog = false
+                            pickedVaultBytes = null
                             myCallSign = cryptoEngine.getRavenCallSign()
                             refreshPeers()
                             hasPersistentVaultOnDisk = true

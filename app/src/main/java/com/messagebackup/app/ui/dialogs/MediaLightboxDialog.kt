@@ -430,24 +430,27 @@ private fun LightboxMediaPage(item: VaultMediaItem) {
                     color = Color.White.copy(alpha = 0.7f)
                 )
 
-                // Open external player for video/audio
+                val nameLower = item.fileName.lowercase()
+                val ctLower = item.contentType.lowercase()
+                val isApk = ctLower.contains("android.package-archive") || nameLower.endsWith(".apk")
+                val isZip = ctLower.contains("zip") || nameLower.endsWith(".zip") || nameLower.endsWith(".rar") || nameLower.endsWith(".7z")
+
+                val actionLabel = when {
+                    isApk -> "Install APK Package"
+                    isZip -> "Open Archive (ZIP)"
+                    item.category == MediaCategory.VIDEO -> "Play Video"
+                    item.category == MediaCategory.AUDIO -> "Play Audio"
+                    nameLower.endsWith(".pdf") -> "Open PDF"
+                    else -> "Open Document / File"
+                }
+
                 Surface(
-                    onClick = {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                setDataAndType(item.contentUri, item.contentType.ifBlank { "*/*" })
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            }
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "No app available to play this file: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    },
+                    onClick = { openOrInstallMediaFile(context, item) },
                     shape = RoundedCornerShape(20.dp),
                     color = MaterialTheme.colorScheme.primary
                 ) {
                     Text(
-                        text = "Open in Media Player",
+                        text = actionLabel,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimary,
@@ -456,6 +459,39 @@ private fun LightboxMediaPage(item: VaultMediaItem) {
                 }
             }
         }
+    }
+}
+
+private fun openOrInstallMediaFile(context: Context, item: VaultMediaItem) {
+    try {
+        val fileNameLower = item.fileName.lowercase()
+        val ctLower = item.contentType.lowercase()
+        val isApk = ctLower.contains("android.package-archive") || fileNameLower.endsWith(".apk")
+
+        val cacheFile = File(context.cacheDir, item.fileName)
+        context.contentResolver.openInputStream(item.contentUri)?.use { input ->
+            FileOutputStream(cacheFile).use { output ->
+                input.copyTo(output)
+            }
+        }
+        val fileUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cacheFile)
+
+        val resolvedMime = when {
+            isApk -> "application/vnd.android.package-archive"
+            ctLower.contains("zip") || fileNameLower.endsWith(".zip") -> "application/zip"
+            fileNameLower.endsWith(".pdf") -> "application/pdf"
+            ctLower.isNotBlank() && ctLower != "*/*" -> ctLower
+            else -> "*/*"
+        }
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(fileUri, resolvedMime)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        Toast.makeText(context, "Could not open file: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }
 

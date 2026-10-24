@@ -580,11 +580,14 @@ class RavenVoicePttEngine(context: Context) {
      * Plays the classic Nextel talk-permit double-beep when PTT button is keyed down.
      */
     fun playNextelTalkPermitChirp(useLoudspeaker: Boolean = true) {
-        try {
-            playTone(frequency = 1080, durationMs = 30, volume = 0.55f, useLoudspeaker = useLoudspeaker)
-            Thread.sleep(15)
-            playTone(frequency = 1380, durationMs = 35, volume = 0.60f, useLoudspeaker = useLoudspeaker)
-        } catch (_: Exception) {}
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                configureAudioRouting(useLoudspeaker)
+                playTone(frequency = 1080, durationMs = 30, volume = 0.55f, useLoudspeaker = useLoudspeaker)
+                Thread.sleep(15)
+                playTone(frequency = 1380, durationMs = 35, volume = 0.60f, useLoudspeaker = useLoudspeaker)
+            } catch (_: Exception) {}
+        }
     }
 
     /**

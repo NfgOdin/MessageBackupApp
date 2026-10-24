@@ -105,6 +105,9 @@ class ScheduledSmsWorker(
                     put(Telephony.Sms.READ, 1)
                     put(Telephony.Sms.SEEN, 1)
                     put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_SENT)
+                    if (subId != -1 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                        put(Telephony.Sms.SUBSCRIPTION_ID, subId)
+                    }
                 }
                 appContext.contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI, values)
             } catch (_: Exception) {}

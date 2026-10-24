@@ -326,6 +326,9 @@ fun HuginnMessageComposerBar(
                     put(android.provider.Telephony.Sms.READ, 1)
                     put(android.provider.Telephony.Sms.SEEN, 1)
                     put(android.provider.Telephony.Sms.TYPE, android.provider.Telephony.Sms.MESSAGE_TYPE_SENT)
+                    if (selectedSubId != -1 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                        put(android.provider.Telephony.Sms.SUBSCRIPTION_ID, selectedSubId)
+                    }
                 }
                 context.contentResolver.insert(android.provider.Telephony.Sms.Sent.CONTENT_URI, values)
             } catch (_: Exception) {}

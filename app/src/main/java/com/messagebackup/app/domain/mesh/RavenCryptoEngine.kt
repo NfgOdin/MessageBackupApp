@@ -53,37 +53,6 @@ class RavenCryptoEngine(private val context: Context) {
                 return KeyPair(pub, priv)
             } catch (_: Exception) {}
         }
-
-        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-
-        if (keyStore.containsAlias(KEY_ALIAS_IDENTITY)) {
-            val entry = keyStore.getEntry(KEY_ALIAS_IDENTITY, null) as? KeyStore.PrivateKeyEntry
-            if (entry != null) {
-                return KeyPair(entry.certificate.publicKey, entry.privateKey)
-            }
-        }
-
-        // Generate a new EC P-256 keypair inside Android Keystore (API 31+ supports PURPOSE_AGREE_KEY in hardware)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            try {
-                val keyPairGenerator = KeyPairGenerator.getInstance(
-                    KeyProperties.KEY_ALGORITHM_EC,
-                    ANDROID_KEYSTORE
-                )
-                val parameterSpec = KeyGenParameterSpec.Builder(
-                    KEY_ALIAS_IDENTITY,
-                    KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY or KeyProperties.PURPOSE_AGREE_KEY
-                ).apply {
-                    setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
-                }.build()
-
-                keyPairGenerator.initialize(parameterSpec)
-                return keyPairGenerator.generateKeyPair()
-            } catch (_: Exception) {
-                // Fall through to software EC P-256 fallback if hardware Keymaster rejects combined purposes
-            }
-        }
-
         return getOrCreateSoftwareFallbackKeyPair()
     }
 

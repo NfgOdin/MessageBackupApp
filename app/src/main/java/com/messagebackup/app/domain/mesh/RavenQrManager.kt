@@ -74,7 +74,7 @@ class RavenQrManager(private val context: Context) {
                 if (verified != null) {
                     onPeerScanned(verified)
                 } else {
-                    onError("Invalid or unverified Raven Mesh QR code.")
+                    onError("Invalid or unverified The Unkindness QR code.")
                 }
             }
             .addOnCanceledListener {

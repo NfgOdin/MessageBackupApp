@@ -47,6 +47,9 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
     companion object {
         private const val DATABASE_NAME = "raven_mesh.db"
         private const val DATABASE_VERSION = 7
+        private val vaultSnapshotExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "MuninnVaultSnapshotThread").apply { isDaemon = true }
+        }
 
         const val TABLE_PEERS = "raven_peers"
         const val COL_PEER_ID = "peer_id"               // Canonical lowercase "raven://callsign"
@@ -206,7 +209,7 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
 
     private fun scheduleVaultSnapshot() {
         try {
-            java.util.concurrent.Executors.newSingleThreadExecutor().execute {
+            vaultSnapshotExecutor.execute {
                 runCatching {
                     com.messagebackup.app.domain.mesh.UnkindnessVaultManager(appContext).saveVault()
                 }

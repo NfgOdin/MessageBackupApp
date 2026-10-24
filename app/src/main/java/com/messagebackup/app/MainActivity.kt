@@ -68,6 +68,10 @@ class MainActivity : FragmentActivity() {
     private var telephonyObserver: TelephonyContentObserver? = null
     private var isVaultUnlocked by mutableStateOf(false)
 
+    companion object {
+        private const val KEY_VAULT_UNLOCKED = "muninn_vault_unlocked_session"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -78,7 +82,8 @@ class MainActivity : FragmentActivity() {
         // Keep Raven Mesh & Global Cellular Relay alive across app sessions for instant out-of-state links
         com.messagebackup.app.domain.mesh.RavenSocketTransport.getInstance(applicationContext)
 
-        if (!viewModel.prefs.appLockEnabled.value) {
+        val wasUnlocked = savedInstanceState?.getBoolean(KEY_VAULT_UNLOCKED, false) ?: false
+        if (!viewModel.prefs.appLockEnabled.value || wasUnlocked) {
             isVaultUnlocked = true
         } else {
             promptBiometricUnlock()
@@ -209,6 +214,11 @@ class MainActivity : FragmentActivity() {
                 // Ignore permission or initialization errors until granted
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_VAULT_UNLOCKED, isVaultUnlocked)
     }
 
     override fun onDestroy() {

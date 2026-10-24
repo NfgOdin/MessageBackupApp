@@ -224,6 +224,16 @@ fun MessageCopilotScreen(
         localTts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 localTts?.language = Locale.getDefault()
+                localTts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {}
+                    override fun onDone(utteranceId: String?) {
+                        speakingMessageId = null
+                    }
+                    @Deprecated("Deprecated in Java")
+                    override fun onError(utteranceId: String?) {
+                        speakingMessageId = null
+                    }
+                })
                 tts = localTts
             }
         }
