@@ -141,6 +141,10 @@ class ScheduledSmsWorker(
             .setAutoCancel(true)
             .build()
 
-        nm.notify((System.currentTimeMillis() % 100000).toInt(), notification)
+        try {
+            nm.notify((System.currentTimeMillis() % 100000).toInt(), notification)
+        } catch (_: SecurityException) {
+            // Notification permission not granted on Android 13+
+        }
     }
 }

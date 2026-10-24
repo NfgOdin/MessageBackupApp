@@ -109,6 +109,7 @@ fun SettingsScreen(
     val app = MessageBackupApp.instance
     val prefs = app.appPreferences
     val billingManager = app.billingManager
+    val adManager = app.adManager
 
     val resolveContacts by prefs.resolveContacts.collectAsState()
     val defaultFormat by prefs.defaultFormat.collectAsState()
@@ -3040,6 +3041,25 @@ Rules:
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(text = "View Privacy Policy")
+            }
+
+            if (activity != null && adManager.isPrivacyOptionsRequired(activity)) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        adManager.showPrivacyOptionsForm(activity)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(text = "Ad Privacy & Consent Choices (GDPR)")
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))

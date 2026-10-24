@@ -481,6 +481,15 @@ class RavenGlobalRelayTransport(
             if (packetType == "READ_RECEIPT") {
                 val upToTs = innerMsg.optLong("up_to_ts", timestamp)
                 dbHelper.markOutboundMessagesAsRead(senderPeer.peerId, upToTs)
+                _incomingMessages.emit(
+                    RavenIncomingMessage(
+                        senderCallsign = senderPeer.peerId,
+                        senderDisplayName = senderPeer.displayName,
+                        messageText = "",
+                        messageType = "READ_RECEIPT",
+                        timestamp = upToTs
+                    )
+                )
                 return@withContext
             }
 
@@ -488,6 +497,15 @@ class RavenGlobalRelayTransport(
                 val targetMsgTs = innerMsg.optLong("msg_timestamp", 0L)
                 val emoji = innerMsg.optString("reaction", "").ifBlank { null }
                 dbHelper.updateMessageReactionByTimestamp(senderCallSign, targetMsgTs, emoji)
+                _incomingMessages.emit(
+                    RavenIncomingMessage(
+                        senderCallsign = senderPeer.peerId,
+                        senderDisplayName = senderPeer.displayName,
+                        messageText = emoji ?: "",
+                        messageType = "MESSAGE_REACTION",
+                        timestamp = targetMsgTs
+                    )
+                )
                 return@withContext
             }
 
@@ -561,7 +579,7 @@ class RavenGlobalRelayTransport(
                     transcription = transcription,
                     expiresAtTimestamp = expiresAt,
                     burnOnRead = burnOnRead,
-                    deliveryStatus = "READ"
+                    deliveryStatus = "DELIVERED"
                 )
                 dbHelper.insertMessage(chatMsg)
                 dbHelper.incrementUnreadCount(senderPeer.peerId)

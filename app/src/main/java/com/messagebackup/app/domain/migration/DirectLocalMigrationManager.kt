@@ -157,7 +157,8 @@ object DirectLocalMigrationManager {
         onProgress: (receivedBytes: Long, totalBytes: Long) -> Unit
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
-            Socket(host, port).use { socket ->
+            Socket().use { socket ->
+                socket.connect(java.net.InetSocketAddress(host, port), 15_000)
                 socket.soTimeout = 60_000
 
                 BufferedInputStream(socket.getInputStream()).use { input ->
@@ -189,6 +190,7 @@ object DirectLocalMigrationManager {
                         output.flush()
 
                         if (totalBytes > 0 && totalReceived < totalBytes) {
+                            try { outputDestinationFile.delete() } catch (_: Exception) {}
                             return@withContext Result.failure(Exception("Transfer interrupted ($totalReceived / $totalBytes bytes received)."))
                         }
                     }
@@ -196,6 +198,7 @@ object DirectLocalMigrationManager {
             }
             Result.success(outputDestinationFile)
         } catch (e: Exception) {
+            try { outputDestinationFile.delete() } catch (_: Exception) {}
             Result.failure(e)
         }
     }

@@ -33,6 +33,9 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            it.jvmArgs("-Xmx512m", "-XX:+UseSerialGC")
+        }
     }
     lint {
         abortOnError = false

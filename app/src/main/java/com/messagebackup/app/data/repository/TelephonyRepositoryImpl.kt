@@ -593,30 +593,43 @@ class TelephonyRepositoryImpl(
     }
 
     private fun parseMmsParts(mmsId: Long): Pair<String, List<MediaAttachment>> {
-        val projection = arrayOf("_id", "ct", "text", "_data", "name", "cl")
         var cursor: Cursor? = null
         val bodyBuilder = StringBuilder()
         val attachments = mutableListOf<MediaAttachment>()
 
         try {
-            // 1. Try canonical part URI for this MMS
-            var partUri = Uri.parse("content://mms/$mmsId/part")
-            cursor = contentResolver.query(partUri, projection, null, null, null)
+            // 1. Try canonical part URI for this MMS (null projection avoids OEM column mismatches)
+            val partUri = Uri.parse("content://mms/$mmsId/part")
+            cursor = try {
+                contentResolver.query(partUri, null, null, null, null)
+            } catch (_: Exception) {
+                null
+            }
 
             // 2. Fallback query if content://mms/$mmsId/part returned 0 rows (common for sent MMS on many Android builds)
             if (cursor == null || cursor.count == 0) {
                 cursor?.close()
-                partUri = Uri.parse("content://mms/part")
-                cursor = contentResolver.query(partUri, projection, "mid = ?", arrayOf(mmsId.toString()), null)
+                val fallbackUri = Uri.parse("content://mms/part")
+                cursor = try {
+                    contentResolver.query(fallbackUri, null, "mid = ?", arrayOf(mmsId.toString()), null)
+                } catch (_: Exception) {
+                    try {
+                        contentResolver.query(fallbackUri, null, "msg_id = ?", arrayOf(mmsId.toString()), null)
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
             }
 
             cursor?.let {
-                val idIdx = it.getColumnIndexOrThrow("_id")
+                val idIdx = it.getColumnIndex("_id").takeIf { idx -> idx != -1 } ?: it.getColumnIndex(android.provider.BaseColumns._ID)
                 val ctIdx = it.getColumnIndex("ct")
                 val textIdx = it.getColumnIndex("text")
                 val dataIdx = it.getColumnIndex("_data")
                 val nameIdx = it.getColumnIndex("name")
                 val clIdx = it.getColumnIndex("cl")
+
+                if (idIdx == -1) return@let
 
                 while (it.moveToNext()) {
                     val partId = it.getLong(idIdx)

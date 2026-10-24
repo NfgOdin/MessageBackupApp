@@ -228,7 +228,7 @@ class ExportEngine(
             if (activePassword != null) {
                 // AES-256 Encrypted ZIP Archive via Zip4j
                 net.lingala.zip4j.io.outputstream.ZipOutputStream(
-                    FileOutputStream(zipFile),
+                    java.io.BufferedOutputStream(FileOutputStream(zipFile)),
                     activePassword.toCharArray()
                 ).use { aesZipOut ->
                     writeAllThreads { entryPath, bytes ->
@@ -245,7 +245,7 @@ class ExportEngine(
                 }
             } else {
                 // Standard Unencrypted ZIP Archive
-                ZipOutputStream(FileOutputStream(zipFile)).use { zipOut ->
+                ZipOutputStream(java.io.BufferedOutputStream(FileOutputStream(zipFile))).use { zipOut ->
                     writeAllThreads { entryPath, bytes ->
                         zipOut.putNextEntry(ZipEntry(entryPath))
                         zipOut.write(bytes)

@@ -292,7 +292,9 @@ fun MediaLightboxDialog(
                         // Share Sheet Button
                         Surface(
                             onClick = {
-                                shareMediaFile(context, currentItem)
+                                scope.launch {
+                                    shareMediaFile(context, currentItem)
+                                }
                             },
                             shape = RoundedCornerShape(24.dp),
                             color = MaterialTheme.colorScheme.primary,
@@ -328,6 +330,7 @@ fun MediaLightboxDialog(
 @Composable
 private fun LightboxMediaPage(item: VaultMediaItem) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var bitmap by remember(item.uriString) { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember(item.uriString) { mutableStateOf(item.category == MediaCategory.IMAGE) }
 
@@ -445,7 +448,11 @@ private fun LightboxMediaPage(item: VaultMediaItem) {
                 }
 
                 Surface(
-                    onClick = { openOrInstallMediaFile(context, item) },
+                    onClick = {
+                        scope.launch {
+                            openOrInstallMediaFile(context, item)
+                        }
+                    },
                     shape = RoundedCornerShape(20.dp),
                     color = MaterialTheme.colorScheme.primary
                 ) {
@@ -462,7 +469,7 @@ private fun LightboxMediaPage(item: VaultMediaItem) {
     }
 }
 
-private fun openOrInstallMediaFile(context: Context, item: VaultMediaItem) {
+private suspend fun openOrInstallMediaFile(context: Context, item: VaultMediaItem) = withContext(Dispatchers.IO) {
     try {
         val fileNameLower = item.fileName.lowercase()
         val ctLower = item.contentType.lowercase()
@@ -484,18 +491,22 @@ private fun openOrInstallMediaFile(context: Context, item: VaultMediaItem) {
             else -> "*/*"
         }
 
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(fileUri, resolvedMime)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        withContext(Dispatchers.Main) {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(fileUri, resolvedMime)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
         }
-        context.startActivity(intent)
     } catch (e: Exception) {
-        Toast.makeText(context, "Could not open file: ${e.message}", Toast.LENGTH_SHORT).show()
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "Could not open file: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 }
 
-private fun shareMediaFile(context: Context, item: VaultMediaItem) {
+private suspend fun shareMediaFile(context: Context, item: VaultMediaItem) = withContext(Dispatchers.IO) {
     try {
         val cacheFile = File(context.cacheDir, item.fileName)
         context.contentResolver.openInputStream(item.contentUri)?.use { input ->
@@ -509,9 +520,13 @@ private fun shareMediaFile(context: Context, item: VaultMediaItem) {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(shareIntent, "Share ${item.fileName}"))
+        withContext(Dispatchers.Main) {
+            context.startActivity(Intent.createChooser(shareIntent, "Share ${item.fileName}"))
+        }
     } catch (e: Exception) {
-        Toast.makeText(context, "Error sharing media: ${e.message}", Toast.LENGTH_SHORT).show()
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "Error sharing media: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 }
 

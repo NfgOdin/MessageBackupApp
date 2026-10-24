@@ -110,6 +110,10 @@ class RavenVoicePttEngine(context: Context) {
     private var liveStreamJob: Job? = null
     private var liveAudioRecord: AudioRecord? = null
     private var liveStreamAudioTrack: AudioTrack? = null
+    private val streamSilenceHandler = Handler(Looper.getMainLooper())
+    private val streamSilenceRunnable = Runnable {
+        stopPlayback()
+    }
     private var speechRecognizer: SpeechRecognizer? = null
     @Volatile
     private var latestRecognizedTranscript: String = ""
@@ -338,6 +342,8 @@ class RavenVoicePttEngine(context: Context) {
             }
 
             track.write(pcmSamples, 0, pcmSamples.size)
+            streamSilenceHandler.removeCallbacks(streamSilenceRunnable)
+            streamSilenceHandler.postDelayed(streamSilenceRunnable, 1800L)
         } catch (_: Exception) {}
     }
 
@@ -416,6 +422,7 @@ class RavenVoicePttEngine(context: Context) {
      */
     @Synchronized
     fun stopPlayback() {
+        streamSilenceHandler.removeCallbacks(streamSilenceRunnable)
         try {
             activeMediaPlayer?.stop()
         } catch (_: Exception) {}

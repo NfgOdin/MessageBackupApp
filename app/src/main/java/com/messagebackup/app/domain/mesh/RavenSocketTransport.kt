@@ -309,6 +309,15 @@ class RavenSocketTransport(
             if (packetType == "READ_RECEIPT") {
                 val upToTs = innerMsg.optLong("up_to_ts", timestamp)
                 dbHelper.markOutboundMessagesAsRead(senderPeer.peerId, upToTs)
+                _incomingMessages.emit(
+                    RavenIncomingMessage(
+                        senderCallsign = senderPeer.peerId,
+                        senderDisplayName = senderPeer.displayName,
+                        messageText = "",
+                        messageType = "READ_RECEIPT",
+                        timestamp = upToTs
+                    )
+                )
                 writer.println(JSONObject().apply { put("status", "OK_ACK") })
                 return@withContext
             }
@@ -317,6 +326,15 @@ class RavenSocketTransport(
                 val targetMsgTs = innerMsg.optLong("msg_timestamp", 0L)
                 val emoji = innerMsg.optString("reaction", "").ifBlank { null }
                 dbHelper.updateMessageReactionByTimestamp(senderCallSign, targetMsgTs, emoji)
+                _incomingMessages.emit(
+                    RavenIncomingMessage(
+                        senderCallsign = senderPeer.peerId,
+                        senderDisplayName = senderPeer.displayName,
+                        messageText = emoji ?: "",
+                        messageType = "MESSAGE_REACTION",
+                        timestamp = targetMsgTs
+                    )
+                )
                 writer.println(JSONObject().apply { put("status", "OK_ACK") })
                 return@withContext
             }
@@ -392,7 +410,7 @@ class RavenSocketTransport(
                     transcription = transcription,
                     expiresAtTimestamp = expiresAt,
                     burnOnRead = burnOnRead,
-                    deliveryStatus = "READ"
+                    deliveryStatus = "DELIVERED"
                 )
                 dbHelper.insertMessage(chatMsg)
                 dbHelper.incrementUnreadCount(senderPeer.peerId)
@@ -921,7 +939,8 @@ data class RavenIncomingMessage(
     val senderCallsign: String,
     val senderDisplayName: String,
     val messageText: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val messageType: String = "TEXT"
 )
 
 data class RavenIncomingVoice(

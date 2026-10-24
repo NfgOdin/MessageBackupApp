@@ -507,9 +507,9 @@ fun RavenChatDialog(
 
     LaunchedEffect(Unit) {
         socketTransport.incomingMessages.collect { incoming ->
-            val cleanIncoming = incoming.senderCallsign.removePrefix("raven://").trim()
-            val cleanPeer = peer.peerId.removePrefix("raven://").trim()
-            if (cleanIncoming.equals(cleanPeer, ignoreCase = true)) {
+            val normIncoming = RavenDatabaseHelper.normalizePeerId(incoming.senderCallsign)
+            val normPeer = RavenDatabaseHelper.normalizePeerId(peer.peerId)
+            if (normIncoming == normPeer || incoming.senderCallsign.contains(peer.peerId.removePrefix("raven://"), ignoreCase = true)) {
                 loadMessages()
             }
         }
@@ -517,9 +517,9 @@ fun RavenChatDialog(
 
     LaunchedEffect(Unit) {
         socketTransport.incomingVoiceStreams.collect { incoming ->
-            val cleanIncoming = incoming.senderCallsign.removePrefix("raven://").trim()
-            val cleanPeer = peer.peerId.removePrefix("raven://").trim()
-            if (cleanIncoming.equals(cleanPeer, ignoreCase = true)) {
+            val normIncoming = RavenDatabaseHelper.normalizePeerId(incoming.senderCallsign)
+            val normPeer = RavenDatabaseHelper.normalizePeerId(peer.peerId)
+            if (normIncoming == normPeer || incoming.senderCallsign.contains(peer.peerId.removePrefix("raven://"), ignoreCase = true)) {
                 loadMessages()
             }
         }
@@ -1352,6 +1352,7 @@ fun RavenMessageBubble(
         RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
     }
 
+    val scope = rememberCoroutineScope()
     val timeString = remember(msg.timestamp) {
         SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(msg.timestamp))
     }
@@ -1487,31 +1488,37 @@ fun RavenMessageBubble(
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f))
                                 .clickable(enabled = !msg.attachmentBase64.isNullOrBlank()) {
-                                    try {
-                                        val bytes = Base64.decode(msg.attachmentBase64, Base64.NO_WRAP)
-                                        val dir = File(context.cacheDir, "raven_parcels").apply { mkdirs() }
-                                        val safeName = (msg.attachmentName ?: "raven_parcel.bin").replace(Regex("[^a-zA-Z0-9._-]"), "_")
-                                        val file = File(dir, safeName).apply { writeBytes(bytes) }
-                                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                                        val isApk = (msg.attachmentMimeType ?: "").contains("package-archive") || safeName.endsWith(".apk", ignoreCase = true)
-                                        val resolvedMime = if (isApk) "application/vnd.android.package-archive" else (msg.attachmentMimeType ?: "*/*")
+                                    scope.launch(Dispatchers.IO) {
                                         try {
-                                            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
-                                                setDataAndType(uri, resolvedMime)
-                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            val bytes = Base64.decode(msg.attachmentBase64, Base64.NO_WRAP)
+                                            val dir = File(context.cacheDir, "raven_parcels").apply { mkdirs() }
+                                            val safeName = (msg.attachmentName ?: "raven_parcel.bin").replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                                            val file = File(dir, safeName).apply { writeBytes(bytes) }
+                                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                            val isApk = (msg.attachmentMimeType ?: "").contains("package-archive") || safeName.endsWith(".apk", ignoreCase = true)
+                                            val resolvedMime = if (isApk) "application/vnd.android.package-archive" else (msg.attachmentMimeType ?: "*/*")
+                                            withContext(Dispatchers.Main) {
+                                                try {
+                                                    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                                                        setDataAndType(uri, resolvedMime)
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
+                                                    context.startActivity(viewIntent)
+                                                } catch (_: Exception) {
+                                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                        type = resolvedMime
+                                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                    }
+                                                    context.startActivity(Intent.createChooser(shareIntent, "Save or Open Parcel"))
+                                                }
                                             }
-                                            context.startActivity(viewIntent)
-                                        } catch (_: Exception) {
-                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                                type = resolvedMime
-                                                putExtra(Intent.EXTRA_STREAM, uri)
-                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        } catch (e: Exception) {
+                                            withContext(Dispatchers.Main) {
+                                                Toast.makeText(context, "Could not open file: ${e.message}", Toast.LENGTH_SHORT).show()
                                             }
-                                            context.startActivity(Intent.createChooser(shareIntent, "Save or Open Parcel"))
                                         }
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, "Could not open file: ${e.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                                 .padding(8.dp)

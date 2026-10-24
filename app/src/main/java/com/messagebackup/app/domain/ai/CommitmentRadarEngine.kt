@@ -27,11 +27,11 @@ class CommitmentRadarEngine(private val aiEngine: AiClientEngine = AiClientEngin
     // Fast heuristic patterns
     private val promisePatterns = listOf(
         Pattern.compile("(?i)\\b(I('ll| will| shall| promise to| swear I'll))\\s+([a-zA-Z0-9 ,'-]{4,60})"),
-        Pattern.compile("(?i)\\b(let('s| us) meet|meet you|see you)\\s+([a-zA-Z0-9 ,'-]{4,40})"),
-        Pattern.compile("(?i)\\b(I owe you|will venmo|will zelle|will pay|send you (\\$|the money))\\b"),
+        Pattern.compile("(?i)\\b(let('s| us) meet|meet you|see you|catch up)\\s+([a-zA-Z0-9 ,'-]{4,40})"),
+        Pattern.compile("(?i)\\b(I owe you|will venmo|will zelle|will pay|pay you back|send you (\\$|the money))\\b"),
         Pattern.compile("(?i)\\b(remind me to|don't forget to|make sure you)\\s+([a-zA-Z0-9 ,'-]{4,50})"),
         Pattern.compile("(?i)\\b(call you (back|later|tomorrow)|text you (back|later|tomorrow))\\b"),
-        Pattern.compile("(?i)\\b(I can drop off|pick up|deliver)\\s+([a-zA-Z0-9 ,'-]{4,40})")
+        Pattern.compile("(?i)\\b(I can drop off|pick up|deliver|bring you|send over)\\s+([a-zA-Z0-9 ,'-]{4,40})")
     )
 
     /**
@@ -95,6 +95,8 @@ class CommitmentRadarEngine(private val aiEngine: AiClientEngine = AiClientEngin
             lower.contains("tomorrow") -> "Tomorrow"
             lower.contains("tonight") -> "Tonight"
             lower.contains("later today") -> "Later Today"
+            lower.contains("today") -> "Today"
+            lower.contains("asap") || lower.contains("right away") -> "ASAP"
             lower.contains("next week") -> "Next Week"
             lower.contains("this weekend") -> "This Weekend"
             lower.contains("monday") -> "Monday"

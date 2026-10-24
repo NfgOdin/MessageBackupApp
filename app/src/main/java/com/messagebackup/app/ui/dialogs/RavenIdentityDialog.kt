@@ -118,6 +118,7 @@ fun RavenIdentityDialog(
     prefs: com.messagebackup.app.data.preferences.AppPreferences,
     adManager: com.messagebackup.app.ads.AdManager,
     isAdsRemoved: Boolean,
+    initialPeerId: String? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -140,7 +141,7 @@ fun RavenIdentityDialog(
         }
     }
 
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(if (initialPeerId != null) 1 else 0) }
     var myCallSign by remember { mutableStateOf(cryptoEngine.getRavenCallSign()) }
     var showEditNameDialog by remember { mutableStateOf(false) }
     var showEnterCodeDialog by remember { mutableStateOf(false) }
@@ -151,9 +152,10 @@ fun RavenIdentityDialog(
     var peersList by remember { mutableStateOf<List<RavenPeer>>(emptyList()) }
     var lastMessagesMap by remember { mutableStateOf<Map<String, com.messagebackup.app.data.local.RavenChatMessage>>(emptyMap()) }
     var isLoadingQr by remember { mutableStateOf(true) }
-    var activeChatPeerId by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeChatPeerId by rememberSaveable { mutableStateOf<String?>(initialPeerId) }
     val activeChatPeer = remember(peersList, activeChatPeerId) {
         peersList.find { it.peerId == activeChatPeerId }
+            ?: if (!activeChatPeerId.isNullOrBlank()) dbHelper.getPeer(activeChatPeerId!!) else null
     }
     var peerForDirectPing by remember { mutableStateOf<RavenPeer?>(null) }
     var pingMessageText by remember { mutableStateOf("⚡ Raven Whisper: Greetings from MUNINN!") }

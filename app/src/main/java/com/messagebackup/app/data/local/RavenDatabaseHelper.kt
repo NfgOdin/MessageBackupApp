@@ -337,6 +337,48 @@ class RavenDatabaseHelper(context: Context) : SQLiteOpenHelper(context.applicati
         return peersMap.values.toList()
     }
 
+    fun getPeer(peerId: String): RavenPeer? {
+        val canonicalId = normalizePeerId(peerId)
+        val clean = peerId.removePrefix("raven://").trim()
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_PEERS,
+            null,
+            "LOWER($COL_PEER_ID) = ? OR LOWER($COL_PEER_ID) = ? OR LOWER($COL_PEER_ID) LIKE ?",
+            arrayOf(canonicalId.lowercase(), clean.lowercase(), "%${clean.lowercase()}%"),
+            null, null, null
+        )
+        cursor.use { c ->
+            if (c.moveToFirst()) {
+                val idxId = c.getColumnIndexOrThrow(COL_PEER_ID)
+                val idxName = c.getColumnIndexOrThrow(COL_DISPLAY_NAME)
+                val idxPk = c.getColumnIndexOrThrow(COL_PUBLIC_KEY)
+                val idxIp = c.getColumnIndex(COL_LAST_KNOWN_IP)
+                val idxLast = c.getColumnIndexOrThrow(COL_LAST_SEEN)
+                val idxTrusted = c.getColumnIndexOrThrow(COL_IS_TRUSTED)
+                val idxColor = c.getColumnIndexOrThrow(COL_AVATAR_COLOR)
+                val idxStatus = c.getColumnIndex(COL_STATUS)
+                val idxUnread = c.getColumnIndex(COL_UNREAD_COUNT)
+                val statusStr = if (idxStatus != -1 && !c.isNull(idxStatus)) c.getString(idxStatus) else "CONNECTED"
+                val peerStatus = try { RavenPeerStatus.valueOf(statusStr) } catch (_: Exception) { RavenPeerStatus.CONNECTED }
+                val unread = if (idxUnread != -1 && !c.isNull(idxUnread)) c.getInt(idxUnread) else 0
+
+                return RavenPeer(
+                    peerId = c.getString(idxId),
+                    displayName = c.getString(idxName),
+                    publicKey = c.getString(idxPk),
+                    lastKnownIp = if (idxIp != -1 && !c.isNull(idxIp)) c.getString(idxIp) else null,
+                    lastSeenTimestamp = c.getLong(idxLast),
+                    isTrusted = c.getInt(idxTrusted) == 1,
+                    avatarColor = c.getString(idxColor) ?: "#0284c7",
+                    status = peerStatus,
+                    unreadCount = unread
+                )
+            }
+        }
+        return null
+    }
+
     fun getUnreadCountForPeer(peerId: String): Int {
         val db = readableDatabase
         val canonicalId = normalizePeerId(peerId)

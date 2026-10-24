@@ -79,7 +79,9 @@ data class MainUiState(
     val vaultMediaItems: List<com.messagebackup.app.model.VaultMediaItem> = emptyList(),
     val showCommitmentRadar: Boolean = false,
     val showMigrationDialog: Boolean = false,
-    val showRewardArcade: Boolean = false
+    val showRewardArcade: Boolean = false,
+    val showRavenMeshDialog: Boolean = false,
+    val deepLinkRavenPeerId: String? = null
 )
 
 /**
@@ -1091,6 +1093,17 @@ class MainViewModel : ViewModel() {
 
     fun setShowRewardArcade(show: Boolean) {
         _uiState.value = _uiState.value.copy(showRewardArcade = show)
+    }
+
+    fun setRavenMeshOpen(open: Boolean, initialPeerId: String? = null) {
+        _uiState.value = _uiState.value.copy(
+            showRavenMeshDialog = open,
+            deepLinkRavenPeerId = if (open) initialPeerId else null
+        )
+    }
+
+    fun openRavenChat(peerId: String?) {
+        setRavenMeshOpen(true, peerId)
     }
 
     fun loadMediaVault(forceRefresh: Boolean = false) {

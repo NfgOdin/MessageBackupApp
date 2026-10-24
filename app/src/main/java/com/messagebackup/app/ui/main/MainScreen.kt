@@ -194,6 +194,14 @@ fun MainScreen(
         }
     }
     var showRavenMeshDialog by rememberSaveable { mutableStateOf(false) }
+    var deepLinkPeerId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(uiState.showRavenMeshDialog, uiState.deepLinkRavenPeerId) {
+        if (uiState.showRavenMeshDialog) {
+            showRavenMeshDialog = true
+            deepLinkPeerId = uiState.deepLinkRavenPeerId
+            viewModel.setRavenMeshOpen(false, null)
+        }
+    }
     var activeConversationMediaItem by remember { mutableStateOf<com.messagebackup.app.model.VaultMediaItem?>(null) }
 
     LaunchedEffect(ravenMeshEnabled, showRavenMeshDialog) {
@@ -2220,7 +2228,11 @@ fun MainScreen(
             prefs = prefs,
             adManager = viewModel.adManager,
             isAdsRemoved = isAdsRemoved,
-            onDismiss = { showRavenMeshDialog = false }
+            initialPeerId = deepLinkPeerId,
+            onDismiss = {
+                showRavenMeshDialog = false
+                deepLinkPeerId = null
+            }
         )
     }
 

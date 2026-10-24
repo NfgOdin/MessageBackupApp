@@ -76,6 +76,32 @@ class AdManager(private val context: Context) {
         )
     }
 
+    /**
+     * Checks if GDPR/EEA Privacy Options form is required to be surfaced in Settings.
+     */
+    fun isPrivacyOptionsRequired(activity: Activity): Boolean {
+        return try {
+            val consentInformation = UserMessagingPlatform.getConsentInformation(activity)
+            consentInformation.privacyOptionsRequirementStatus == ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Displays the UMP Privacy Options / Consent Form so users in EEA/UK can modify their ad choices.
+     */
+    fun showPrivacyOptionsForm(activity: Activity, onDismiss: (formError: String?) -> Unit = {}) {
+        UserMessagingPlatform.showPrivacyOptionsForm(activity) { formError ->
+            if (formError != null) {
+                Log.w(TAG, "Privacy options form error: ${formError.message}")
+                onDismiss(formError.message)
+            } else {
+                onDismiss(null)
+            }
+        }
+    }
+
     private fun initializeMobileAds(context: Context) {
         val appCtx = context.applicationContext
         if (isMobileAdsInitialized) {

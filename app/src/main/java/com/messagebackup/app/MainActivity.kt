@@ -177,6 +177,10 @@ class MainActivity : FragmentActivity() {
         if (intent?.getBooleanExtra("OPEN_RUNIC_ARCADE", false) == true) {
             viewModel.setShowRewardArcade(true)
         }
+        if (intent?.action == "com.messagebackup.app.ACTION_OPEN_RAVEN_CHAT") {
+            val peerId = intent.getStringExtra("extra_raven_peer_id")
+            viewModel.openRavenChat(peerId)
+        }
         when (intent?.action) {
             com.messagebackup.app.widget.OdinSearchWidgetProvider.ACTION_OPEN_ODIN -> {
                 viewModel.setCopilotOpen(true)
